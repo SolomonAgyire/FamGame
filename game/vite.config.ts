@@ -21,14 +21,14 @@ export default defineConfig(async () => {
         // Passed inline (not auto-read from wrangler.jsonc) because letting
         // @cloudflare/vite-plugin@1.37.1 discover the config file itself
         // breaks CSS resolution during `vinext build` (postcss-import fails
-        // to find the `tailwindcss` package). Bindings (D1, etc.) are NOT
-        // duplicated here — they're read from wrangler.jsonc, which is
-        // merged in automatically alongside this inline config. Duplicating
-        // a binding in both places causes "assigned to multiple bindings"
-        // errors at deploy time.
+        // to find the `tailwindcss` package). Only `main` lives here.
+        // compatibility_flags and bindings (D1, etc.) are NOT duplicated —
+        // they're read from wrangler.jsonc, which is merged in automatically
+        // alongside this inline config. Duplicating a value in both places
+        // causes "specified multiple times" / "assigned to multiple
+        // bindings" errors at deploy time.
         config: {
           main: 'vinext/server/app-router-entry',
-          compatibility_flags: ['nodejs_compat'],
         },
       }),
     ],

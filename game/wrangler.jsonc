@@ -6,6 +6,11 @@
   "compatibility_date": "2026-05-15",
   "compatibility_flags": ["nodejs_compat"],
 
+  // Serve on the free *.workers.dev address (https://gatherword.<subdomain>.workers.dev).
+  // Explicit here just to silence Wrangler's "using default" warnings.
+  "workers_dev": true,
+  "preview_urls": true,
+
   // Cloudflare account to deploy to. Left unset on purpose so it's not
   // committed to a public repo — set it locally with `wrangler login`
   // (interactive) or via the CLOUDFLARE_ACCOUNT_ID env var / GitHub Actions
