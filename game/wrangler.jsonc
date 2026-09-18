@@ -16,11 +16,7 @@
     {
       "binding": "DB",
       "database_name": "gatherword-db",
-      // Placeholder — replace with the real ID printed by:
-      //   npx wrangler d1 create gatherword-db
-      // Local dev works with this placeholder (Miniflare simulates D1
-      // locally); only real deploys need the real ID here.
-      "database_id": "00000000-0000-4000-8000-000000000000"
+      "database_id": "80f4799c-e14b-46a2-af83-f9bdd93d676d"
     }
   ]
 }
