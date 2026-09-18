@@ -33,20 +33,18 @@ function HomeScreen({ mode, setMode, start }: { mode: EntryMode; setMode: (mode:
     { id: 'together' as const, eyebrow: 'One device', title: 'Play Together', copy: 'Co-op or team play.', icon: '◎' },
     { id: 'online' as const, eyebrow: 'Different devices', title: 'Online Room', copy: 'Invite with a room code.', icon: '⌁' },
   ];
-  return <main className="home-shell"><div className="sunwash" aria-hidden="true" />
+  return <main className="home-shell">
     <section className="home-grid">
-      <div><p className="eyebrow-pill"><span>●</span> A warm word challenge for everyone</p>
-        <h1 className="hero-title">Unscramble.<span>Connect.</span>Remember.</h1>
-        <p className="hero-copy">Pick Bible books, people, or places. Play quietly on your own or bring the whole room into the puzzle.</p>
-        <div className="mode-grid" role="radiogroup" aria-label="Choose how to play">
-          {modes.map((item) => <button key={item.id} type="button" role="radio" aria-checked={mode === item.id} onClick={() => setMode(item.id)} className={`mode-card ${mode === item.id ? 'active' : ''}`}>
-            <span className="mode-icon" aria-hidden="true">{item.icon}</span><span><small>{item.eyebrow}</small><strong>{item.title}</strong><em>{item.copy}</em></span>
-          </button>)}
-        </div>
-        <button type="button" className="primary-button hero-button" onClick={start}>Start {modes.find((item) => item.id === mode)?.title}<span>→</span></button>
-        <p className="free-note">No account · No timer · Free to play</p>
-      </div>
+      <h1 className="hero-title">Unscramble the word</h1>
+      <p className="hero-copy">Bible books, people, and places. Play solo, pass the phone around, or invite a room.</p>
       <SamplePuzzle />
+      <div className="mode-grid" role="radiogroup" aria-label="Choose how to play">
+        {modes.map((item) => <button key={item.id} type="button" role="radio" aria-checked={mode === item.id} onClick={() => setMode(item.id)} className={`mode-card ${mode === item.id ? 'active' : ''}`}>
+          <span className="mode-icon" aria-hidden="true">{item.icon}</span><span><small>{item.eyebrow}</small><strong>{item.title}</strong><em>{item.copy}</em></span>
+        </button>)}
+      </div>
+      <button type="button" className="primary-button hero-button" onClick={start}>Start {modes.find((item) => item.id === mode)?.title}</button>
+      <p className="free-note">No account needed. No timer. Free to play.</p>
     </section>
   </main>;
 }
@@ -97,7 +95,7 @@ function SetupScreen({ entryMode, settings, setSettings, togetherMode, setTogeth
       <div className="mini-actions">{teams.length < 4 && <button type="button" onClick={() => setTeams([...teams, { id: `team-${teams.length + 1}`, name: `Team ${teams.length + 1}`, color: TEAM_COLORS[teams.length], score: 0 }])}>+ Add team</button>}{teams.length > 2 && <button type="button" onClick={() => setTeams(teams.slice(0, -1))}>− Remove</button>}</div>
     </div></fieldset>}
     <SettingsPanel settings={settings} setSettings={setSettings} />
-    <button className="primary-button full-button" type="button" onClick={start}>Create fresh match <span>→</span></button>
+    <button className="primary-button full-button" type="button" onClick={start}>Create fresh match</button>
   </section></main>;
 }
 
@@ -141,7 +139,7 @@ function LocalGame({ mode, settings, teams: initialTeams, sound, onHome, onChang
       <TileBoard scramble={puzzle.scramble} fixedPrefix={entry.fixedPrefix} placed={placed} setPlaced={setPlaced} locked={Boolean(resolved) || (mode === 'teams' && !claimedBy)} />
       {hints > 0 && !resolved && <div className="hint-box">{entry.hints.slice(0, hints).map((hint) => <p key={hint}>✦ {hint}</p>)}</div>}
       {notice && <p className="notice" role="status">{notice}</p>}
-      {resolved ? <div className="resolution"><span>{resolved.revealed ? 'The answer was' : 'Beautiful work!'}</span><strong>{entry.display}</strong><p>{entry.references[0]} · {resolved.award ? `+${resolved.award} points` : 'No points this time'}</p><button type="button" className="primary-button" onClick={next}>{index === recipe.puzzles.length - 1 ? 'See results' : 'Next puzzle'} <span>→</span></button></div>
+      {resolved ? <div className="resolution"><span>{resolved.revealed ? 'The answer was' : 'Beautiful work!'}</span><strong>{entry.display}</strong><p>{entry.references[0]} · {resolved.award ? `+${resolved.award} points` : 'No points this time'}</p><button type="button" className="primary-button" onClick={next}>{index === recipe.puzzles.length - 1 ? 'See results' : 'Next puzzle'}</button></div>
       : <div className="game-actions"><button type="button" className="soft-button" onClick={() => { setPlaced([]); setNotice(''); }}>↻ Reset</button><button type="button" className="soft-button" disabled={hints >= 2} onClick={() => setHints(Math.min(2, hints + 1))}>✦ Hint {hints}/2</button><button type="button" className="check-button" onClick={check}>Check answer</button><button type="button" className="text-button" onClick={reveal}>Reveal & continue</button></div>}
     </section></main>;
 }
@@ -160,7 +158,7 @@ function OnlineEntry({ onBack, onConnected, initialCode }: { onBack: () => void;
   const submit = async () => { setBusy(true); setError(''); try { const response = await fetch(kind === 'create' ? '/api/rooms' : `/api/rooms/${code}/join`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(kind === 'create' ? { name, settings: DEFAULT_SETTINGS, mode: 'individuals' } : { name }) }); const data = await response.json() as Credentials & { error?: string }; if (!response.ok) throw new Error(data.error || 'Could not connect.'); onConnected(data); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not connect.'); } finally { setBusy(false); } };
   return <main className="page-shell"><section className="panel online-entry"><button className="back-button" type="button" onClick={onBack}>← Back</button><p className="section-kicker">Different devices, one game</p><h1 className="page-title">Online room</h1><p className="page-subtitle">The host creates a private six-character code. Everyone else joins from their own device.</p>
     <div className="tabs"><button type="button" className={kind === 'create' ? 'active' : ''} onClick={() => setKind('create')}>Create room</button><button type="button" className={kind === 'join' ? 'active' : ''} onClick={() => setKind('join')}>Join room</button></div>
-    <div className="form-stack"><label>Display name<input value={name} maxLength={24} autoComplete="name" placeholder="Your name" onChange={(event) => setName(event.target.value)} /></label>{kind === 'join' && <label>Room code<input className="code-input" value={code} maxLength={6} placeholder="A7K4PQ" autoCapitalize="characters" onChange={(event) => setCode(event.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ''))} /></label>}{error && <p className="error-box" role="alert">{error}</p>}<button type="button" disabled={busy} className="primary-button full-button" onClick={submit}>{busy ? 'Connecting…' : kind === 'create' ? 'Create private room' : 'Join room'} <span>→</span></button></div>
+    <div className="form-stack"><label>Display name<input value={name} maxLength={24} autoComplete="name" placeholder="Your name" onChange={(event) => setName(event.target.value)} /></label>{kind === 'join' && <label>Room code<input className="code-input" value={code} maxLength={6} placeholder="A7K4PQ" autoCapitalize="characters" onChange={(event) => setCode(event.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ''))} /></label>}{error && <p className="error-box" role="alert">{error}</p>}<button type="button" disabled={busy} className="primary-button full-button" onClick={submit}>{busy ? 'Connecting…' : kind === 'create' ? 'Create private room' : 'Join room'}</button></div>
     <div className="privacy-note"><span>⌁</span><p><strong>No account needed.</strong> Room data expires after two hours of inactivity.</p></div>
   </section></main>;
 }
@@ -181,7 +179,7 @@ function OnlineRoom({ credentials, leave }: { credentials: Credentials; leave: (
     <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{puzzle.category} · {BAND_NAMES[puzzle.band - 1]}</p><h1>{snapshot.status === 'PUZZLE_RESOLVED' ? puzzle.display : 'Everyone is solving…'}</h1></div><span className="points-pill">{Math.max(1, 5 - snapshot.viewerHints)} pts</span></div>
       <TileBoard scramble={puzzle.scramble} fixedPrefix={puzzle.fixedPrefix} placed={placed} setPlaced={setPlaced} locked={snapshot.status !== 'PUZZLE_OPEN' || busy} />
       {snapshot.viewerHints > 0 && snapshot.status === 'PUZZLE_OPEN' && <div className="hint-box">{puzzle.hints.slice(0, snapshot.viewerHints).map((hint) => <p key={hint}>✦ {hint}</p>)}</div>}{error && <p className="error-box">{error}</p>}
-      {snapshot.status === 'PUZZLE_RESOLVED' ? <div className="resolution"><span>{snapshot.resolution?.revealed ? 'The answer was' : `${snapshot.resolution?.solverName} solved it!`}</span><strong>{puzzle.display}</strong><p>{puzzle.reference} · {snapshot.resolution?.award ? `+${snapshot.resolution.award} points` : 'No points this time'}</p>{isHost ? <button type="button" className="primary-button" onClick={() => action({ action: 'next' })}>Next puzzle <span>→</span></button> : <p>Waiting for the host…</p>}</div>
+      {snapshot.status === 'PUZZLE_RESOLVED' ? <div className="resolution"><span>{snapshot.resolution?.revealed ? 'The answer was' : `${snapshot.resolution?.solverName} solved it!`}</span><strong>{puzzle.display}</strong><p>{puzzle.reference} · {snapshot.resolution?.award ? `+${snapshot.resolution.award} points` : 'No points this time'}</p>{isHost ? <button type="button" className="primary-button" onClick={() => action({ action: 'next' })}>Next puzzle</button> : <p>Waiting for the host…</p>}</div>
       : <div className="game-actions"><button className="soft-button" type="button" onClick={() => setPlaced([])}>↻ Reset</button><button className="soft-button" type="button" disabled={snapshot.viewerHints >= 2 || busy} onClick={() => action({ action: 'hint' })}>✦ Hint {snapshot.viewerHints}/2</button><button className="check-button" type="button" disabled={placed.length !== puzzle.scramble.length || busy} onClick={() => action({ action: 'check', answer })}>Check answer</button>{isHost && <button className="text-button" type="button" onClick={() => action({ action: 'reveal' })}>Host reveal</button>}</div>}
     </section></main>;
 }
@@ -191,7 +189,7 @@ function OnlineLobby({ snapshot, viewer, isHost, error, busy, action, leave }: {
   const copy = async () => { try { await navigator.clipboard.writeText(joinUrl); } catch { /* clipboard can be blocked */ } };
   return <main className="page-shell"><section className="panel lobby-panel"><div className="lobby-heading"><div><p className="section-kicker">Private room</p><h1 className="room-code">{snapshot.code}</h1><p>Share this code with up to 11 more players.</p></div><button type="button" className="secondary-button" onClick={copy}>Copy invite link</button></div>
     <div className="lobby-grid"><div><h2>Players <span>{snapshot.players.length}/12</span></h2><div className="player-list">{snapshot.players.map((player) => <div key={player.id}><span className="avatar">{player.name[0]?.toUpperCase()}</span><strong>{player.name}{player.id === viewer?.id ? ' (you)' : ''}</strong>{player.isHost && <small>Host</small>}<em className={player.ready ? 'ready' : ''}>{player.ready ? 'Ready' : 'Not ready'}</em></div>)}</div>{!isHost && <button type="button" className="primary-button full-button" onClick={() => action({ action: 'ready', ready: !viewer?.ready })}>{viewer?.ready ? 'I’m not ready' : 'I’m ready'}</button>}</div>
-      <div className="lobby-settings"><h2>Match setup</h2>{isHost ? <><div className="tabs compact three-tabs"><button className={mode === 'individuals' ? 'active' : ''} onClick={() => setMode('individuals')}>Individuals</button><button className={mode === 'teams' ? 'active' : ''} onClick={() => setMode('teams')}>Teams</button><button className={mode === 'cooperative' ? 'active' : ''} onClick={() => setMode('cooperative')}>Co-op</button></div><SettingsPanel settings={settings} setSettings={setSettings} /><button type="button" className="secondary-button full-button" onClick={() => action({ action: 'configure', settings, mode })}>Save settings</button><button type="button" disabled={busy} className="primary-button full-button" onClick={() => action({ action: 'start' })}>Start match <span>→</span></button></> : <div className="setting-summary"><p><strong>{snapshot.mode === 'individuals' ? 'Individuals' : snapshot.mode === 'teams' ? 'Teams' : 'Cooperative'}</strong></p><p>{snapshot.settings.categories.join(' + ')}</p><p>{BAND_NAMES[snapshot.settings.maxBand - 1]} · {snapshot.settings.length} puzzles</p></div>}</div></div>
+      <div className="lobby-settings"><h2>Match setup</h2>{isHost ? <><div className="tabs compact three-tabs"><button className={mode === 'individuals' ? 'active' : ''} onClick={() => setMode('individuals')}>Individuals</button><button className={mode === 'teams' ? 'active' : ''} onClick={() => setMode('teams')}>Teams</button><button className={mode === 'cooperative' ? 'active' : ''} onClick={() => setMode('cooperative')}>Co-op</button></div><SettingsPanel settings={settings} setSettings={setSettings} /><button type="button" className="secondary-button full-button" onClick={() => action({ action: 'configure', settings, mode })}>Save settings</button><button type="button" disabled={busy} className="primary-button full-button" onClick={() => action({ action: 'start' })}>Start match</button></> : <div className="setting-summary"><p><strong>{snapshot.mode === 'individuals' ? 'Individuals' : snapshot.mode === 'teams' ? 'Teams' : 'Cooperative'}</strong></p><p>{snapshot.settings.categories.join(' + ')}</p><p>{BAND_NAMES[snapshot.settings.maxBand - 1]} · {snapshot.settings.length} puzzles</p></div>}</div></div>
     {error && <p className="error-box">{error}</p>}<button type="button" className="text-button leave-button" onClick={leave}>Leave room</button>
   </section></main>;
 }
@@ -217,6 +215,6 @@ export default function GatherWordApp() {
     : screen === 'setup' ? <SetupScreen entryMode={entryMode} settings={settings} setSettings={setSettings} togetherMode={togetherMode} setTogetherMode={setTogetherMode} teams={teams} setTeams={setTeams} start={startLocal} back={home} />
     : screen === 'online-entry' ? <OnlineEntry onBack={home} onConnected={connect} initialCode={initialCode} />
     : credentials ? <OnlineRoom credentials={credentials} leave={leave} /> : null}
-    <footer><span>GatherWord</span><span>{WORD_BANK.length} curated Bible answers · original hints</span></footer>
+    <footer><span>GatherWord</span><span>{WORD_BANK.length} curated Bible answers, original hints</span></footer>
   </div>;
 }
