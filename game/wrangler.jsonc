@@ -1,12 +1,14 @@
 {
   // Worker name — this becomes part of your free *.workers.dev address
-  // (e.g. gatherword.<your-subdomain>.workers.dev) unless you attach a
-  // custom domain later.
-  "name": "gatherword",
+  // (e.g. wordin.<your-subdomain>.workers.dev) unless you attach a
+  // custom domain later. Renaming this moves the live URL -- the old
+  // gatherword.sagyire83.workers.dev address stops working once this
+  // version is deployed to production.
+  "name": "wordin",
   "compatibility_date": "2026-05-15",
   "compatibility_flags": ["nodejs_compat"],
 
-  // Serve on the free *.workers.dev address (https://gatherword.<subdomain>.workers.dev).
+  // Serve on the free *.workers.dev address (https://wordin.<subdomain>.workers.dev).
   // Explicit here just to silence Wrangler's "using default" warnings.
   "workers_dev": true,
   "preview_urls": true,

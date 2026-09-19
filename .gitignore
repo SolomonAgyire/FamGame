@@ -1,0 +1,4 @@
+.DS_Store
+# Duplicate staging copy of the audio files -- the real copies the app
+# actually serves live in game/public/audio/.
+/game/Audio file/

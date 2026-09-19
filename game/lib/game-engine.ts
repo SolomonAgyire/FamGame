@@ -1,5 +1,5 @@
 import { WORD_BANK } from '@/data/word-bank';
-import type { GameSettings, MatchRecipe, PuzzleRecipe, WordEntry } from '@/lib/types';
+import type { Category, DifficultyBand, GameSettings, MatchRecipe, PuzzleRecipe, WordEntry } from '@/lib/types';
 
 const HISTORY_KEY = 'gatherword-match-history-v1';
 
@@ -38,6 +38,20 @@ export function normalizeAnswer(value: string) {
 
 export function eligibleWords(settings: GameSettings) {
   return WORD_BANK.filter((entry) => entry.band <= settings.maxBand && entry.categories.some((category) => settings.categories.includes(category)));
+}
+
+/** Words at exactly one band (not "up to"), for level-by-level modes like
+ * Time Attack where each level is a single difficulty tier. */
+export function wordsForBand(band: DifficultyBand, categories: Category[]) {
+  return WORD_BANK.filter((entry) => entry.band === band && entry.categories.some((category) => categories.includes(category)));
+}
+
+/** A shuffled, freshly-scrambled queue of every word at one band, for a
+ * level that should never repeat a word within a run. */
+export function buildLevelQueue(band: DifficultyBand, categories: Category[]): PuzzleRecipe[] {
+  const random = rng(secureSeed());
+  const words = shuffle(wordsForBand(band, categories), random);
+  return words.map((entry) => ({ entryId: entry.id, scramble: makeScramble(entry.playable, random) }));
 }
 
 function makeScramble(answer: string, random: () => number) {
@@ -90,6 +104,10 @@ export function createFreshRecipe(settings: GameSettings) {
   }
   localStorage.setItem(HISTORY_KEY, JSON.stringify([recipe.signature, ...history.filter((value) => value !== recipe.signature)].slice(0, 1000)));
   return recipe;
+}
+
+export function getEntryById(id: string) {
+  return WORD_BANK.find((entry) => entry.id === id);
 }
 
 export function getPuzzleEntry(recipe: MatchRecipe, index: number) {
