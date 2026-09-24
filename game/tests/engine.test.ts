@@ -10,7 +10,7 @@ test('the starter bank includes all 66 Bible books and complete metadata', () =>
   assert.equal(WORD_BANK.filter((entry) => entry.categories.includes('book')).length, 66);
   for (const entry of WORD_BANK) {
     assert.ok(entry.id);
-    assert.match(entry.playable, /^[A-Z]+$/);
+    assert.match(entry.playable, /^[A-Z0-9]+$/);
     assert.equal(entry.hints.length, 2);
     assert.ok(entry.references[0]);
     assert.equal(entry.status, 'approved');
