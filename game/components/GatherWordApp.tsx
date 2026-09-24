@@ -5,16 +5,20 @@ import { buildLevelQueue, createFreshRecipe, eligibleWords, getEntryById, getPuz
 import { duckMusic, playCorrect, playTap, playWrong, startMusic, stopMusic } from '@/lib/audio';
 import { showToast, subscribeToasts, type Toast } from '@/lib/toast';
 import type { Category, DifficultyBand, GameSettings, MatchRecipe, PlayMode, PuzzleRecipe, Team } from '@/lib/types';
+import { LEVEL_NAMES } from '@/lib/types';
 
 function ToastHost() {
   const [toasts, setToasts] = useState<(Toast & { leaving?: boolean })[]>([]);
-  useEffect(() => subscribeToasts((toast) => {
-    setToasts((current) => [...current, toast]);
-    // Mark it "leaving" first so the fade-out animation can play, then
-    // actually remove it once that animation has had time to finish.
-    window.setTimeout(() => setToasts((current) => current.map((item) => item.id === toast.id ? { ...item, leaving: true } : item)), 2800);
-    window.setTimeout(() => setToasts((current) => current.filter((item) => item.id !== toast.id)), 3100);
-  }), []);
+  useEffect(() => {
+    const unsubscribe = subscribeToasts((toast) => {
+      setToasts((current) => [...current, toast]);
+      // Mark it "leaving" first so the fade-out animation can play, then
+      // actually remove it once that animation has had time to finish.
+      window.setTimeout(() => setToasts((current) => current.map((item) => item.id === toast.id ? { ...item, leaving: true } : item)), 2800);
+      window.setTimeout(() => setToasts((current) => current.filter((item) => item.id !== toast.id)), 3100);
+    });
+    return () => { unsubscribe(); };
+  }, []);
   if (toasts.length === 0) return null;
   return <div className="toast-stack" role="status" aria-live="polite">
     {toasts.map((toast) => <div key={toast.id} className={`toast toast-${toast.kind} ${toast.leaving ? 'toast-leaving' : ''}`}>{toast.message}</div>)}
@@ -27,13 +31,12 @@ type RoomPlayer = { id: string; name: string; isHost: boolean; ready: boolean; s
 type RoomSnapshot = {
   code: string; status: 'LOBBY' | 'PUZZLE_OPEN' | 'PUZZLE_RESOLVED' | 'RESULTS'; mode: 'individuals' | 'teams' | 'cooperative';
   settings: GameSettings; players: RoomPlayer[]; currentIndex: number; puzzleCount: number; version: number; viewerId: string; viewerHints: number;
-  puzzle: null | { id: string; scramble: string; fixedPrefix?: string; category: Category; band: number; hints: [string, string]; display?: string; reference?: string };
+  puzzle: null | { id: string; scramble: string; category: Category; band: number; hints: [string, string]; display?: string; reference?: string };
   resolution: null | { solverId: string | null; solverName: string | null; award: number; revealed: boolean };
 };
 type Credentials = { code: string; token: string; playerId: string };
 
 const DEFAULT_SETTINGS: GameSettings = { categories: ['book', 'person', 'place'], maxBand: 2, length: 10 };
-const BAND_NAMES = ['Starter', 'Familiar', 'Challenge', 'Deep Cut'];
 const TEAM_COLORS = ['#dd6f57', '#2e7d68', '#bc861a', '#6c6faa'];
 
 function Header({ onHome, sound, setSound }: { onHome: () => void; sound: boolean; setSound: (value: boolean) => void }) {
@@ -94,7 +97,7 @@ function SettingsPanel({ settings, setSettings }: { settings: GameSettings; setS
       </button>; })}
     </div></fieldset>
     <fieldset><legend>How challenging?</legend><div className="band-grid">
-      {BAND_NAMES.map((name, index) => <button type="button" key={name} onClick={() => setSettings({ ...settings, maxBand: (index + 1) as DifficultyBand })} className={`band-button ${settings.maxBand === index + 1 ? 'selected' : ''}`}><small>Up to band {index + 1}</small><strong>{name}</strong></button>)}
+      {LEVEL_NAMES.map((name, index) => <button type="button" key={name} onClick={() => setSettings({ ...settings, maxBand: (index + 1) as DifficultyBand })} className={`band-button ${settings.maxBand === index + 1 ? 'selected' : ''}`}><small>Up to band {index + 1}</small><strong>{name}</strong></button>)}
     </div></fieldset>
     <fieldset><legend>How many puzzles?</legend><div className="length-row">
       {[10, 15].map((value) => <button type="button" key={value} onClick={() => setSettings({ ...settings, length: Math.min(value, pool) })} className={`length-button ${settings.length === value ? 'selected' : ''}`}>{value}</button>)}
@@ -230,7 +233,7 @@ function LocalGame({ mode, settings, teams: initialTeams, sound, onHome, onChang
     {missPop !== null && <MissPopup key={missPop} />}
     <div className="game-topbar"><div><span>Puzzle {index + 1} of {recipe.puzzles.length}</span><div className="progress"><i style={{ width: `${((index + 1) / recipe.puzzles.length) * 100}%` }} /></div></div><div className="score-strip">{scores.map((team) => <span key={team.id}><i style={{ background: team.color }} />{team.name} <strong key={team.score}>{team.score}</strong></span>)}</div></div>
     {mode === 'teams' && !resolved && <div className="claim-panel"><p>{claimedBy ? <><strong>{scores.find((team) => team.id === claimedBy)?.name}</strong> is building</> : 'Who knows it? Claim the puzzle.'}</p><div>{scores.map((team) => <button type="button" key={team.id} disabled={Boolean(claimedBy)} style={{ '--team-color': team.color } as React.CSSProperties} onClick={() => setClaimedBy(team.id)}>{claimedBy === team.id ? 'Building…' : `Claim · ${team.name}`}</button>)}{claimedBy && <button type="button" className="release" onClick={() => { setClaimedBy(null); setPlaced([]); }}>Release</button>}</div></div>}
-    <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{entry.categories[0]} · {BAND_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Unscramble the answer'}</h1></div><span className="points-pill">{currentValue} pts</span></div>
+    <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{entry.categories[0]} · {LEVEL_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Unscramble the answer'}</h1></div><span className="points-pill">{currentValue} pts</span></div>
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} locked={Boolean(resolved) || (mode === 'teams' && !claimedBy)} />
       {hints > 0 && !resolved && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{entry.hints.slice(0, hints).map((hint) => <p key={hint}>{hint}</p>)}</div></div>}
       {resolved ? <div className="resolution"><span>{resolved.revealed ? 'The answer was' : 'Beautiful work!'}</span><strong>{entry.display}</strong><p>{entry.references[0]} · {resolved.award ? `+${resolved.award} points` : 'No points this time'}</p><button type="button" className="primary-button" onClick={next}>{index === recipe.puzzles.length - 1 ? 'See results' : 'Next puzzle'}</button></div>
@@ -239,7 +242,7 @@ function LocalGame({ mode, settings, teams: initialTeams, sound, onHome, onChang
     </section></main>;
 }
 
-const BAND_TIME_LIMITS: Record<DifficultyBand, number> = { 1: 30, 2: 24, 3: 18, 4: 14 };
+const BAND_TIME_LIMITS: Record<DifficultyBand, number> = { 1: 40, 2: 36, 3: 32, 4: 28, 5: 24, 6: 22, 7: 20, 8: 18, 9: 16 };
 const HIGH_SCORE_KEY = 'wordin-timeattack-highscore';
 
 function getHighScore(): number {
@@ -369,7 +372,7 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
       setResolved(null);
       setStrikes(0);
       setTimeLeft(BAND_TIME_LIMITS[nextBand]);
-      showToast(`Leveling up: ${BAND_NAMES[nextBand - 1]}!`);
+      showToast(`Leveling up: ${LEVEL_NAMES[nextBand - 1]}!`);
       return;
     }
     setFinished('cleared');
@@ -392,7 +395,7 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
       <div className="result-score"><strong>{score}</strong><span>points</span></div>
       <div className="stat-grid">
         <div><strong>{solved}</strong><span>Solved</span></div>
-        <div><strong>{BAND_NAMES[band - 1]}</strong><span>Reached</span></div>
+        <div><strong>{LEVEL_NAMES[band - 1]}</strong><span>Reached</span></div>
         <div><strong>{best}</strong><span>Best score</span></div>
       </div>
       <div className="result-actions">
@@ -407,11 +410,11 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
   return <main className="game-shell">
     {celebration && <BigCelebration key={celebration.id} title={celebration.title} subtitle={celebration.subtitle} />}
     <div className="game-topbar">
-      <div><span>{BAND_NAMES[band - 1]} · {solved} solved</span><div className="progress"><i style={{ width: `${(timeLeft / timeLimit) * 100}%`, background: urgent ? 'var(--danger)' : undefined }} /></div></div>
+      <div><span>{LEVEL_NAMES[band - 1]} · {solved} solved</span><div className="progress"><i style={{ width: `${(timeLeft / timeLimit) * 100}%`, background: urgent ? 'var(--danger)' : undefined }} /></div></div>
       <div className="score-strip"><span>Score <strong key={score}>{score}</strong></span><span>{'❤️'.repeat(3 - strikes)}{'🖤'.repeat(strikes)}</span></div>
     </div>
     <section className="puzzle-card play-card">
-      <div className="card-top"><div><p className="puzzle-kicker">{entry.categories[0]} · {BAND_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Unscramble the answer'}</h1></div><span className={`points-pill timer-pill ${urgent ? 'urgent' : ''}`}>{timeLeft}s</span></div>
+      <div className="card-top"><div><p className="puzzle-kicker">{entry.categories[0]} · {LEVEL_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Unscramble the answer'}</h1></div><span className={`points-pill timer-pill ${urgent ? 'urgent' : ''}`}>{timeLeft}s</span></div>
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} locked={Boolean(resolved)} />
       {resolved && <div className="resolution"><span>{resolved.correct ? `+${resolved.gained} points` : 'Missed it'}</span><strong>{entry.display}</strong><p>{entry.references[0]}</p></div>}
       {!resolved && <div className="game-actions"><button type="button" className="check-button full-button" onClick={check}>Check answer</button></div>}
@@ -460,7 +463,7 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
   const answer = placed.map((index) => puzzle.scramble[index]).join('');
   const onlineScores = snapshot.mode === 'teams' ? ([['sun', 'Sun Team'], ['olive', 'Olive Team']] as const).map(([id, name]) => ({ id, name, score: snapshot.players.filter((player) => player.teamId === id).reduce((sum, player) => sum + player.score, 0) })) : snapshot.players.map((player) => ({ id: player.id, name: player.name, score: player.score }));
   return <main className="game-shell"><div className="room-banner"><span>Room <strong>{snapshot.code}</strong></span><span>{error || '● Connected'}</span></div><div className="game-topbar"><div><span>Puzzle {snapshot.currentIndex + 1} of {snapshot.puzzleCount}</span><div className="progress"><i style={{ width: `${((snapshot.currentIndex + 1) / snapshot.puzzleCount) * 100}%` }} /></div></div><div className="score-strip">{onlineScores.map((side) => <span key={side.id}>{side.name} <strong key={side.score}>{side.score}</strong></span>)}</div></div>
-    <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{puzzle.category} · {BAND_NAMES[puzzle.band - 1]}</p><h1>{snapshot.status === 'PUZZLE_RESOLVED' ? puzzle.display : 'Everyone is solving…'}</h1></div><span className="points-pill">{Math.max(1, 5 - snapshot.viewerHints)} pts</span></div>
+    <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{puzzle.category} · {LEVEL_NAMES[puzzle.band - 1]}</p><h1>{snapshot.status === 'PUZZLE_RESOLVED' ? puzzle.display : 'Everyone is solving…'}</h1></div><span className="points-pill">{Math.max(1, 5 - snapshot.viewerHints)} pts</span></div>
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} locked={snapshot.status !== 'PUZZLE_OPEN' || busy} />
       {snapshot.viewerHints > 0 && snapshot.status === 'PUZZLE_OPEN' && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{puzzle.hints.slice(0, snapshot.viewerHints).map((hint) => <p key={hint}>{hint}</p>)}</div></div>}
       {snapshot.status === 'PUZZLE_RESOLVED' ? <div className="resolution">{Boolean(snapshot.resolution?.award) && <Confetti key={snapshot.currentIndex} />}<span>{snapshot.resolution?.revealed ? 'The answer was' : `${snapshot.resolution?.solverName} solved it!`}</span><strong>{puzzle.display}</strong><p>{puzzle.reference} · {snapshot.resolution?.award ? `+${snapshot.resolution.award} points` : 'No points this time'}</p>{isHost ? <button type="button" className="primary-button" onClick={() => action({ action: 'next' })}>Next puzzle</button> : <p>Waiting for the host…</p>}</div>
@@ -474,7 +477,7 @@ function OnlineLobby({ snapshot, viewer, isHost, busy, action, leave }: { snapsh
   const copy = async () => { try { await navigator.clipboard.writeText(joinUrl); } catch { /* clipboard can be blocked */ } };
   return <main className="page-shell"><section className="panel lobby-panel"><div className="lobby-heading"><div><p className="section-kicker">Private room</p><h1 className="room-code">{snapshot.code}</h1><p>Share this code with up to 11 more players.</p></div><button type="button" className="secondary-button" onClick={copy}>Copy invite link</button></div>
     <div className="lobby-grid"><div><h2>Players <span>{snapshot.players.length}/12</span></h2><div className="player-list">{snapshot.players.map((player) => <div key={player.id}><span className="avatar">{player.name[0]?.toUpperCase()}</span><strong>{player.name}{player.id === viewer?.id ? ' (you)' : ''}</strong>{player.isHost && <small>Host</small>}<em className={player.ready ? 'ready' : ''}>{player.ready ? 'Ready' : 'Not ready'}</em></div>)}</div>{!isHost && <button type="button" className="primary-button full-button" onClick={() => action({ action: 'ready', ready: !viewer?.ready })}>{viewer?.ready ? 'I’m not ready' : 'I’m ready'}</button>}</div>
-      <div className="lobby-settings"><h2>Match setup</h2>{isHost ? <><div className="tabs compact three-tabs"><button className={mode === 'individuals' ? 'active' : ''} onClick={() => setMode('individuals')}>Individuals</button><button className={mode === 'teams' ? 'active' : ''} onClick={() => setMode('teams')}>Teams</button><button className={mode === 'cooperative' ? 'active' : ''} onClick={() => setMode('cooperative')}>Co-op</button></div><SettingsPanel settings={settings} setSettings={setSettings} /><button type="button" className="secondary-button full-button" onClick={() => action({ action: 'configure', settings, mode })}>Save settings</button><button type="button" disabled={busy} className="primary-button full-button" onClick={() => action({ action: 'start' })}>Start match</button></> : <div className="setting-summary"><p><strong>{snapshot.mode === 'individuals' ? 'Individuals' : snapshot.mode === 'teams' ? 'Teams' : 'Cooperative'}</strong></p><p>{snapshot.settings.categories.join(' + ')}</p><p>{BAND_NAMES[snapshot.settings.maxBand - 1]} · {snapshot.settings.length} puzzles</p></div>}</div></div>
+      <div className="lobby-settings"><h2>Match setup</h2>{isHost ? <><div className="tabs compact three-tabs"><button className={mode === 'individuals' ? 'active' : ''} onClick={() => setMode('individuals')}>Individuals</button><button className={mode === 'teams' ? 'active' : ''} onClick={() => setMode('teams')}>Teams</button><button className={mode === 'cooperative' ? 'active' : ''} onClick={() => setMode('cooperative')}>Co-op</button></div><SettingsPanel settings={settings} setSettings={setSettings} /><button type="button" className="secondary-button full-button" onClick={() => action({ action: 'configure', settings, mode })}>Save settings</button><button type="button" disabled={busy} className="primary-button full-button" onClick={() => action({ action: 'start' })}>Start match</button></> : <div className="setting-summary"><p><strong>{snapshot.mode === 'individuals' ? 'Individuals' : snapshot.mode === 'teams' ? 'Teams' : 'Cooperative'}</strong></p><p>{snapshot.settings.categories.join(' + ')}</p><p>{LEVEL_NAMES[snapshot.settings.maxBand - 1]} · {snapshot.settings.length} puzzles</p></div>}</div></div>
     <button type="button" className="text-button leave-button" onClick={leave}>Leave room</button>
   </section></main>;
 }

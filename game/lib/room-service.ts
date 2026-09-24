@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { createRecipe, getPuzzleEntry, normalizeAnswer } from '@/lib/game-engine';
-import type { GameSettings, MatchRecipe } from '@/lib/types';
+import type { GameSettings, Level, MatchRecipe } from '@/lib/types';
 
 export type RoomMode = 'individuals' | 'teams' | 'cooperative';
 export type RoomPlayer = {
@@ -62,7 +62,7 @@ export function cleanName(value: string) {
 export function validateSettings(input: Partial<GameSettings>): GameSettings {
   const allowed = ['book', 'person', 'place'] as const;
   const categories = allowed.filter((category) => input.categories?.includes(category));
-  const maxBand = Math.min(4, Math.max(1, Number(input.maxBand) || 2)) as 1 | 2 | 3 | 4;
+  const maxBand = Math.min(9, Math.max(1, Number(input.maxBand) || 2)) as Level;
   const length = Math.min(30, Math.max(3, Math.floor(Number(input.length) || 10)));
   return { categories: categories.length ? categories : ['book'], maxBand, length };
 }
@@ -142,7 +142,7 @@ export function publicSnapshot(room: RoomRow, viewerId: string) {
     currentIndex: room.current_index, puzzleCount: match?.puzzles.length || settings.length,
     version: room.version, viewerId, viewerHints,
     puzzle: recipePuzzle && entry ? {
-      id: entry.id, scramble: recipePuzzle.scramble, fixedPrefix: entry.fixedPrefix,
+      id: entry.id, scramble: recipePuzzle.scramble,
       category: entry.categories[0], band: entry.band, hints: entry.hints,
       display: resolved ? entry.display : undefined,
       reference: resolved ? entry.references[0] : undefined,

@@ -35,7 +35,7 @@ test('blended matches keep category representation balanced', () => {
   const counts = { book: 0, person: 0, place: 0 };
   for (const puzzle of recipe.puzzles) {
     const entry = WORD_BANK.find((item) => item.id === puzzle.entryId);
-    if (entry) counts[entry.categories[0]] += 1;
+    if (entry) counts[entry.categories[0] as 'book' | 'person' | 'place'] += 1;
   }
   assert.ok(Math.max(...Object.values(counts)) - Math.min(...Object.values(counts)) <= 1);
 });
@@ -49,5 +49,6 @@ test('settings filter and answer normalization behave predictably', () => {
   const books = eligibleWords({ categories: ['book'], maxBand: 1, length: 10 });
   assert.ok(books.length >= 10);
   assert.ok(books.every((entry) => entry.categories.includes('book') && entry.band === 1));
-  assert.equal(normalizeAnswer(' 1 sam-uel '), 'SAMUEL');
+  // Digits are kept now, so the leading "1" of "1 Samuel" survives.
+  assert.equal(normalizeAnswer(' 1 sam-uel '), '1SAMUEL');
 });

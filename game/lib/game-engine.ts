@@ -32,8 +32,10 @@ function shuffle<T>(items: T[], random: () => number) {
   return copy;
 }
 
+/** Digits are kept so "1 Kings" and "2 Kings" stay distinguishable --
+ * they scramble to identical letters otherwise. */
 export function normalizeAnswer(value: string) {
-  return value.toUpperCase().replace(/[^A-Z]/g, '');
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
 export function eligibleWords(settings: GameSettings) {
