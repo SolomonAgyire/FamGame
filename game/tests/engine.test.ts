@@ -7,13 +7,17 @@ import type { GameSettings } from '../lib/types';
 const allSettings: GameSettings = { categories: ['book', 'person', 'place'], maxBand: 4, length: 15 };
 
 test('the starter bank includes all 66 Bible books and complete metadata', () => {
-  assert.equal(WORD_BANK.filter((entry) => entry.categories.includes('book')).length, 66);
+  const books = WORD_BANK.filter((entry) => entry.categories.includes('book'));
+  assert.equal(books.length, 66);
+  for (const book of books) assert.equal(book.status, 'approved');
   for (const entry of WORD_BANK) {
     assert.ok(entry.id);
     assert.match(entry.playable, /^[A-Z0-9]+$/);
     assert.equal(entry.hints.length, 2);
     assert.ok(entry.references[0]);
-    assert.equal(entry.status, 'approved');
+    // The bank now carries a review queue: a word is either cleared for
+    // play or still a draft. `PLAYABLE_BANK` is what reaches a player.
+    assert.ok(['draft', 'approved'].includes(entry.status));
   }
 });
 

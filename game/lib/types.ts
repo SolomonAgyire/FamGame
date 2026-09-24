@@ -3,6 +3,10 @@ export type Level = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 /** 0 = a household name, 4 = genuinely obscure. Set by hand per word. */
 export type Familiarity = 0 | 1 | 2 | 3 | 4;
 
+/** A hand-authored word-bank row: display spelling, its NWT reference
+ * in `Book chapter:verse` form, and how familiar the name is. */
+export type SourceRow = [display: string, reference: string, familiarity: Familiarity];
+
 /** Kept as an alias so existing call sites compile while Phase D migrates
  * them; remove once nothing references it. */
 export type DifficultyBand = Level;

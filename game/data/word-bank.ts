@@ -1,7 +1,7 @@
-import type { Category, Familiarity, Level, WordEntry } from '@/lib/types';
+import type { Category, Familiarity, Level, SourceRow, WordEntry } from '@/lib/types';
+import { draftPeopleRows, peopleRows } from '@/data/words/people';
 
-/** display, NWT reference, familiarity (0 household .. 4 obscure) */
-type SourceRow = [display: string, reference: string, familiarity: Familiarity];
+export type { SourceRow };
 
 const books: SourceRow[] = [
   ['Genesis', 'Genesis 1:1', 0], ['Exodus', 'Exodus 1:1', 0], ['Leviticus', 'Leviticus 1:1', 1], ['Numbers', 'Numbers 1:1', 0],
@@ -23,23 +23,6 @@ const books: SourceRow[] = [
   ['Jude', 'Jude 1:1', 1], ['Revelation', 'Revelation 1:1', 0],
 ];
 
-const people: SourceRow[] = [
-  ['Abraham', 'Genesis 17:5', 0], ['Sarah', 'Genesis 17:15', 0], ['Isaac', 'Genesis 21:3', 0], ['Rebekah', 'Genesis 24:15', 1],
-  ['Jacob', 'Genesis 25:26', 0], ['Joseph', 'Genesis 30:24', 0], ['Moses', 'Exodus 3:4', 0], ['Aaron', 'Exodus 4:14', 0],
-  ['Miriam', 'Exodus 15:20', 1], ['Joshua', 'Joshua 1:1', 0], ['Rahab', 'Joshua 2:1', 1], ['Gideon', 'Judges 6:11', 1],
-  ['Samson', 'Judges 13:24', 0], ['Ruth', 'Ruth 1:4', 0], ['Naomi', 'Ruth 1:2', 1], ['Boaz', 'Ruth 2:1', 1],
-  ['Samuel', '1 Samuel 1:20', 0], ['Saul', '1 Samuel 9:2', 0], ['David', '1 Samuel 16:13', 0], ['Jonathan', '1 Samuel 18:1', 1],
-  ['Abigail', '1 Samuel 25:3', 1], ['Solomon', '2 Samuel 12:24', 0], ['Elijah', '1 Kings 17:1', 0], ['Elisha', '1 Kings 19:16', 1],
-  ['Hezekiah', '2 Kings 18:1', 1], ['Josiah', '2 Kings 22:1', 1], ['Ezra', 'Ezra 7:1', 1], ['Nehemiah', 'Nehemiah 1:1', 1],
-  ['Esther', 'Esther 2:7', 0], ['Mordecai', 'Esther 2:5', 3], ['Job', 'Job 1:1', 0], ['Isaiah', 'Isaiah 1:1', 0],
-  ['Jeremiah', 'Jeremiah 1:1', 0], ['Ezekiel', 'Ezekiel 1:3', 1], ['Daniel', 'Daniel 1:6', 0], ['Hosea', 'Hosea 1:1', 1],
-  ['Jonah', 'Jonah 1:1', 0], ['Mary', 'Matthew 1:16', 0], ['Elizabeth', 'Luke 1:5', 1], ['Zechariah', 'Luke 1:5', 1],
-  ['Jesus', 'Matthew 1:21', 0], ['Peter', 'Matthew 4:18', 0], ['Andrew', 'Matthew 4:18', 0], ['James', 'Matthew 4:21', 1],
-  ['Philip', 'John 1:43', 1], ['Nathanael', 'John 1:45', 2], ['Martha', 'Luke 10:38', 1], ['Lazarus', 'John 11:1', 1],
-  ['Paul', 'Acts 13:9', 0], ['Barnabas', 'Acts 4:36', 1], ['Timothy', 'Acts 16:1', 1], ['Lydia', 'Acts 16:14', 1],
-  ['Priscilla', 'Acts 18:2', 1], ['Aquila', 'Acts 18:2', 2], ['Stephen', 'Acts 6:5', 1], ['Phoebe', 'Romans 16:1', 2],
-  ['Lois', '2 Timothy 1:5', 2], ['Eunice', '2 Timothy 1:5', 2],
-];
 
 const places: SourceRow[] = [
   ['Eden', 'Genesis 2:8', 0], ['Ararat', 'Genesis 8:4', 1], ['Babel', 'Genesis 11:9', 1], ['Ur', 'Genesis 11:31', 2],
@@ -123,7 +106,8 @@ export function assignLevels(entries: WordEntry[]): WordEntry[] {
 
 export const WORD_BANK: WordEntry[] = assignLevels([
   ...makeEntries('book', books, 'approved'),
-  ...makeEntries('person', people, 'approved'),
+  ...makeEntries('person', peopleRows, 'approved'),
+  ...makeEntries('person', draftPeopleRows, 'draft'),
   ...makeEntries('place', places, 'approved'),
 ]);
 
