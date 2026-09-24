@@ -53,3 +53,52 @@ test('levels are ordered — no level contains an easier average word than the l
     assert.ok(averages[i] >= averages[i - 1], `level ${i + 1} averages ${averages[i]} but level ${i} averages ${averages[i - 1]}`);
   }
 });
+
+/** Forms that belong to KJV and other translations, not the NWT. Their
+ * presence means a word was sourced from the wrong translation. */
+const NON_NWT_FORMS = [
+  'Esaias', 'Elias', 'Eliseus', 'Osee', 'Jeremias', 'Noe', 'Core', 'Sion',
+  'Marcus', 'Lucas', 'Timotheus', 'Zacharias', 'Ezekias', 'Josias', 'Jonas',
+  'Judas Iscariot the son of Simon', 'Aggeus', 'Sophonias', 'Abdias', 'Micheas',
+];
+
+test('no entry uses a non-NWT name form', () => {
+  for (const entry of WORD_BANK) {
+    for (const bad of NON_NWT_FORMS) {
+      assert.notEqual(entry.display.toLowerCase(), bad.toLowerCase(), `${entry.display} is a non-NWT form`);
+    }
+  }
+});
+
+test('every entry is complete and internally consistent', () => {
+  for (const entry of WORD_BANK) {
+    assert.ok(entry.id, 'missing id');
+    assert.match(entry.playable, /^[A-Z0-9]+$/, `${entry.display} has an unplayable answer`);
+    assert.equal(entry.answer, entry.playable, `${entry.display} answer and playable disagree`);
+    assert.equal(entry.hints.length, 2, `${entry.display} needs exactly two hints`);
+    assert.ok(entry.references[0], `${entry.display} has no reference`);
+    assert.match(entry.references[0], /^[1-3]?\s?[A-Za-z][A-Za-z ]*\s\d+:\d+$/, `${entry.display} reference "${entry.references[0]}" is not book chapter:verse`);
+    assert.ok(entry.familiarity >= 0 && entry.familiarity <= 4, `${entry.display} familiarity out of range`);
+    assert.ok(['draft', 'approved'].includes(entry.status), `${entry.display} has an invalid status`);
+    assert.equal(entry.verification, 'English NWT naming standard');
+  }
+});
+
+test('no two entries share an id or a playable answer within a category', () => {
+  const ids = new Set<string>();
+  const seen = new Map<string, string>();
+  for (const entry of WORD_BANK) {
+    assert.ok(!ids.has(entry.id), `duplicate id ${entry.id}`);
+    ids.add(entry.id);
+    const key = `${entry.categories[0]}:${entry.playable}`;
+    const previous = seen.get(key);
+    assert.ok(!previous, `${entry.display} collides with ${previous} — identical tiles, different answers`);
+    seen.set(key, entry.display);
+  }
+});
+
+test('all 66 Bible books are present and approved', () => {
+  const books = WORD_BANK.filter((entry) => entry.categories.includes('book'));
+  assert.equal(books.length, 66);
+  for (const book of books) assert.equal(book.status, 'approved');
+});
