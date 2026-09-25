@@ -413,6 +413,53 @@ legend { margin-bottom: 4px; font-size: 15px; font-weight: 700; color: var(--ink
 .resolution strong { margin: 6px 0; font-family: var(--font-display); font-weight: 600; font-size: clamp(26px, 6vw, 38px); color: var(--grass-deep); }
 .resolution p { margin: 6px 0 16px; color: var(--muted); font-size: 13px; }
 
+/* ============================================================
+   The solve moment. Three beats inside 700ms: the word settles,
+   the citation arrives under it, then the points. The citation is
+   the reason this game exists, so it gets a plaque of its own
+   instead of grey text after a middle dot — and the points, which
+   are only a mechanic, stop sharing its line.
+   ============================================================ */
+.resolution .scripture {
+  display: inline-flex; align-items: center; gap: 9px;
+  margin: 2px auto 0; padding: 10px 18px; border-radius: 999px;
+  background: linear-gradient(180deg, #fffaf0, var(--paper));
+  border: 1px solid #e8cf9a; box-shadow: 0 4px 0 #d9bf82;
+  color: var(--paper-ink); font-family: var(--font-display);
+  font-weight: 600; font-size: clamp(15px, 4.2vw, 19px);
+}
+.resolution .scripture-mark { display: inline-block; color: var(--sun-deep); font-size: 14px; }
+.resolution .scripture-cite { display: inline-block; color: inherit; font-size: inherit; font-weight: inherit; font-style: normal; }
+.resolution .resolution-award {
+  margin: 14px 0 16px; color: var(--grass-deep); font-size: 13px; font-weight: 700;
+}
+.resolution-rule { display: block; width: 44px; height: 3px; margin: 14px auto 12px; border-radius: 3px; background: #cdeed8; }
+
+@keyframes reveal-word {
+  from { opacity: 0; transform: translateY(8px) scale(.9); }
+  62% { opacity: 1; transform: translateY(0) scale(1.04); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes reveal-rise {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: none; }
+}
+.resolution .resolution-lead { animation: reveal-rise 200ms ease both; }
+.resolution .resolution-word { animation: reveal-word 320ms cubic-bezier(.2,.8,.25,1) 60ms both; }
+.resolution .resolution-rule { animation: reveal-rise 220ms ease 240ms both; }
+.resolution .scripture { animation: reveal-rise 240ms cubic-bezier(.2,.8,.25,1) 300ms both; }
+.resolution .resolution-award,
+.resolution .primary-button { animation: reveal-rise 200ms ease 460ms both; }
+
+/* The same content, all at once. Zeroing the durations is not enough on
+   its own — the delays would still stage it. */
+@media (prefers-reduced-motion: reduce) {
+  .resolution .resolution-lead, .resolution .resolution-word, .resolution .resolution-rule,
+  .resolution .scripture, .resolution .resolution-award, .resolution .primary-button {
+    animation: none !important; opacity: 1; transform: none;
+  }
+}
+
 .claim-panel { margin: 0 auto 12px; padding: 12px 14px; border-radius: 20px; background: var(--surface); border: 1px solid var(--line); }
 .claim-panel p { margin: 0 0 8px; font-size: 13px; color: var(--ink); }
 .claim-panel > div { display: flex; flex-wrap: wrap; gap: 7px; }

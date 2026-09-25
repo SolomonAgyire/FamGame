@@ -392,7 +392,7 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
       {timerMode === 'bonus' && !metLevelBefore && !resolved && <p className="notice">A clock from here on — but running out costs you nothing. Beat it and it pays a speed bonus.</p>}
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} shakeKey={shake ?? undefined} locked={Boolean(resolved) || (mode === 'teams' && !claimedBy)} />
       {hints > 0 && !resolved && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{ladder.slice(0, hints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
-      {resolved ? <div className="resolution"><span>{resolved.revealed ? 'The answer was' : 'Beautiful work!'}</span><strong>{entry.display}</strong><p>{entry.references[0]} · {resolved.award ? `+${resolved.award} points` : 'No points this time'}</p><button type="button" className="primary-button" onClick={next}>{index === recipe.puzzles.length - 1 ? 'See results' : 'Next puzzle'}</button></div>
+      {resolved ? <Resolution lead={resolved.revealed ? 'The answer was' : 'Beautiful work!'} word={entry.display} reference={entry.references[0]} award={resolved.award ? `+${resolved.award} points` : 'No points this time'}><button type="button" className="primary-button" onClick={next}>{index === recipe.puzzles.length - 1 ? 'See results' : 'Next puzzle'}</button></Resolution>
       : <div className="game-actions"><button type="button" className="soft-button" onClick={shuffleTray}>↻ Shuffle</button><button type="button" className="soft-button" disabled={placed.length === 0} onClick={undo}>↩ Undo</button><button type="button" className="soft-button" disabled={placed.length === 0} onClick={() => { rejectedRef.current = null; setPlaced([]); }}>✕ Clear</button><button type="button" className="soft-button" disabled={!nextHint} onClick={takeHint}>{nextHint ? `✦ Hint · ${HINT_LABELS[nextHint.kind]}` : '✦ Hints used'}</button><button type="button" className="text-button" onClick={reveal}>Reveal & continue</button></div>}
       <button type="button" className="quit-button" onClick={onHome}>End match</button>
     </section></main>;
@@ -415,6 +415,22 @@ function getHighScore(): number {
 }
 function saveHighScore(value: number) {
   try { localStorage.setItem(HIGH_SCORE_KEY, String(value)); } catch { /* storage can be blocked */ }
+}
+
+/** The solve moment, shared by every mode. Three staged beats inside
+ * 700ms -- the word settling, then the citation, then the award -- rather
+ * than three simultaneous fades. The citation is the point of the game and
+ * gets its own plaque; the award is a mechanic and sits below it, never
+ * joined to it by a middle dot. */
+function Resolution({ lead, word, reference, award, children }: { lead: string; word: string; reference?: string; award: string; children?: React.ReactNode }) {
+  return <div className="resolution">
+    <span className="resolution-lead">{lead}</span>
+    <strong className="resolution-word">{word}</strong>
+    <i className="resolution-rule" aria-hidden="true" />
+    {reference && <p className="scripture"><span className="scripture-mark" aria-hidden="true">✦</span><cite className="scripture-cite">{reference}</cite></p>}
+    <p className="resolution-award">{award}</p>
+    {children}
+  </div>;
 }
 
 function BigCelebration({ title, subtitle }: { title: string; subtitle: string }) {
@@ -559,7 +575,7 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
   // Auto-advance shortly after each word resolves -- an arcade mode keeps moving.
   useEffect(() => {
     if (!resolved) return;
-    const timer = window.setTimeout(advance, 650);
+    const timer = window.setTimeout(advance, 1100);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolved]);
@@ -630,7 +646,7 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
     <section className="puzzle-card play-card">
       <div className="card-top"><div><p className="puzzle-kicker">{entry.categories[0]} · {LEVEL_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Unscramble the answer'}</h1></div><span className={`points-pill timer-pill ${urgent ? 'urgent' : ''} ${timerMode === 'bonus' ? 'bonus' : ''}`}>{timerMode === 'none' ? `${queue.length} left` : timeLeft > 0 ? `${timeLeft}s` : timerMode === 'bonus' ? 'bonus gone' : '0s'}</span></div>
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} locked={Boolean(resolved)} />
-      {resolved && <div className="resolution"><span>{resolved.correct ? `+${resolved.gained} points` : 'Missed it'}</span><strong>{entry.display}</strong><p>{entry.references[0]}</p></div>}
+      {resolved && <Resolution lead={resolved.correct ? 'Solved it' : 'Missed it'} word={entry.display} reference={entry.references[0]} award={resolved.correct ? `+${resolved.gained} points` : 'No points'} />}
       {!resolved && <div className="game-actions"><button type="button" className="soft-button" onClick={() => { playTap(); setOrder(shuffledOrder(puzzle.scramble.length)); }}>↻ Shuffle</button><button type="button" className="soft-button" disabled={placed.length === 0} onClick={() => { playTap(); setPlaced(placed.slice(0, -1)); }}>↩ Undo</button><button type="button" className="soft-button" disabled={placed.length === 0} onClick={() => setPlaced([])}>✕ Clear</button></div>}
     </section>
     <button type="button" className="quit-button" onClick={onHome}>End run</button>
@@ -714,7 +730,7 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
     <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{puzzle.category} · {LEVEL_NAMES[puzzle.band - 1]}</p><h1>{snapshot.status === 'PUZZLE_RESOLVED' ? puzzle.display : 'Everyone is solving…'}</h1></div><span className="points-pill">{scoreSolve({ letterCount: puzzle.scramble.length, level: puzzle.band, combo: 0, hintsUsed: snapshot.viewerHints })} pts</span></div>
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} locked={snapshot.status !== 'PUZZLE_OPEN' || busy} />
       {snapshot.viewerHints > 0 && snapshot.status === 'PUZZLE_OPEN' && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{puzzle.hints.slice(0, snapshot.viewerHints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
-      {snapshot.status === 'PUZZLE_RESOLVED' ? <div className="resolution">{Boolean(snapshot.resolution?.award) && <Confetti key={snapshot.currentIndex} />}<span>{snapshot.resolution?.revealed ? 'The answer was' : `${snapshot.resolution?.solverName} solved it!`}</span><strong>{puzzle.display}</strong><p>{puzzle.reference} · {snapshot.resolution?.award ? `+${snapshot.resolution.award} points` : 'No points this time'}</p>{isHost ? <button type="button" className="primary-button" onClick={() => action({ action: 'next' })}>Next puzzle</button> : <p>Waiting for the host…</p>}</div>
+      {snapshot.status === 'PUZZLE_RESOLVED' ? <Resolution lead={snapshot.resolution?.revealed ? 'The answer was' : `${snapshot.resolution?.solverName} solved it!`} word={puzzle.display ?? ''} reference={puzzle.reference} award={snapshot.resolution?.award ? `+${snapshot.resolution.award} points` : 'No points this time'}>{Boolean(snapshot.resolution?.award) && <Confetti key={snapshot.currentIndex} />}{isHost ? <button type="button" className="primary-button" onClick={() => action({ action: 'next' })}>Next puzzle</button> : <p>Waiting for the host…</p>}</Resolution>
       : <div className="game-actions"><button className="soft-button" type="button" onClick={() => { playTap(); setOrder(shuffledOrder(puzzle.scramble.length)); }}>↻ Shuffle</button><button className="soft-button" type="button" disabled={placed.length === 0} onClick={() => { playTap(); setPlaced(placed.slice(0, -1)); }}>↩ Undo</button><button className="soft-button" type="button" disabled={placed.length === 0} onClick={() => setPlaced([])}>✕ Clear</button><button className="soft-button" type="button" disabled={snapshot.viewerHints >= puzzle.hints.length || busy} onClick={() => action({ action: 'hint' })}>{puzzle.hints[snapshot.viewerHints] ? `✦ Hint · ${HINT_LABELS[puzzle.hints[snapshot.viewerHints].kind]}` : '✦ Hints used'}</button><button className="check-button" type="button" disabled={placed.length !== puzzle.scramble.length || busy} onClick={() => action({ action: 'check', answer })}>Check answer</button>{isHost && <button className="text-button" type="button" onClick={() => action({ action: 'reveal' })}>Host reveal</button>}</div>}
       <button type="button" className="quit-button" onClick={leave}>Leave room</button>
     </section></main>;
