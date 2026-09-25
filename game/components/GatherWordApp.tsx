@@ -4,10 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { buildLevelQueue, createFreshRecipe, eligibleWords, getEntryById, getPuzzleEntry, normalizeAnswer } from '@/lib/game-engine';
 import { duckMusic, playCorrect, playTap, playWrong, startMusic, stopMusic } from '@/lib/audio';
 import { showToast, subscribeToasts, type Toast } from '@/lib/toast';
-import type { Category, DifficultyBand, GameSettings, MatchRecipe, PlayMode, PuzzleRecipe, Team } from '@/lib/types';
+import type { Category, DifficultyBand, GameSettings, Level, MatchRecipe, PlayMode, PuzzleRecipe, Team } from '@/lib/types';
 import { LEVEL_NAMES } from '@/lib/types';
 import { scoreSolve } from '@/lib/scoring';
 import { loadProgress, saveProgress, recordMatch, masteredCount } from '@/lib/progress';
+import { highestUnlocked } from '@/lib/levels';
+import { LevelPath } from '@/components/LevelPath';
 
 function ToastHost() {
   const [toasts, setToasts] = useState<(Toast & { leaving?: boolean })[]>([]);
@@ -38,7 +40,7 @@ type RoomSnapshot = {
 };
 type Credentials = { code: string; token: string; playerId: string };
 
-const DEFAULT_SETTINGS: GameSettings = { categories: ['book', 'person', 'place'], maxBand: 2, length: 10 };
+const DEFAULT_SETTINGS: GameSettings = { categories: ['book', 'person', 'place'], maxBand: 1, length: 10 };
 const TEAM_COLORS = ['#dd6f57', '#2e7d68', '#bc861a', '#6c6faa'];
 
 function Header({ onHome, sound, setSound }: { onHome: () => void; sound: boolean; setSound: (value: boolean) => void }) {
@@ -48,7 +50,7 @@ function Header({ onHome, sound, setSound }: { onHome: () => void; sound: boolea
   </header>;
 }
 
-function HomeScreen({ mode, setMode, start }: { mode: EntryMode; setMode: (mode: EntryMode) => void; start: () => void }) {
+function HomeScreen({ mode, setMode, start, level, setLevel }: { mode: EntryMode; setMode: (mode: EntryMode) => void; start: () => void; level: Level; setLevel: (level: Level) => void }) {
   const [expanded, setExpanded] = useState<EntryMode | null>(null);
   const modes = [
     { id: 'solo' as const, title: 'Solo Journey', icon: '🧩', tint: 'sky', detail: 'Play by yourself, at your own pace. No timer, no pressure.' },
@@ -56,6 +58,7 @@ function HomeScreen({ mode, setMode, start }: { mode: EntryMode; setMode: (mode:
     { id: 'online' as const, title: 'Online Room', icon: '🌐', tint: 'violet', detail: 'Everyone joins from their own phone with a six-character code -- great for players in different places.' },
     { id: 'timeattack' as const, title: 'Time Attack', icon: '⚡', tint: 'berry', detail: 'A solo race against the clock. Each level is faster and harder -- chase your high score.' },
   ];
+  const modeTitle = modes.find((item) => item.id === mode)?.title;
   return <main className="home-shell">
     <section className="home-grid">
       <h1 className="hero-title">Unscramble the word</h1>
@@ -70,7 +73,8 @@ function HomeScreen({ mode, setMode, start }: { mode: EntryMode; setMode: (mode:
           {expanded === item.id && <p className="mode-detail">{item.detail}</p>}
         </div>)}
       </div>
-      <button type="button" className="primary-button hero-button" onClick={start}>Start {modes.find((item) => item.id === mode)?.title}</button>
+      <LevelPath selected={level} onSelect={setLevel} />
+      <button type="button" className="primary-button hero-button" onClick={start}>Start {modeTitle} · {LEVEL_NAMES[level - 1]}</button>
       <p className="free-note">No account needed. No timer. Free to play.</p>
     </section>
   </main>;
@@ -534,6 +538,12 @@ function OnlineResults({ snapshot, isHost, action, leave }: { snapshot: RoomSnap
 
 export default function GatherWordApp() {
   const [screen, setScreen] = useState<Screen>('home'); const [entryMode, setEntryMode] = useState<EntryMode>('solo'); const [settings, setSettings] = useState<GameSettings>(DEFAULT_SETTINGS); const [togetherMode, setTogetherMode] = useState<PlayMode>('cooperative');
+  const [level, setLevelState] = useState<Level>(1);
+  // Picking a level on the journey path is what a solo/together match
+  // actually plays at -- the band picker used to live in SettingsPanel,
+  // but the journey path replaced it, so selecting a level here has to
+  // keep `settings.maxBand` in step.
+  const setLevel = (value: Level) => { setLevelState(value); setSettings((current) => ({ ...current, maxBand: value })); };
   const [teams, setTeams] = useState<Team[]>([{ id: 'team-1', name: 'Sun Team', color: TEAM_COLORS[0], score: 0 }, { id: 'team-2', name: 'Olive Team', color: TEAM_COLORS[1], score: 0 }]); const [localGameKey, setLocalGameKey] = useState(0); const [localMode, setLocalMode] = useState<PlayMode | null>(null); const [credentials, setCredentials] = useState<Credentials | null>(null); const [sound, setSound] = useState(true);
   const initialCode = useMemo(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('room')?.toUpperCase() || '', []);
   useEffect(() => { const timer = window.setTimeout(() => { const saved = sessionStorage.getItem('gatherword-room'); if (saved) { try { const value = JSON.parse(saved) as Credentials; setCredentials(value); setScreen('online-lobby'); } catch { sessionStorage.removeItem('gatherword-room'); } } else if (initialCode) { setEntryMode('online'); setScreen('online-entry'); } }, 0); return () => window.clearTimeout(timer); }, [initialCode]);
@@ -555,7 +565,7 @@ export default function GatherWordApp() {
   return <div className="app"><Header onHome={home} sound={sound} setSound={setSound} />
     {timeAttackActive ? <TimeAttackGame key={localGameKey} categories={settings.categories} sound={sound} onHome={home} />
     : localMode ? <LocalGame key={localGameKey} mode={localMode} settings={settings} teams={teams} sound={sound} onHome={home} onChangeSet={() => { setLocalMode(null); setScreen('setup'); }} />
-    : screen === 'home' ? <HomeScreen mode={entryMode} setMode={setEntryMode} start={startEntry} />
+    : screen === 'home' ? <HomeScreen mode={entryMode} setMode={setEntryMode} start={startEntry} level={level} setLevel={setLevel} />
     : screen === 'setup' ? <SetupScreen entryMode={entryMode} settings={settings} setSettings={setSettings} togetherMode={togetherMode} setTogetherMode={setTogetherMode} teams={teams} setTeams={setTeams} start={startLocal} back={home} />
     : screen === 'online-entry' ? <OnlineEntry onBack={home} onConnected={connect} initialCode={initialCode} />
     : credentials ? <OnlineRoom credentials={credentials} leave={leave} sound={sound} /> : null}
