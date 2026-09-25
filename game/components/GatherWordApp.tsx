@@ -180,6 +180,7 @@ function LocalGame({ mode, settings, teams: initialTeams, sound, onHome, onChang
   const [solvedIds, setSolvedIds] = useState<string[]>([]);
   const [combo, setCombo] = useState(0);
   const [summary, setSummary] = useState<{ points: number; isBest: boolean; previousBest: number; lifetime: number; mastered: number } | null>(null);
+  const [unlocked, setUnlocked] = useState<{ level: Level; name: string } | null>(null);
   const puzzle = recipe.puzzles[index]; const entry = getPuzzleEntry(recipe, index);
   const assembled = puzzle ? placed.map((source) => puzzle.scramble[source]).join('') : '';
   // Declared before the effects below since the auto-advance effect needs
@@ -188,7 +189,9 @@ function LocalGame({ mode, settings, teams: initialTeams, sound, onHome, onChang
   const next = () => {
     if (index >= recipe.puzzles.length - 1) {
       const total = scores.reduce((sum, team) => sum + team.score, 0);
-      const outcome = recordMatch(loadProgress(), {
+      const before = loadProgress();
+      const wasUnlocked = highestUnlocked(before);
+      const outcome = recordMatch(before, {
         mode: mode === 'solo' ? 'solo' : mode,
         level: settings.maxBand,
         points: total,
@@ -196,6 +199,8 @@ function LocalGame({ mode, settings, teams: initialTeams, sound, onHome, onChang
         wrong: wrongCount,
       });
       saveProgress(outcome.record);
+      const nowUnlocked = highestUnlocked(outcome.record);
+      setUnlocked(nowUnlocked > wasUnlocked ? { level: nowUnlocked, name: LEVEL_NAMES[nowUnlocked - 1] } : null);
       setSummary({
         points: total,
         isBest: outcome.isBest,
@@ -258,8 +263,8 @@ function LocalGame({ mode, settings, teams: initialTeams, sound, onHome, onChang
     }
   };
   const reveal = () => setResolved({ correct: false, revealed: true, award: 0 });
-  const rematch = () => { setRecipe(createFreshRecipe(settings)); setIndex(0); setScores(scores.map((team) => ({ ...team, score: 0 }))); setCorrectCount(0); setWrongCount(0); setFinished(false); resetPuzzle(); setSolvedIds([]); setCombo(0); setSummary(null); };
-  if (finished) return <Results mode={mode} scores={scores} correct={correctCount} wrong={wrongCount} total={recipe.puzzles.length} summary={summary} rematch={rematch} changeSet={onChangeSet} home={onHome} />;
+  const rematch = () => { setRecipe(createFreshRecipe(settings)); setIndex(0); setScores(scores.map((team) => ({ ...team, score: 0 }))); setCorrectCount(0); setWrongCount(0); setFinished(false); resetPuzzle(); setSolvedIds([]); setCombo(0); setSummary(null); setUnlocked(null); };
+  if (finished) return <Results mode={mode} scores={scores} correct={correctCount} wrong={wrongCount} total={recipe.puzzles.length} summary={summary} unlocked={unlocked} rematch={rematch} changeSet={onChangeSet} home={onHome} />;
   return <main className="game-shell">
     {celebration && <BigCelebration key={celebration.id} title={celebration.title} subtitle={celebration.subtitle} />}
     {missPop !== null && <MissPopup key={missPop} />}
@@ -455,13 +460,19 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
   </main>;
 }
 
-function Results({ mode, scores, correct, wrong, total, summary, rematch, changeSet, home }: {
+function Results({ mode, scores, correct, wrong, total, summary, unlocked, rematch, changeSet, home }: {
   mode: PlayMode; scores: Team[]; correct: number; wrong: number; total: number;
   summary: { points: number; isBest: boolean; previousBest: number; lifetime: number; mastered: number } | null;
+  unlocked: { level: Level; name: string } | null;
   rematch: () => void; changeSet: () => void; home: () => void;
 }) {
   const ranking = [...scores].sort((a, b) => b.score - a.score); const winner = ranking[0];
   return <main className="page-shell"><section className="panel results-panel"><div className="celebration">✦</div><p className="section-kicker">Match complete</p><h1 className="page-title">{mode === 'teams' ? `${winner.name} wins!` : mode === 'solo' ? 'Nicely done!' : 'Wonderful teamwork!'}</h1><p className="page-subtitle">You turned every scramble into a chance to remember.</p>
+    {unlocked && <div className="unlock-banner" role="status">
+      <span className="unlock-key" aria-hidden="true">🔓</span>
+      <strong>{unlocked.name} unlocked</strong>
+      <small>A new level is open on your journey.</small>
+    </div>}
     <div className="result-score"><strong>{winner.score}</strong><span>points</span></div>
     {summary && <div className="score-compare">
       {summary.isBest

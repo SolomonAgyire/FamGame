@@ -560,3 +560,15 @@ footer {
 .level-node.cleared .level-badge { background: linear-gradient(180deg, #7be0a0, var(--grass)); color: #fff; box-shadow: 0 3px 0 var(--grass-deep); }
 .level-node.locked button { background: var(--surface2); box-shadow: none; opacity: .72; }
 .level-node.locked .level-badge { background: var(--surface2); color: var(--muted); border: 1px dashed var(--line); box-shadow: none; }
+
+/* Unlocking a level is the single biggest moment in the run — it gets a
+   full-width banner rather than a line of text. */
+.unlock-banner {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  margin: 0 0 18px; padding: 16px; border-radius: 22px;
+  background: linear-gradient(180deg, #7be0a0, var(--grass)); color: #fff;
+  box-shadow: 0 4px 0 var(--grass-deep);
+}
+.unlock-key { font-size: 26px; }
+.unlock-banner strong { font-family: var(--font-display); font-size: 19px; }
+.unlock-banner small { opacity: .9; font-size: 12px; font-weight: 600; }
