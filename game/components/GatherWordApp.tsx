@@ -12,6 +12,7 @@ import { secondsFor, timerModeFor } from '@/lib/timing';
 import { saveProgress, recordMatch, masteredCount, subscribeProgress, getProgressSnapshot, getProgressServerSnapshot } from '@/lib/progress';
 import { highestUnlocked } from '@/lib/levels';
 import { LevelPath } from '@/components/LevelPath';
+import { Standings } from '@/components/Standings';
 import { shuffledOrder, TileBoard } from '@/components/TileBoard';
 import { DailyWord, StreakHeader, useHydrated } from '@/components/DailyWord';
 import { dailyPuzzleFor } from '@/lib/daily';
@@ -752,7 +753,9 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
       <button className="text-button" type="button" onClick={leave}>Leave room</button>
     </div>
   </section></main>;
-  const onlineScores = snapshot.mode === 'teams' ? ([['sun', 'Sun Team'], ['olive', 'Olive Team']] as const).map(([id, name]) => ({ id, name, score: snapshot.players.filter((player) => player.teamId === id).reduce((sum, player) => sum + player.score, 0) })) : snapshot.players.map((player) => ({ id: player.id, name: player.name, score: player.score }));
+  // Teams mode still gets a small aggregate strip -- at most four sides,
+  // never a scale problem -- above the ranked, per-player Standings below.
+  const teamScores = snapshot.mode === 'teams' ? ([['sun', 'Sun Team'], ['olive', 'Olive Team']] as const).map(([id, name]) => ({ id, name, score: snapshot.players.filter((player) => player.teamId === id).reduce((sum, player) => sum + player.score, 0) })) : [];
   // Past the player cap a joiner comes in watching rather than playing, and
   // anyone who joined mid-match sits out the puzzle that was already live
   // when they arrived -- both get a locked board and their own message
@@ -769,7 +772,8 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
   const lead = solvers.length === 0 ? 'The answer was'
     : solvers.length === 1 ? `${solvers[0].solverName} solved it!`
     : `${solvers[0].solverName} and ${solvers.length - 1} other${solvers.length > 2 ? 's' : ''} solved it!`;
-  return <main className="game-shell"><div className="room-banner"><span>Room <strong>{snapshot.code}</strong></span><span>{error || '● Connected'}</span></div><div className="game-topbar"><div><span>Puzzle {snapshot.currentIndex + 1} of {snapshot.puzzleCount}</span><div className="progress"><i style={{ width: `${((snapshot.currentIndex + 1) / snapshot.puzzleCount) * 100}%` }} /></div></div><div className="score-strip">{onlineScores.map((side) => <span key={side.id}>{side.name} <strong key={side.score}>{side.score}</strong></span>)}</div></div>
+  return <main className="game-shell"><div className="room-banner"><span>Room <strong>{snapshot.code}</strong></span><span>{error || '● Connected'}</span></div><div className="game-topbar"><div><span>Puzzle {snapshot.currentIndex + 1} of {snapshot.puzzleCount}</span><div className="progress"><i style={{ width: `${((snapshot.currentIndex + 1) / snapshot.puzzleCount) * 100}%` }} /></div></div>{snapshot.mode === 'teams' && <div className="score-strip">{teamScores.map((side) => <span key={side.id}>{side.name} <strong key={side.score}>{side.score}</strong></span>)}</div>}</div>
+    <Standings players={snapshot.players} viewerId={snapshot.viewerId} answeredIds={snapshot.resolution?.answeredIds ?? []} phase="play" />
     <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{puzzle.category} · {LEVEL_NAMES[puzzle.band - 1]}</p><h1>{snapshot.status === 'PUZZLE_RESOLVED' ? puzzle.display : 'Everyone is solving…'}</h1></div><span className="points-pill">{scoreSolve({ letterCount: puzzle.scramble.length, level: puzzle.band, combo: 0, hintsUsed: snapshot.viewerHints })} pts</span></div>
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} locked={boardLocked} />
       {snapshot.viewerHints > 0 && snapshot.status === 'PUZZLE_OPEN' && !spectating && !sittingOut && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{puzzle.hints.slice(0, snapshot.viewerHints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
@@ -808,7 +812,12 @@ function OnlineLobby({ snapshot, viewer, isHost, busy, action, leave }: { snapsh
 
 function OnlineResults({ snapshot, isHost, action, leave }: { snapshot: RoomSnapshot; isHost: boolean; action: (input: Record<string, unknown>) => void; leave: () => void }) {
   const sides = snapshot.mode === 'teams' ? ([['sun', 'Sun Team'], ['olive', 'Olive Team']] as const).map(([id, name]) => ({ id, name, score: snapshot.players.filter((player) => player.teamId === id).reduce((sum, player) => sum + player.score, 0) })) : snapshot.players.map((player) => ({ id: player.id, name: player.name, score: player.score }));
-  const ranking = [...sides].sort((a, b) => b.score - a.score); return <main className="page-shell"><section className="panel results-panel"><div className="celebration">✦</div><p className="section-kicker">Room {snapshot.code} · Match complete</p><h1 className="page-title">{snapshot.mode === 'cooperative' ? 'Wonderful teamwork!' : `${ranking[0]?.name} wins!`}</h1><div className="leaderboard">{ranking.map((side, index) => <div key={side.id}><span>{index + 1}</span><span className="avatar">{side.name[0]}</span><strong>{side.name}</strong><b>{side.score}</b></div>)}</div><div className="result-actions">{isHost && <><button className="primary-button" type="button" onClick={() => action({ action: 'rematch' })}>Play again <span>↻</span></button><button className="secondary-button" type="button" onClick={() => action({ action: 'lobby' })}>Change set</button></>}<button className="text-button" type="button" onClick={leave}>Leave room</button></div></section></main>;
+  const ranking = [...sides].sort((a, b) => b.score - a.score);
+  return <main className="page-shell"><section className="panel results-panel"><div className="celebration">✦</div><p className="section-kicker">Room {snapshot.code} · Match complete</p><h1 className="page-title">{snapshot.mode === 'cooperative' ? 'Wonderful teamwork!' : `${ranking[0]?.name} wins!`}</h1>
+    {snapshot.mode === 'teams'
+      ? <div className="leaderboard">{ranking.map((side, index) => <div key={side.id}><span>{index + 1}</span><span className="avatar">{side.name[0]}</span><strong>{side.name}</strong><b>{side.score}</b></div>)}</div>
+      : <Standings players={snapshot.players} viewerId={snapshot.viewerId} answeredIds={[]} phase="results" />}
+    <div className="result-actions">{isHost && <><button className="primary-button" type="button" onClick={() => action({ action: 'rematch' })}>Play again <span>↻</span></button><button className="secondary-button" type="button" onClick={() => action({ action: 'lobby' })}>Change set</button></>}<button className="text-button" type="button" onClick={leave}>Leave room</button></div></section></main>;
 }
 
 export default function GatherWordApp() {

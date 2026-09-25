@@ -341,6 +341,39 @@ legend { margin-bottom: 4px; font-size: 15px; font-weight: 700; color: var(--ink
 .score-strip i { width: 8px; height: 8px; border-radius: 50%; }
 .score-strip strong { display: inline-block; font-size: 13px; animation: score-bump .35s ease; }
 @keyframes score-bump { 0% { transform: scale(1.7); } 55% { transform: scale(.9); } 100% { transform: scale(1); } }
+
+/* ============================================================
+   Live standings — ranked, the viewer's own row always findable
+   even at thirty players. Collapsed to the top three plus "you"
+   during play; the full list only on the results screen.
+   ============================================================ */
+.standings { margin: 0 auto 14px; }
+.standings-toggle {
+  display: flex; width: 100%; justify-content: space-between; align-items: center;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
+  min-height: 38px; padding: 0 14px; font-size: 12px; font-weight: 700; color: var(--ink);
+}
+.standings-list { display: grid; gap: 5px; margin: 8px 0 0; padding: 0; list-style: none; }
+.standings-open .standings-list { max-height: 62vh; overflow-y: auto; padding-right: 2px; }
+.standings-row {
+  display: grid; grid-template-columns: 20px 1fr auto 9px auto; align-items: center; gap: 8px;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 6px 10px; font-size: 12px;
+}
+.standings-row.viewer { border-color: var(--sky); background: linear-gradient(180deg, #eaf7ff, var(--surface)); box-shadow: 0 2px 0 var(--sky-deep); }
+.standings-row .rank { font-weight: 700; color: var(--muted); text-align: center; }
+.standings-row.rank-1 .rank { color: var(--sun-deep); }
+.standings-row.rank-2 .rank { color: var(--sky-deep); }
+.standings-row.rank-3 .rank { color: var(--berry-deep); }
+.standings-row .name { display: flex; align-items: center; gap: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.standings-row .name small { flex: 0 0 auto; border-radius: 999px; background: var(--surface2); padding: 1px 6px; color: var(--sun-deep); font-size: 9px; font-weight: 700; }
+.standings-row.left .name { text-decoration: line-through; color: var(--muted); }
+.standings-row .score { font-weight: 700; font-variant-numeric: tabular-nums; }
+.standings-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.standings-dot.answered { background: var(--grass); }
+.standings-gap { margin: 0; text-align: center; color: var(--muted); font-size: 12px; letter-spacing: .2em; }
+.standings-kick { border: 0; background: transparent; color: var(--danger); font-size: 13px; font-weight: 700; line-height: 1; padding: 4px; }
+.standings-footer { margin: 8px 0 0; color: var(--muted); font-size: 11px; text-align: center; }
+
 .play-card { max-width: 100%; }
 .board { margin: 24px 0; }
 .answer-area { min-height: 56px; margin-bottom: 18px; }
