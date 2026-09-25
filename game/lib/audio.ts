@@ -42,6 +42,24 @@ function playNextTrack() {
   void musicEl.play().catch(() => { /* autoplay can still be blocked; ignored */ });
 }
 
+// Browsers don't pause background <audio> on their own when a phone locks
+// or the tab is backgrounded -- that's deliberate, so a web page can act
+// like a music/podcast player. For a game, the opposite is expected: stop
+// when you leave, pick back up (if sound is still on) when you return.
+// Registered once at module load, not per-play.
+let wasPlayingBeforeHidden = false;
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (!musicEl) return;
+    if (document.hidden) {
+      wasPlayingBeforeHidden = !musicEl.paused;
+      musicEl.pause();
+    } else if (wasPlayingBeforeHidden) {
+      void musicEl.play().catch(() => { /* ignored */ });
+    }
+  });
+}
+
 function getCtx(): AudioContext | null {
   if (typeof window === 'undefined') return null;
   if (!ctx) {

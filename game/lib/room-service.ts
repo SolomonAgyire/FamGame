@@ -1,18 +1,21 @@
 import { env } from 'cloudflare:workers';
-import { createRecipe, getPuzzleEntry, normalizeAnswer } from '@/lib/game-engine';
-import type { GameSettings, MatchRecipe } from '@/lib/types';
+import { createRecipe, getPuzzleEntry, normalizeAnswer, unplayableReason } from '@/lib/game-engine';
+import { hintsFor } from '@/lib/hints';
+import { scoreSolve } from '@/lib/scoring';
+import {
+  activePlayers, applyCorrectSolve, applyWrongSolve, EMPTY_PROGRESS, eligiblePlayers,
+  pauseProgress, refundSolvers, resumeProgress, roleForJoin, shouldCloseWindow,
+  type PuzzleProgress, type RoomMode, type RoomPlayer,
+} from '@/lib/room-rules';
+import type { GameSettings, Level, MatchRecipe } from '@/lib/types';
 
-export type RoomMode = 'individuals' | 'teams' | 'cooperative';
-export type RoomPlayer = {
-  id: string;
-  name: string;
-  tokenHash: string;
-  isHost: boolean;
-  ready: boolean;
-  score: number;
-  teamId?: 'sun' | 'olive';
-  joinedAt: number;
-};
+export type { RoomMode, RoomPlayer, RoomRole } from '@/lib/room-rules';
+export { MAX_PLAYERS, MAX_SPECTATORS } from '@/lib/room-rules';
+
+function parseProgress(json: string | null): PuzzleProgress {
+  if (!json) return { ...EMPTY_PROGRESS };
+  return JSON.parse(json) as PuzzleProgress;
+}
 
 type RoomRow = {
   code: string;
@@ -62,13 +65,39 @@ export function cleanName(value: string) {
 export function validateSettings(input: Partial<GameSettings>): GameSettings {
   const allowed = ['book', 'person', 'place'] as const;
   const categories = allowed.filter((category) => input.categories?.includes(category));
-  const maxBand = Math.min(4, Math.max(1, Number(input.maxBand) || 2)) as 1 | 2 | 3 | 4;
+  const maxBand = Math.min(9, Math.max(1, Math.floor(Number(input.maxBand) || 1))) as Level;
   const length = Math.min(30, Math.max(3, Math.floor(Number(input.length) || 10)));
   return { categories: categories.length ? categories : ['book'], maxBand, length };
 }
 
+/** A puzzle that has been open long enough, or that everyone eligible has
+ * already solved, resolves on the next read -- even if that read is just a
+ * player polling for a snapshot rather than submitting an answer. Without
+ * this, a room where the last few players never answer would stay open
+ * forever: nothing else runs on a schedule to close it. */
+async function resolveExpiredWindow(row: RoomRow): Promise<RoomRow> {
+  if (row.status !== 'PUZZLE_OPEN' || !row.resolution_json) return row;
+  const progress = parseProgress(row.resolution_json);
+  const players = JSON.parse(row.players_json) as RoomPlayer[];
+  const now = Date.now();
+  if (!shouldCloseWindow(progress, eligiblePlayers(players).length, now)) return row;
+  const result = await database().prepare(
+    `UPDATE rooms SET status = 'PUZZLE_RESOLVED', puzzle_status = 'RESOLVED', version = version + 1, last_activity = ? WHERE code = ? AND version = ? AND status = 'PUZZLE_OPEN'`,
+  ).bind(now, row.code, row.version).run();
+  if ((result.meta.changes || 0) === 1) {
+    return { ...row, status: 'PUZZLE_RESOLVED', puzzle_status: 'RESOLVED', version: row.version + 1, last_activity: now };
+  }
+  // Something else changed the row first (another request resolved it, or
+  // a host action landed) -- read the current truth rather than trust a
+  // guess that is already stale.
+  const fresh = await database().prepare('SELECT * FROM rooms WHERE code = ?').bind(row.code).first<RoomRow>();
+  return fresh ?? row;
+}
+
 export async function getRoom(code: string) {
-  return database().prepare('SELECT * FROM rooms WHERE code = ?').bind(cleanCode(code)).first<RoomRow>();
+  const row = await database().prepare('SELECT * FROM rooms WHERE code = ?').bind(cleanCode(code)).first<RoomRow>();
+  if (!row) return row;
+  return resolveExpiredWindow(row);
 }
 
 async function makeUniqueCode() {
@@ -86,7 +115,7 @@ export async function createRoom(nameInput: string, settingsInput: Partial<GameS
   const now = Date.now();
   const code = await makeUniqueCode();
   const token = randomString(42);
-  const player: RoomPlayer = { id: crypto.randomUUID(), name, tokenHash: await digest(token), isHost: true, ready: true, score: 0, joinedAt: now };
+  const player: RoomPlayer = { id: crypto.randomUUID(), name, tokenHash: await digest(token), isHost: true, ready: true, score: 0, role: 'player', joinedAt: now, lastSeen: now, left: false, sitOutCurrent: false };
   const settings = validateSettings(settingsInput);
   const mode: RoomMode = modeInput === 'cooperative' ? 'cooperative' : modeInput === 'teams' ? 'teams' : 'individuals';
   if (mode === 'teams') player.teamId = 'sun';
@@ -105,17 +134,28 @@ export async function joinRoom(codeInput: string, nameInput: string) {
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const room = await getRoom(code);
     if (!room || room.expires_at < Date.now()) throw new Error('That room was not found or has expired.');
-    if (room.status !== 'LOBBY') throw new Error('That match has already started.');
     const players = JSON.parse(room.players_json) as RoomPlayer[];
-    if (players.length >= 12) throw new Error('That room is full.');
+    // Past the player cap, a joiner is not refused outright -- they come in
+    // as a spectator instead, watching and getting live snapshots but not
+    // scoring or counting toward the "everyone answered" check.
+    const role = roleForJoin(players);
+    if (!role) throw new Error('That room is full.');
     const now = Date.now();
     const token = randomString(42);
     const sunCount = players.filter((item) => item.teamId === 'sun').length;
     const oliveCount = players.filter((item) => item.teamId === 'olive').length;
-    const player: RoomPlayer = { id: crypto.randomUUID(), name, tokenHash: await digest(token), isHost: false, ready: false, score: 0, joinedAt: now, ...(room.mode === 'teams' ? { teamId: sunCount <= oliveCount ? 'sun' as const : 'olive' as const } : {}) };
+    // Ungated online rooms stay ungated even mid-match: joining is allowed
+    // any time, not just in the lobby. A joiner who lands while a puzzle is
+    // already open just sits that one out and plays from the next.
+    const sitOutCurrent = role === 'player' && room.status !== 'LOBBY';
+    const player: RoomPlayer = {
+      id: crypto.randomUUID(), name, tokenHash: await digest(token), isHost: false, ready: role === 'spectator', score: 0,
+      role, joinedAt: now, lastSeen: now, left: false, sitOutCurrent,
+      ...(role === 'player' && room.mode === 'teams' ? { teamId: sunCount <= oliveCount ? 'sun' as const : 'olive' as const } : {}),
+    };
     const result = await database().prepare('UPDATE rooms SET players_json = ?, version = version + 1, last_activity = ?, expires_at = ? WHERE code = ? AND version = ?')
       .bind(JSON.stringify([...players, player]), now, now + ROOM_TTL, code, room.version).run();
-    if ((result.meta.changes || 0) === 1) return { code, token, playerId: player.id };
+    if ((result.meta.changes || 0) === 1) return { code, token, playerId: player.id, role };
   }
   throw new Error('The room changed while you were joining. Please try again.');
 }
@@ -124,11 +164,16 @@ export async function authenticate(room: RoomRow, playerId: string, token: strin
   const players = JSON.parse(room.players_json) as RoomPlayer[];
   const player = players.find((item) => item.id === playerId);
   if (!player || player.tokenHash !== await digest(token)) throw new Error('Your room session is no longer valid.');
+  if (player.left) throw new Error('You were removed from this room.');
   return { player, players };
 }
 
 export function publicSnapshot(room: RoomRow, viewerId: string) {
-  const players = (JSON.parse(room.players_json) as RoomPlayer[]).map((player) => ({ id: player.id, name: player.name, isHost: player.isHost, ready: player.ready, score: player.score, joinedAt: player.joinedAt, teamId: player.teamId }));
+  const players = (JSON.parse(room.players_json) as RoomPlayer[]).map((player) => ({
+    id: player.id, name: player.name, isHost: player.isHost, ready: player.ready, score: player.score,
+    role: player.role, joinedAt: player.joinedAt, lastSeen: player.lastSeen, left: player.left,
+    sitOutCurrent: player.sitOutCurrent, teamId: player.teamId,
+  }));
   const settings = JSON.parse(room.settings_json) as GameSettings;
   const match = room.match_json ? JSON.parse(room.match_json) as MatchRecipe : null;
   const hints = JSON.parse(room.hint_state_json || '{}') as Record<string, number>;
@@ -137,17 +182,27 @@ export function publicSnapshot(room: RoomRow, viewerId: string) {
   const resolved = room.status === 'PUZZLE_RESOLVED' || room.status === 'RESULTS';
   const viewer = players.find((player) => player.id === viewerId);
   const viewerHints = room.mode === 'teams' ? Math.max(0, ...players.filter((player) => player.teamId === viewer?.teamId).map((player) => hints[player.id] || 0)) : (hints[viewerId] || 0);
+  const progress = parseProgress(room.resolution_json);
   return {
     code: room.code, status: room.status, mode: room.mode, settings, players,
     currentIndex: room.current_index, puzzleCount: match?.puzzles.length || settings.length,
     version: room.version, viewerId, viewerHints,
     puzzle: recipePuzzle && entry ? {
-      id: entry.id, scramble: recipePuzzle.scramble, fixedPrefix: entry.fixedPrefix,
-      category: entry.categories[0], band: entry.band, hints: entry.hints,
+      id: entry.id, scramble: recipePuzzle.scramble,
+      // The full ladder, not the stored pair: the first rung names a
+      // character, so a room player buys the same three hints a solo
+      // player does. The answer itself is still never sent until the
+      // puzzle resolves.
+      category: entry.categories[0], band: entry.band,
+      hints: hintsFor(entry).map(({ kind, text }) => ({ kind, text })),
       display: resolved ? entry.display : undefined,
       reference: resolved ? entry.references[0] : undefined,
     } : null,
-    resolution: resolved && room.resolution_json ? JSON.parse(room.resolution_json) : null,
+    // Populated for the whole life of a puzzle, not just once it resolves --
+    // a client needs `solvers` while still PUZZLE_OPEN to know its own
+    // player already solved (and should stop submitting), and `answeredIds`
+    // to show who has gone without saying whether they were right.
+    resolution: recipePuzzle ? { solvers: progress.solvers, answeredIds: progress.answered, revealed: progress.revealed, paused: progress.paused } : null,
   };
 }
 
@@ -164,49 +219,93 @@ export async function roomAction(room: RoomRow, playerId: string, token: string,
   let resolution = room.resolution_json;
   let hints = JSON.parse(room.hint_state_json || '{}') as Record<string, number>;
 
-  if (action === 'ready' && status === 'LOBBY') {
+  if (action === 'ready' && status === 'LOBBY' && player.role === 'player') {
     nextPlayers = players.map((item) => item.id === player.id ? { ...item, ready: Boolean(input.ready) } : item);
   } else if (action === 'configure' && player.isHost && status === 'LOBBY') {
     settings = validateSettings(input.settings as Partial<GameSettings>);
     room.mode = input.mode === 'cooperative' ? 'cooperative' : input.mode === 'teams' ? 'teams' : 'individuals';
-    if (room.mode === 'teams') nextPlayers = players.map((item, index) => ({ ...item, teamId: index % 2 === 0 ? 'sun' : 'olive' } as RoomPlayer));
+    if (room.mode === 'teams') nextPlayers = players.map((item, index) => item.role === 'player' ? ({ ...item, teamId: index % 2 === 0 ? 'sun' : 'olive' } as RoomPlayer) : item);
     else nextPlayers = players.map((item) => ({ ...item, teamId: undefined }));
   } else if (action === 'start' && player.isHost && status === 'LOBBY') {
-    if (room.mode !== 'cooperative' && players.length < 2) throw new Error('Invite at least one more player, or choose Cooperative.');
-    if (players.some((item) => !item.isHost && !item.ready)) throw new Error('Everyone needs to be ready first.');
+    const seated = activePlayers(players);
+    if (room.mode !== 'cooperative' && seated.length < 2) throw new Error('Invite at least one more player, or choose Cooperative.');
+    if (seated.some((item) => !item.isHost && !item.ready)) throw new Error('Everyone needs to be ready first.');
+    // A level the chosen categories have no words at would produce a match
+    // with no puzzles -- an empty screen for everyone, in a room only the
+    // two-hour TTL could clear. Refuse it here, where the host can still
+    // change the setting.
+    const blocked = unplayableReason(settings);
+    if (blocked) throw new Error(blocked);
     match = createRecipe(settings, randomString(32));
-    nextPlayers = players.map((item) => ({ ...item, score: 0 }));
-    status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; currentIndex = 0; resolution = null; hints = {};
+    nextPlayers = players.map((item) => ({ ...item, score: 0, sitOutCurrent: false }));
+    status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; currentIndex = 0; resolution = JSON.stringify(EMPTY_PROGRESS); hints = {};
   } else if (action === 'hint' && status === 'PUZZLE_OPEN') {
-    hints[player.id] = Math.min(2, (hints[player.id] || 0) + 1);
+    if (player.role === 'spectator') throw new Error('Spectators are just watching this room.');
+    if (player.sitOutCurrent) throw new Error('You will join in on the next puzzle.');
+    hints[player.id] = Math.min(3, (hints[player.id] || 0) + 1);
   } else if (action === 'check' && status === 'PUZZLE_OPEN' && match) {
+    if (player.role === 'spectator') throw new Error('Spectators are just watching this room.');
+    if (player.sitOutCurrent) throw new Error('You will join in on the next puzzle.');
+    const progress = parseProgress(resolution);
+    if (progress.paused) throw new Error('The host paused this puzzle.');
     const entry = getPuzzleEntry(match, currentIndex);
     if (!entry) throw new Error('The current puzzle could not be found.');
     if (normalizeAnswer(String(input.answer || '')) === entry.answer) {
       const sideHintCount = room.mode === 'cooperative' ? Math.max(0, ...Object.values(hints)) : room.mode === 'teams' ? Math.max(0, ...players.filter((item) => item.teamId === player.teamId).map((item) => hints[item.id] || 0)) : (hints[player.id] || 0);
-      const award = Math.max(1, 5 - sideHintCount);
-      nextPlayers = players.map((item) => room.mode === 'cooperative' || item.id === player.id ? { ...item, score: item.score + award } : item);
-      status = 'PUZZLE_RESOLVED'; puzzleStatus = 'RESOLVED';
-      resolution = JSON.stringify({ solverId: player.id, solverName: player.name, award, revealed: false });
+      // The same pure function solo and Time Attack use, so a long word at
+      // a hard level pays what it is worth in every mode. Sharing the same
+      // finish-order curve across every room, whatever its size, is
+      // `applyCorrectSolve`'s job.
+      const base = scoreSolve({ letterCount: entry.playable.length, level: entry.level, combo: 0, hintsUsed: sideHintCount });
+      const outcome = applyCorrectSolve({ players, progress, mode: room.mode, playerId: player.id, playerName: player.name, base, now });
+      nextPlayers = outcome.players;
+      resolution = JSON.stringify(outcome.progress);
+      if (outcome.resolved) { status = 'PUZZLE_RESOLVED'; puzzleStatus = 'RESOLVED'; }
     } else {
-      if (room.mode === 'teams') {
-        const payer = [...players].filter((item) => item.teamId === player.teamId && item.score > 0).sort((a, b) => b.score - a.score)[0];
-        nextPlayers = players.map((item) => item.id === payer?.id ? { ...item, score: item.score - 1 } : item);
-      } else nextPlayers = players.map((item) => item.id === player.id ? { ...item, score: Math.max(0, item.score - 1) } : item);
+      const outcome = applyWrongSolve(players, progress, room.mode, player.id, player.teamId);
+      nextPlayers = outcome.players;
+      resolution = JSON.stringify(outcome.progress);
     }
   } else if (action === 'reveal' && player.isHost && status === 'PUZZLE_OPEN' && match) {
+    const progress = parseProgress(resolution);
+    progress.revealed = true;
     status = 'PUZZLE_RESOLVED'; puzzleStatus = 'RESOLVED';
-    resolution = JSON.stringify({ solverId: null, solverName: null, award: 0, revealed: true });
+    resolution = JSON.stringify(progress);
+  } else if (action === 'skip' && player.isHost && status === 'PUZZLE_OPEN' && match) {
+    // Abandon the current puzzle: anyone who already solved it this round
+    // is refunded, since "nobody scores" is the whole point of skipping.
+    const progress = parseProgress(resolution);
+    nextPlayers = refundSolvers(players, progress);
+    if (currentIndex >= match.puzzles.length - 1) { status = 'RESULTS'; resolution = null; }
+    else { currentIndex += 1; status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; resolution = JSON.stringify(EMPTY_PROGRESS); }
+    hints = {};
+  } else if (action === 'pause' && player.isHost && status === 'PUZZLE_OPEN') {
+    resolution = JSON.stringify(pauseProgress(parseProgress(resolution), now));
+  } else if (action === 'resume' && player.isHost && status === 'PUZZLE_OPEN') {
+    resolution = JSON.stringify(resumeProgress(parseProgress(resolution), now));
+  } else if (action === 'kick' && player.isHost) {
+    const targetId = String(input.targetId || '');
+    if (targetId === player.id) throw new Error('You cannot kick yourself.');
+    if (!players.some((item) => item.id === targetId)) throw new Error('That player is not in this room.');
+    nextPlayers = players.map((item) => item.id === targetId ? { ...item, left: true, ready: false } : item);
+  } else if (action === 'end' && player.isHost && (status === 'PUZZLE_OPEN' || status === 'PUZZLE_RESOLVED')) {
+    status = 'RESULTS'; resolution = null;
   } else if (action === 'next' && player.isHost && status === 'PUZZLE_RESOLVED' && match) {
     if (currentIndex >= match.puzzles.length - 1) status = 'RESULTS';
-    else { currentIndex += 1; status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; resolution = null; hints = {}; }
+    else { currentIndex += 1; status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; resolution = JSON.stringify(EMPTY_PROGRESS); hints = {}; }
   } else if (action === 'rematch' && player.isHost && status === 'RESULTS') {
-    match = createRecipe(settings, randomString(32)); currentIndex = 0; status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; resolution = null; hints = {};
-    nextPlayers = players.map((item) => ({ ...item, score: 0 }));
+    const blocked = unplayableReason(settings);
+    if (blocked) throw new Error(blocked);
+    match = createRecipe(settings, randomString(32)); currentIndex = 0; status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; resolution = JSON.stringify(EMPTY_PROGRESS); hints = {};
+    nextPlayers = players.map((item) => ({ ...item, score: 0, sitOutCurrent: false }));
   } else if (action === 'lobby' && player.isHost) {
     status = 'LOBBY'; puzzleStatus = 'WAITING'; match = null; currentIndex = 0; resolution = null; hints = {};
-    nextPlayers = players.map((item) => ({ ...item, ready: item.isHost, score: 0 }));
+    nextPlayers = players.map((item) => ({ ...item, ready: item.isHost, score: 0, sitOutCurrent: false }));
   } else throw new Error('That action is not available right now.');
+
+  // Every successful action is proof of life -- record it so a room can
+  // eventually tell a stalled connection from a player who simply left.
+  nextPlayers = nextPlayers.map((item) => item.id === player.id ? { ...item, lastSeen: now } : item);
 
   const result = await database().prepare(`UPDATE rooms SET status = ?, mode = ?, settings_json = ?, players_json = ?, match_json = ?, current_index = ?, puzzle_status = ?, resolution_json = ?, hint_state_json = ?, version = version + 1, last_activity = ?, expires_at = ? WHERE code = ? AND version = ?`)
     .bind(status, room.mode, JSON.stringify(settings), JSON.stringify(nextPlayers), match ? JSON.stringify(match) : null, currentIndex, puzzleStatus, resolution, JSON.stringify(hints), now, now + ROOM_TTL, room.code, room.version).run();

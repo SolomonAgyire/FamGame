@@ -155,6 +155,14 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   box-shadow: 0 3px 0 var(--sun-deep);
 }
 
+/* The clock reads as its own thing, not as a second score. Violet while
+   it is only a bonus, sky once it is enforced, danger-red at the end. */
+.card-pills { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.timer-pill {
+  background: linear-gradient(180deg, #8fd2f5, var(--sky)); color: #fff;
+  box-shadow: 0 3px 0 var(--sky-deep); font-variant-numeric: tabular-nums;
+}
+.timer-pill.bonus { background: linear-gradient(180deg, #c9a9ef, var(--violet)); box-shadow: 0 3px 0 var(--violet-deep); }
 .timer-pill.urgent { background: linear-gradient(180deg, #ff9a86, var(--danger)); color: #fff; box-shadow: 0 3px 0 #b3402f; animation: timer-pulse .6s ease-in-out infinite; }
 @keyframes timer-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
 
@@ -271,6 +279,7 @@ button.letter-tile:active { transform: translateY(3px); box-shadow: 0 0 0 #d9bf8
 fieldset { margin: 0 0 26px; padding: 0; border: 0; }
 legend { margin-bottom: 4px; font-size: 15px; font-weight: 700; color: var(--ink); }
 .field-help { margin: 2px 0 11px; color: var(--muted); font-size: 12px; }
+.field-help.warn { color: var(--danger); font-weight: 700; }
 
 .choice-grid { display: grid; gap: 8px; min-width: 0; }
 .choice-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -332,10 +341,77 @@ legend { margin-bottom: 4px; font-size: 15px; font-weight: 700; color: var(--ink
 .score-strip i { width: 8px; height: 8px; border-radius: 50%; }
 .score-strip strong { display: inline-block; font-size: 13px; animation: score-bump .35s ease; }
 @keyframes score-bump { 0% { transform: scale(1.7); } 55% { transform: scale(.9); } 100% { transform: scale(1); } }
+
+/* ============================================================
+   Live standings — ranked, the viewer's own row always findable
+   even at thirty players. Collapsed to the top three plus "you"
+   during play; the full list only on the results screen.
+   ============================================================ */
+.standings { margin: 0 auto 14px; }
+.standings-toggle {
+  display: flex; width: 100%; justify-content: space-between; align-items: center;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
+  min-height: 38px; padding: 0 14px; font-size: 12px; font-weight: 700; color: var(--ink);
+}
+.standings-list { display: grid; gap: 5px; margin: 8px 0 0; padding: 0; list-style: none; }
+.standings-open .standings-list { max-height: 62vh; overflow-y: auto; padding-right: 2px; }
+.standings-row {
+  display: grid; grid-template-columns: 20px 1fr auto 9px auto; align-items: center; gap: 8px;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 6px 10px; font-size: 12px;
+}
+.standings-row.viewer { border-color: var(--sky); background: linear-gradient(180deg, #eaf7ff, var(--surface)); box-shadow: 0 2px 0 var(--sky-deep); }
+.standings-row .rank { font-weight: 700; color: var(--muted); text-align: center; }
+.standings-row.rank-1 .rank { color: var(--sun-deep); }
+.standings-row.rank-2 .rank { color: var(--sky-deep); }
+.standings-row.rank-3 .rank { color: var(--berry-deep); }
+.standings-row .name { display: flex; align-items: center; gap: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.standings-row .name small { flex: 0 0 auto; border-radius: 999px; background: var(--surface2); padding: 1px 6px; color: var(--sun-deep); font-size: 9px; font-weight: 700; }
+.standings-row.left .name { text-decoration: line-through; color: var(--muted); }
+.standings-row .score { font-weight: 700; font-variant-numeric: tabular-nums; }
+.standings-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.standings-dot.answered { background: var(--grass); }
+.standings-gap { margin: 0; text-align: center; color: var(--muted); font-size: 12px; letter-spacing: .2em; }
+.standings-kick { border: 0; background: transparent; color: var(--danger); font-size: 13px; font-weight: 700; line-height: 1; padding: 4px; }
+.standings-footer { margin: 8px 0 0; color: var(--muted); font-size: 11px; text-align: center; }
+
 .play-card { max-width: 100%; }
 .board { margin: 24px 0; }
 .answer-area { min-height: 56px; margin-bottom: 18px; }
 .scramble-area { min-height: 56px; padding: 14px; border-radius: 22px; background: var(--surface2); border: 1px dashed var(--line); }
+
+/* ============================================================
+   Tile sizing — a word's silhouette is most of the puzzle, so the
+   whole answer has to stay on one line. The tile is sized against
+   the board's own width for the exact number of characters in the
+   answer (numerals included: "1 Kings" is six tiles), and the
+   glyph shrinks with it. A flat clamp() wrapped an eleven-letter
+   word 7 + 4 at 390px and threw that silhouette away.
+   ============================================================ */
+.board {
+  container-type: inline-size;
+  --tiles: 8;
+  --tile-gap: 7px;
+  --tray-pad: calc(var(--tile-gap) + 5px);
+  --tile-size: clamp(15px, min(8.5vw, calc((100cqi - var(--tray-pad) * 2 - (var(--tiles) - 1) * var(--tile-gap)) / var(--tiles))), 50px);
+}
+.board .answer-area, .board .scramble-area { gap: var(--tile-gap); align-items: center; align-content: center; }
+.board .scramble-area { padding: var(--tray-pad); }
+.board .letter-tile, .board .answer-slot {
+  width: var(--tile-size);
+  font-size: clamp(10px, calc(var(--tile-size) * .46), 21px);
+}
+
+/* A miss shakes the answer row and leaves the tiles alone: the work
+   is kept, only the verdict is delivered. */
+.answer-area.wrong { animation: board-shake .38s ease; }
+@keyframes board-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-7px); }
+  45% { transform: translateX(6px); }
+  70% { transform: translateX(-4px); }
+  88% { transform: translateX(2px); }
+}
+@media (prefers-reduced-motion: reduce) { .answer-area.wrong { animation: none; } }
 .hint-box {
   margin: 12px 0; padding: 12px 14px; border-radius: 18px;
   background: linear-gradient(135deg, #fff6e0, #fff0cf); border: 1px solid #f0dba0;
@@ -353,7 +429,7 @@ legend { margin-bottom: 4px; font-size: 15px; font-weight: 700; color: var(--ink
 .error-box { background: #ffe4e0; color: var(--danger); }
 .game-actions { display: flex; flex-wrap: wrap; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); gap: 8px; align-items: center; }
 .check-button { margin-left: auto; }
-.game-actions .text-button { min-height: 42px; padding: 0 8px; }
+.game-actions .text-button { min-height: 42px; padding: 0 8px; margin-left: auto; }
 
 .resolution { position: relative; overflow: hidden; margin-top: 20px; padding: 22px; border-radius: 24px; background: linear-gradient(180deg, #f2fbf4, #eaf9f0); text-align: center; border: 1px solid #cdeed8; }
 .confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
@@ -369,6 +445,53 @@ legend { margin-bottom: 4px; font-size: 15px; font-weight: 700; color: var(--ink
 .resolution span { color: var(--muted); font-size: 12px; font-weight: 700; }
 .resolution strong { margin: 6px 0; font-family: var(--font-display); font-weight: 600; font-size: clamp(26px, 6vw, 38px); color: var(--grass-deep); }
 .resolution p { margin: 6px 0 16px; color: var(--muted); font-size: 13px; }
+
+/* ============================================================
+   The solve moment. Three beats inside 700ms: the word settles,
+   the citation arrives under it, then the points. The citation is
+   the reason this game exists, so it gets a plaque of its own
+   instead of grey text after a middle dot — and the points, which
+   are only a mechanic, stop sharing its line.
+   ============================================================ */
+.resolution .scripture {
+  display: inline-flex; align-items: center; gap: 9px;
+  margin: 2px auto 0; padding: 10px 18px; border-radius: 999px;
+  background: linear-gradient(180deg, #fffaf0, var(--paper));
+  border: 1px solid #e8cf9a; box-shadow: 0 4px 0 #d9bf82;
+  color: var(--paper-ink); font-family: var(--font-display);
+  font-weight: 600; font-size: clamp(15px, 4.2vw, 19px);
+}
+.resolution .scripture-mark { display: inline-block; color: var(--sun-deep); font-size: 14px; }
+.resolution .scripture-cite { display: inline-block; color: inherit; font-size: inherit; font-weight: inherit; font-style: normal; }
+.resolution .resolution-award {
+  margin: 14px 0 16px; color: var(--grass-deep); font-size: 13px; font-weight: 700;
+}
+.resolution-rule { display: block; width: 44px; height: 3px; margin: 14px auto 12px; border-radius: 3px; background: #cdeed8; }
+
+@keyframes reveal-word {
+  from { opacity: 0; transform: translateY(8px) scale(.9); }
+  62% { opacity: 1; transform: translateY(0) scale(1.04); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes reveal-rise {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: none; }
+}
+.resolution .resolution-lead { animation: reveal-rise 200ms ease both; }
+.resolution .resolution-word { animation: reveal-word 320ms cubic-bezier(.2,.8,.25,1) 60ms both; }
+.resolution .resolution-rule { animation: reveal-rise 220ms ease 240ms both; }
+.resolution .scripture { animation: reveal-rise 240ms cubic-bezier(.2,.8,.25,1) 300ms both; }
+.resolution .resolution-award,
+.resolution .primary-button { animation: reveal-rise 200ms ease 460ms both; }
+
+/* The same content, all at once. Zeroing the durations is not enough on
+   its own — the delays would still stage it. */
+@media (prefers-reduced-motion: reduce) {
+  .resolution .resolution-lead, .resolution .resolution-word, .resolution .resolution-rule,
+  .resolution .scripture, .resolution .resolution-award, .resolution .primary-button {
+    animation: none !important; opacity: 1; transform: none;
+  }
+}
 
 .claim-panel { margin: 0 auto 12px; padding: 12px 14px; border-radius: 20px; background: var(--surface); border: 1px solid var(--line); }
 .claim-panel p { margin: 0 0 8px; font-size: 13px; color: var(--ink); }
@@ -441,6 +564,8 @@ legend { margin-bottom: 4px; font-size: 15px; font-weight: 700; color: var(--ink
 .leave-button { display: block; margin: 22px auto 0; }
 .room-banner { display: flex; margin: 0 auto 10px; justify-content: space-between; color: var(--muted); font-size: 12px; }
 .room-banner strong { letter-spacing: .1em; color: var(--sun-deep); }
+.host-controls { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 auto 10px; }
+.host-controls .soft-button { min-height: 36px; padding: 0 12px; font-size: 12px; }
 
 footer {
   display: flex; max-width: 720px; margin: auto; padding: 16px 20px 26px;
@@ -506,3 +631,205 @@ footer {
     transition-duration: .01ms !important;
   }
 }
+
+/* ============================================================
+   Results comparison — a score means nothing on its own, so the
+   match total always sits next to a previous best and a lifetime
+   running total.
+   ============================================================ */
+.score-compare { margin: 6px 0 18px; text-align: center; }
+.best-flag {
+  display: inline-block; margin: 0 0 14px; padding: 7px 15px; border-radius: 999px;
+  background: linear-gradient(180deg, #ffd876, var(--sun)); color: var(--sun-ink);
+  font-size: 13px; font-weight: 700; box-shadow: 0 3px 0 var(--sun-deep);
+}
+.best-flag.quiet {
+  background: var(--surface2); color: var(--muted);
+  border: 1px solid var(--line); box-shadow: 0 3px 0 #d8c79f;
+}
+.lifetime-row { display: flex; gap: 10px; justify-content: center; }
+.lifetime-row span {
+  flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 12px 8px;
+  border: 1px solid var(--line); border-radius: 18px; background: var(--surface2);
+  color: var(--muted); font-size: 11px; font-weight: 700; line-height: 1.3;
+}
+.lifetime-row strong { font-family: var(--font-display); font-size: 21px; color: var(--ink); }
+
+/* ============================================================
+   Level journey — a vertical path. A locked node is visibly a
+   destination, not an error: it keeps its name so the player can
+   see where they are going.
+   ============================================================ */
+.level-path { display: flex; flex-direction: column; gap: 10px; width: 100%; margin: 0; padding: 0; list-style: none; }
+.level-node button {
+  position: relative; display: flex; width: 100%; gap: 14px; padding: 14px 16px;
+  align-items: center; text-align: left; border: 1px solid var(--line);
+  border-radius: 20px; background: var(--surface); box-shadow: 0 4px 0 #e6d4ab;
+}
+.level-node button:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 0 0 #e6d4ab; }
+.level-badge {
+  display: grid; flex: none; width: 40px; height: 40px; place-items: center;
+  border-radius: 50%; background: linear-gradient(180deg, #ffd876, var(--sun));
+  color: var(--sun-ink); font-family: var(--font-display); font-size: 17px; font-weight: 700;
+  box-shadow: 0 3px 0 var(--sun-deep);
+}
+.level-text { display: flex; flex-direction: column; gap: 2px; }
+.level-text strong { font-family: var(--font-display); font-size: 16px; color: var(--ink); }
+.level-text small { color: var(--muted); font-size: 12px; font-weight: 600; }
+.level-meter {
+  position: absolute; right: 16px; bottom: 12px; width: 64px; height: 5px;
+  border-radius: 999px; background: var(--surface2); overflow: hidden;
+}
+.level-meter i { display: block; height: 100%; background: var(--grass); }
+.level-node.selected button { border-color: var(--sun-deep); box-shadow: 0 4px 0 var(--sun-deep); }
+.level-node.cleared .level-badge { background: linear-gradient(180deg, #7be0a0, var(--grass)); color: #fff; box-shadow: 0 3px 0 var(--grass-deep); }
+.level-node.locked button { background: var(--surface2); box-shadow: none; opacity: .72; }
+.level-node.locked .level-badge { background: var(--surface2); color: var(--muted); border: 1px dashed var(--line); box-shadow: none; }
+
+/* Unlocking a level is the single biggest moment in the run — it gets a
+   full-width banner rather than a line of text. */
+.unlock-banner {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  margin: 0 0 18px; padding: 16px; border-radius: 22px;
+  background: linear-gradient(180deg, #7be0a0, var(--grass)); color: #fff;
+  box-shadow: 0 4px 0 var(--grass-deep);
+}
+.unlock-key { font-size: 26px; }
+.unlock-banner strong { font-family: var(--font-display); font-size: 19px; }
+.unlock-banner small { opacity: .9; font-size: 12px; font-weight: 600; }
+
+/* ============================================================
+   Phase B — the habit loop: streak header, week strip, the
+   Daily Word tile and its result card. Same vocabulary as the
+   rest of the app: 999px pills, a hard offset shadow that
+   flattens on :active, Fredoka for anything that shouts.
+   ============================================================ */
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+/* The first thing on the home screen: what the player stands to lose. */
+.streak-header {
+  display: flex; width: 100%; flex-direction: column; align-items: center; gap: 12px;
+  padding: 14px 16px; border-radius: 24px;
+  background: var(--surface); border: 1px solid var(--line);
+  box-shadow: 0 4px 0 #e8dcbc;
+}
+.streak-row { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.streak-flame { font-size: 26px; line-height: 1; }
+.streak-flame.live { filter: none; animation: flame-breathe 2.4s ease-in-out infinite; }
+/* A cold flame is not a scolding -- it is just waiting. */
+.streak-flame.cold { filter: grayscale(1); opacity: .45; }
+@keyframes flame-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+.streak-count { display: flex; align-items: baseline; gap: 6px; }
+.streak-count strong { font-family: var(--font-display); font-weight: 600; font-size: 28px; line-height: 1; color: var(--ink); }
+.streak-count small { color: var(--muted); font-size: 12px; font-weight: 700; }
+.freeze-pill, .best-pill {
+  border-radius: 999px; padding: 5px 11px; font-size: 12px; font-weight: 700; white-space: nowrap;
+}
+.freeze-pill { background: linear-gradient(180deg, #d5eefc, #b6e0f7); color: var(--sky-deep); box-shadow: 0 3px 0 var(--sky-deep); }
+.best-pill { background: var(--surface2); color: var(--muted); border: 1px solid var(--line); }
+
+.week-strip { display: flex; width: 100%; justify-content: space-between; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.week-dot { display: flex; flex: 1; flex-direction: column; align-items: center; gap: 4px; }
+.week-dot i {
+  display: block; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--surface2); border: 1px solid var(--line);
+}
+.week-dot.played i { background: linear-gradient(180deg, #7be0a0, var(--grass)); border-color: var(--grass-deep); box-shadow: 0 2px 0 var(--grass-deep); }
+.week-dot.today i { outline: 2px solid var(--sun-deep); outline-offset: 2px; }
+.week-dot small { color: var(--muted); font-size: 10px; font-weight: 700; }
+
+/* A broken streak is winnable back, so it gets a button, not a sad note. */
+.repair-banner {
+  display: flex; width: 100%; flex-direction: column; align-items: center; gap: 3px;
+  padding: 12px 16px; border: none; border-radius: 20px; text-align: center;
+  background: linear-gradient(180deg, #ff97a8, var(--berry)); color: #fff;
+  box-shadow: 0 4px 0 var(--berry-deep);
+  transition: transform .08s ease, box-shadow .08s ease;
+}
+.repair-banner:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 0 0 var(--berry-deep); }
+/* Still short of three solves: the banner is the goal, not a dead button,
+   so it keeps its colour and only loses its press. */
+.repair-banner:disabled { cursor: default; opacity: 1; background: linear-gradient(180deg, #ffc7cf, #ff97a8); box-shadow: 0 4px 0 #e0788c; }
+.repair-banner strong { font-family: var(--font-display); font-weight: 600; font-size: 15px; }
+.repair-banner small { font-size: 11px; font-weight: 700; opacity: .92; }
+.repair-meter { display: block; width: 100%; height: 6px; margin-top: 5px; border-radius: 999px; background: rgba(255,255,255,.4); overflow: hidden; }
+.repair-meter i { display: block; height: 100%; background: #fff; transition: width .25s ease; }
+
+/* The Daily Word tile spans the grid -- it is the reason to open the app,
+   not one option among five. */
+.daily-tile { grid-column: 1 / -1; }
+.daily-tile .mode-tile-main { min-height: 0; padding: 16px 52px 16px 16px; flex-direction: row; justify-content: flex-start; text-align: left; gap: 12px; }
+.daily-tile .mode-tile-main > span { flex: none; }
+.daily-tile strong { display: block; }
+.mode-sub { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 600; line-height: 1.4; }
+.mode-tile.active .mode-sub { color: var(--sun-ink); opacity: .85; }
+.mode-tint-sun .mode-icon { background: #fff0cf; }
+.mode-badge {
+  position: absolute; top: 10px; right: 10px; border-radius: 999px;
+  background: var(--surface2); border: 1px solid var(--line); color: var(--muted);
+  padding: 3px 9px; font-size: 11px; font-weight: 700;
+}
+.mode-tile.active .mode-badge { background: rgba(255,255,255,.55); border-color: transparent; color: var(--sun-ink); }
+.mode-dot {
+  position: absolute; top: 6px; right: 6px; width: 11px; height: 11px; border-radius: 50%;
+  background: var(--berry); border: 2px solid var(--surface);
+  animation: flame-breathe 2s ease-in-out infinite;
+}
+
+/* The result card, shown once the day is spent. */
+.daily-done { padding: 24px 20px; max-width: 460px; margin: auto; }
+.daily-done .streak-header { margin: 18px 0 10px; }
+.daily-scoreline { display: grid; margin: 18px 0 10px; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.daily-scoreline div { border-radius: 18px; background: var(--surface2); border: 1px solid var(--line); padding: 12px 8px; text-align: center; }
+.daily-scoreline strong { display: block; font-family: var(--font-display); font-weight: 600; font-size: 22px; color: var(--ink); }
+.daily-scoreline span { display: block; color: var(--muted); font-size: 11px; font-weight: 700; }
+.daily-note { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; text-align: center; }
+.daily-note strong { color: var(--ink); font-family: var(--font-display); font-weight: 600; }
+.daily-tomorrow { margin: 10px 0 18px; color: var(--muted); font-size: 12px; font-weight: 700; text-align: center; }
+
+/* Milestones are rare enough to earn the same treatment as unlocking a
+   level: a full-width banner, not a line of text. */
+.milestone-banner {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  margin: 0 0 18px; padding: 16px; border-radius: 22px;
+  background: linear-gradient(180deg, #ffd876, var(--sun)); color: var(--sun-ink);
+  box-shadow: 0 4px 0 var(--sun-deep);
+  animation: celebration-pop .4s cubic-bezier(.34,1.56,.64,1);
+}
+.milestone-spark { font-size: 26px; }
+.milestone-banner strong { font-family: var(--font-display); font-size: 19px; }
+.milestone-banner small { opacity: .85; font-size: 12px; font-weight: 600; }
+
+@media (max-width: 400px) {
+  .streak-header { padding: 12px; gap: 10px; }
+  .week-dot i { width: 19px; height: 19px; }
+  .daily-tile .mode-tile-main { padding: 14px 46px 14px 12px; gap: 10px; }
+  .daily-scoreline strong { font-size: 19px; }
+}
+
+/* ============================================================
+   Install banner — installing is what actually protects saved
+   progress, so the offer reads as a benefit rather than a nag,
+   and it is dismissible for good.
+   ============================================================ */
+.install-banner {
+  position: relative; width: 100%; margin: 4px 0 2px; padding: 18px 20px;
+  border: 1px solid var(--line); border-radius: 24px; background: var(--surface);
+  box-shadow: 0 10px 0 -4px #fff, 0 14px 30px rgba(122,94,26,.12); text-align: left;
+}
+.install-banner strong {
+  display: block; margin-bottom: 6px; font-family: var(--font-display);
+  font-size: 17px; color: var(--ink);
+}
+.install-banner p { margin: 0 0 14px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.install-close {
+  position: absolute; top: 10px; right: 10px; width: 32px; height: 32px;
+  border: 0; border-radius: 50%; background: var(--surface2); color: var(--muted);
+  font-size: 19px; line-height: 1;
+}
+.install-steps { margin: 0; padding-left: 20px; color: var(--muted); font-size: 13px; line-height: 1.9; }
+.install-steps strong { display: inline; font-family: var(--font-body); font-size: 13px; color: var(--ink); }
