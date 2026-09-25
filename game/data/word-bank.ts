@@ -1,6 +1,7 @@
 import type { Category, Familiarity, Level, SourceRow, WordEntry } from '@/lib/types';
 import { draftPeopleRows, peopleRows } from '@/data/words/people';
 import { draftPlaceRows, placeRows } from '@/data/words/places';
+import { draftNationRows, nationRows, tribeRows } from '@/data/words/peoples';
 
 export type { SourceRow };
 
@@ -97,9 +98,12 @@ export const WORD_BANK: WordEntry[] = assignLevels([
   ...makeEntries('person', draftPeopleRows, 'draft'),
   ...makeEntries('place', placeRows, 'approved'),
   ...makeEntries('place', draftPlaceRows, 'draft'),
+  ...makeEntries('tribe', tribeRows, 'approved'),
+  ...makeEntries('nation', nationRows, 'approved'),
+  ...makeEntries('nation', draftNationRows, 'draft'),
 ]);
 
-export const WORD_BANK_VERSION = '2026.09.17-1';
+export const WORD_BANK_VERSION = '2026.09.24-1';
 
 export function getEntry(id: string) {
   return WORD_BANK.find((entry) => entry.id === id);

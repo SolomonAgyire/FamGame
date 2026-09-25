@@ -102,3 +102,10 @@ test('all 66 Bible books are present and approved', () => {
   assert.equal(books.length, 66);
   for (const book of books) assert.equal(book.status, 'approved');
 });
+
+test('the twelve tribes and the major nations are present', () => {
+  const tribes = WORD_BANK.filter((entry) => entry.categories.includes('tribe'));
+  assert.ok(tribes.length >= 12, `expected at least 12 tribes, found ${tribes.length}`);
+  const nations = WORD_BANK.filter((entry) => entry.categories.includes('nation'));
+  assert.ok(nations.length >= 20, `expected at least 20 nations, found ${nations.length}`);
+});
