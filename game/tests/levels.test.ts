@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { emptyProgress } from '../lib/progress';
 import { isLevelCleared, highestUnlocked, isUnlocked, levelStatus, WORDS_TO_CLEAR } from '../lib/levels';
 import type { Level } from '../lib/types';
+import { createRecipe, wordsForLevel, getPuzzleEntry } from '../lib/game-engine';
 
 function withLevel(level: Level, solvedCount: number, correct: number, attempts: number) {
   const record = emptyProgress();
@@ -67,4 +68,22 @@ test('a level never played reports zero progress without throwing', () => {
   assert.equal(status.accuracy, 0);
   assert.equal(status.unlocked, false);
   assert.equal(status.name, 'Strong Faith');
+});
+
+test('a match draws only from the chosen level', () => {
+  const recipe = createRecipe({ categories: ['book', 'person', 'place'], maxBand: 1, length: 8 }, 'level-seed');
+  for (let i = 0; i < recipe.puzzles.length; i += 1) {
+    const entry = getPuzzleEntry(recipe, i);
+    assert.ok(entry);
+    assert.equal(entry.level, 1, `${entry.display} is level ${entry.level}, not the requested level 1`);
+  }
+});
+
+test('words for a level are all at that level and all approved', () => {
+  const words = wordsForLevel(2, ['book', 'person', 'place']);
+  assert.ok(words.length > 0);
+  for (const word of words) {
+    assert.equal(word.level, 2);
+    assert.equal(word.status, 'approved');
+  }
 });

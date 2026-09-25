@@ -102,13 +102,10 @@ function SettingsPanel({ settings, setSettings }: { settings: GameSettings; setS
         <span>{category === 'book' ? '📖' : category === 'person' ? '👤' : '📍'}</span><strong>{category === 'book' ? 'Bible Books' : category === 'person' ? 'People' : 'Places'}</strong>
       </button>; })}
     </div></fieldset>
-    <fieldset><legend>How challenging?</legend><div className="band-grid">
-      {LEVEL_NAMES.map((name, index) => <button type="button" key={name} onClick={() => setSettings({ ...settings, maxBand: (index + 1) as DifficultyBand })} className={`band-button ${settings.maxBand === index + 1 ? 'selected' : ''}`}><small>Up to band {index + 1}</small><strong>{name}</strong></button>)}
-    </div></fieldset>
     <fieldset><legend>How many puzzles?</legend><div className="length-row">
       {[10, 15].map((value) => <button type="button" key={value} onClick={() => setSettings({ ...settings, length: Math.min(value, pool) })} className={`length-button ${settings.length === value ? 'selected' : ''}`}>{value}</button>)}
       <label className="custom-length"><span>Custom</span><input aria-label="Custom puzzle count" type="number" min="3" max={pool} value={settings.length} onChange={(event) => setSettings({ ...settings, length: Math.min(pool, Math.max(3, Number(event.target.value) || 3)) })} /></label>
-    </div><p className="field-help">{pool} eligible answers in this set · no repeats inside a match</p></fieldset>
+    </div><p className="field-help">{pool} approved answers at {LEVEL_NAMES[settings.maxBand - 1]} · no repeats inside a match</p></fieldset>
   </div>;
 }
 
