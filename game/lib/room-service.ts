@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { createRecipe, getPuzzleEntry, normalizeAnswer } from '@/lib/game-engine';
+import { createRecipe, getPuzzleEntry, normalizeAnswer, unplayableReason } from '@/lib/game-engine';
+import { scoreSolve } from '@/lib/scoring';
 import type { GameSettings, Level, MatchRecipe } from '@/lib/types';
 
 export type RoomMode = 'individuals' | 'teams' | 'cooperative';
@@ -174,6 +175,12 @@ export async function roomAction(room: RoomRow, playerId: string, token: string,
   } else if (action === 'start' && player.isHost && status === 'LOBBY') {
     if (room.mode !== 'cooperative' && players.length < 2) throw new Error('Invite at least one more player, or choose Cooperative.');
     if (players.some((item) => !item.isHost && !item.ready)) throw new Error('Everyone needs to be ready first.');
+    // A level the chosen categories have no words at would produce a match
+    // with no puzzles -- an empty screen for everyone, in a room only the
+    // two-hour TTL could clear. Refuse it here, where the host can still
+    // change the setting.
+    const blocked = unplayableReason(settings);
+    if (blocked) throw new Error(blocked);
     match = createRecipe(settings, randomString(32));
     nextPlayers = players.map((item) => ({ ...item, score: 0 }));
     status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; currentIndex = 0; resolution = null; hints = {};
@@ -184,7 +191,9 @@ export async function roomAction(room: RoomRow, playerId: string, token: string,
     if (!entry) throw new Error('The current puzzle could not be found.');
     if (normalizeAnswer(String(input.answer || '')) === entry.answer) {
       const sideHintCount = room.mode === 'cooperative' ? Math.max(0, ...Object.values(hints)) : room.mode === 'teams' ? Math.max(0, ...players.filter((item) => item.teamId === player.teamId).map((item) => hints[item.id] || 0)) : (hints[player.id] || 0);
-      const award = Math.max(1, 5 - sideHintCount);
+      // The same pure function solo and Time Attack use, so a long word at
+      // a hard level pays what it is worth in every mode.
+      const award = scoreSolve({ letterCount: entry.playable.length, level: entry.level, combo: 0, hintsUsed: sideHintCount });
       nextPlayers = players.map((item) => room.mode === 'cooperative' || item.id === player.id ? { ...item, score: item.score + award } : item);
       status = 'PUZZLE_RESOLVED'; puzzleStatus = 'RESOLVED';
       resolution = JSON.stringify({ solverId: player.id, solverName: player.name, award, revealed: false });
@@ -201,6 +210,8 @@ export async function roomAction(room: RoomRow, playerId: string, token: string,
     if (currentIndex >= match.puzzles.length - 1) status = 'RESULTS';
     else { currentIndex += 1; status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; resolution = null; hints = {}; }
   } else if (action === 'rematch' && player.isHost && status === 'RESULTS') {
+    const blocked = unplayableReason(settings);
+    if (blocked) throw new Error(blocked);
     match = createRecipe(settings, randomString(32)); currentIndex = 0; status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; resolution = null; hints = {};
     nextPlayers = players.map((item) => ({ ...item, score: 0 }));
   } else if (action === 'lobby' && player.isHost) {
