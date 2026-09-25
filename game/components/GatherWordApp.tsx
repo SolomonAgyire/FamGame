@@ -81,22 +81,21 @@ function HomeScreen({ mode, setMode, start, level, setLevel, blocked, dailyNumbe
   return <main className="home-shell">
     <section className="home-grid">
       <StreakHeader />
+      {/* The Daily Word is the habit, so it sits directly under the streak it
+          feeds, above everything else, and is never gated by a level. */}
+      <div className={`daily-bar ${mode === 'daily' ? 'active' : ''}`}>
+        <button type="button" role="radio" aria-checked={mode === 'daily'} onClick={() => setMode('daily')}>
+          <span className="mode-icon" aria-hidden="true">☀️</span>
+          <strong>Daily Word</strong>
+          {dailyNumber !== null && <span className="daily-bar-num">#{dailyNumber}</span>}
+          {dailyNumber !== null && !dailyDone && <i className="mode-dot" aria-label="Not played yet" />}
+        </button>
+      </div>
       <h1 className="hero-title">Unscramble the word</h1>
       <p className="hero-copy">Bible books, people, and places. Play solo, pass the phone around, or invite a room.</p>
       <InstallPrompt />
       <SamplePuzzle />
       <div className="mode-grid" role="radiogroup" aria-label="Choose how to play">
-        {/* The Daily Word is the habit, so it sits across the top and is
-            never gated by a level -- there is nothing to unlock. */}
-        <div className={`mode-tile mode-tint-sun daily-tile ${mode === 'daily' ? 'active' : ''}`}>
-          <button type="button" role="radio" aria-checked={mode === 'daily'} onClick={() => setMode('daily')} className="mode-tile-main">
-            <span className="mode-icon" aria-hidden="true">☀️</span>
-            <strong>Daily Word</strong>
-            <small className="mode-sub">One word a day, the same one for everyone.</small>
-          </button>
-          {dailyNumber !== null && <span className="mode-badge">#{dailyNumber}</span>}
-          {dailyNumber !== null && !dailyDone && <i className="mode-dot" aria-label="Not played yet" />}
-        </div>
         {modes.map((item) => <div key={item.id} className={`mode-tile mode-tint-${item.tint} ${mode === item.id ? 'active' : ''} ${expanded === item.id ? 'expanded' : ''}`}>
           <button type="button" role="radio" aria-checked={mode === item.id} onClick={() => setMode(item.id)} className="mode-tile-main">
             <span className="mode-icon" aria-hidden="true">{item.icon}</span><strong>{item.title}</strong>
@@ -108,14 +107,14 @@ function HomeScreen({ mode, setMode, start, level, setLevel, blocked, dailyNumbe
       <LevelBar selected={level} onSelect={setLevel} />
       {stopped && <p className="field-help warn" role="status">{blocked}</p>}
       <button type="button" className="primary-button hero-button" disabled={stopped} onClick={start}>{mode === 'daily' ? (dailyDone ? "See today's result" : 'Play the Daily Word') : `Start ${modeTitle} · ${LEVEL_NAMES[level - 1]}`}</button>
-      <p className="free-note">No account needed. No timer. Free to play.</p>
+      <p className="free-note">No account needed. Free to play.</p>
     </section>
   </main>;
 }
 
 function SamplePuzzle() {
   return <div className="sample-wrap"><div className="puzzle-card sample-card">
-    <div className="card-top"><div><p className="puzzle-kicker">People · Starter</p><h2>Who is hiding here?</h2></div><span className="points-pill">5 pts</span></div>
+    <div className="card-top"><div><p className="puzzle-kicker">People</p><h2>Who is hiding here?</h2></div><span className="points-pill">9 pts</span></div>
     <div className="tile-row" aria-label="Scrambled letters H A M A B R A">{'HAMABRA'.split('').map((letter, index) => <span className="letter-tile" key={`${letter}-${index}`}>{letter}</span>)}</div>
     <div className="tile-row answer-row" aria-label="Empty answer slots">{Array.from({ length: 7 }, (_, index) => <span className="answer-slot" key={index} />)}</div>
     <div className="sample-footer"><span>↻ Shuffle</span><small>Tap letters to build the answer</small><span>✦ Hint</span></div>

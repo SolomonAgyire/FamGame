@@ -928,3 +928,43 @@ footer {
 .daily-tile .mode-icon { grid-area: icon; }
 .daily-tile strong { grid-area: title; align-self: end; }
 .daily-tile .mode-sub { grid-area: sub; align-self: start; margin-top: 0; }
+
+/* ============================================================
+   Daily bar — the habit sits directly under the streak it feeds,
+   so it is one slim row rather than a card that explains itself.
+   "Daily Word" and a number say everything the tile needs to.
+   ============================================================ */
+.daily-bar { width: 100%; }
+.daily-bar button {
+  position: relative; display: flex; width: 100%; gap: 11px; padding: 9px 14px;
+  align-items: center; text-align: left; border: 1px solid var(--line);
+  border-radius: 999px; background: var(--surface); box-shadow: 0 4px 0 #e8dcbc;
+}
+.daily-bar button:active { transform: translateY(4px); box-shadow: 0 0 0 #e8dcbc; }
+.daily-bar .mode-icon { width: 34px; height: 34px; font-size: 17px; background: #fff0cf; }
+.daily-bar strong { flex: 1; font-family: var(--font-display); font-size: 15.5px; color: var(--ink); }
+.daily-bar-num {
+  border-radius: 999px; background: var(--surface2); border: 1px solid var(--line);
+  padding: 3px 9px; color: var(--muted); font-size: 11.5px; font-weight: 700;
+}
+.daily-bar .mode-dot { position: static; width: 8px; height: 8px; flex: none; }
+.daily-bar.active button {
+  background: linear-gradient(180deg, #ffd876, var(--sun)); border-color: var(--sun-deep);
+  box-shadow: 0 4px 0 var(--sun-deep);
+}
+.daily-bar.active strong { color: var(--sun-ink); }
+.daily-bar.active .daily-bar-num { background: rgba(255,255,255,.6); border-color: rgba(58,37,4,.16); color: var(--sun-ink); }
+
+/* The streak box is a header, not a panel -- it earns less height now
+   that the Daily Word sits right beneath it. */
+.streak-header { gap: 8px; padding: 10px 14px; }
+.streak-count strong { font-size: 24px; }
+.streak-flame { font-size: 22px; }
+.week-dot i { width: 18px; height: 18px; }
+.week-dot { gap: 3px; }
+.week-dot small { font-size: 9.5px; }
+
+/* The kicker and title sit against the card's own edge rather than
+   inside a second inset. */
+.sample-card { padding: 15px 14px; }
+.sample-card .puzzle-kicker { margin-left: 0; }
