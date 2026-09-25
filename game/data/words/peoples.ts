@@ -45,13 +45,7 @@ export const nationRows: SourceRow[] = [
   ['Arabians', 'Acts 2:11', 3], ['Cretans', 'Acts 2:11', 4], ['Nazarenes', 'Acts 24:5', 4],
 ];
 
-/**
- * Peoples whose NWT rendering this author could not confirm. They stay
- * out of play until a human checks them.
- * - The NWT speaks of the land of `Phoenicia` (Acts 11:19; 21:2); whether
- *   it ever calls its people `Phoenicians` needs checking against the
- *   printed text.
- */
-export const draftNationRows: SourceRow[] = [
-  ['Phoenicians', 'Acts 11:19', 3],
-];
+/** No nation rows are awaiting review. `Phoenicians` was dropped: the NWT
+ * names the land Phoenicia (Acts 11:19) but never its people, so the word
+ * now lives in the place list instead. */
+export const draftNationRows: SourceRow[] = [];

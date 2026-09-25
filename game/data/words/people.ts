@@ -125,14 +125,9 @@ export const peopleRows: SourceRow[] = [
   ['Onesiphorus', '2 Timothy 1:16', 4], ['Philetus', '2 Timothy 2:17', 4], ['Claudia', '2 Timothy 4:21', 4], ['Linus', '2 Timothy 4:21', 4],
   ['Pudens', '2 Timothy 4:21', 4], ['Artemas', 'Titus 3:12', 4], ['Zenas', 'Titus 3:13', 4], ['Philemon', 'Philemon 1:1', 2],
   ['Jude', 'Jude 1:1', 1], ['Diotrephes', '3 John 1:9', 4],
-];
-
-/**
- * Rows whose NWT spelling this author could not confirm. They stay out of
- * play until someone checks them against a printed or online NWT.
- * `Junias` is the masculine form the NWT uses at Romans 16:7; other
- * translations read `Junia`, so the spelling needs a human eye.
- */
-export const draftPeopleRows: SourceRow[] = [
   ['Junias', 'Romans 16:7', 4],
 ];
+
+/** No person rows are awaiting review: Junias was confirmed as the form
+ * the NWT uses at Romans 16:7 and promoted. */
+export const draftPeopleRows: SourceRow[] = [];

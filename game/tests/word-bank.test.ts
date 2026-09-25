@@ -113,5 +113,11 @@ test('the twelve tribes and the major nations are present', () => {
 test('draft words never reach play', () => {
   assert.ok(PLAYABLE_BANK.length > 0);
   for (const entry of PLAYABLE_BANK) assert.equal(entry.status, 'approved');
-  assert.ok(PLAYABLE_BANK.length < WORD_BANK.length, 'there should be drafts awaiting review');
+  // The bank may legitimately hold no drafts at all -- what matters is that
+  // every draft is excluded, not that drafts exist.
+  const drafts = WORD_BANK.filter((entry) => entry.status === 'draft');
+  assert.equal(PLAYABLE_BANK.length, WORD_BANK.length - drafts.length);
+  for (const draft of drafts) {
+    assert.ok(!PLAYABLE_BANK.some((entry) => entry.id === draft.id), `${draft.display} is a draft but reached play`);
+  }
 });

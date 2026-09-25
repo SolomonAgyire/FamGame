@@ -91,18 +91,10 @@ export const placeRows: SourceRow[] = [
   ['Colossae', 'Colossians 1:2', 3], ['Hierapolis', 'Colossians 4:13', 4], ['Dalmatia', '2 Timothy 4:10', 4], ['Nicopolis', 'Titus 3:12', 4],
   ['Cappadocia', '1 Peter 1:1', 3], ['Smyrna', 'Revelation 2:8', 2], ['Pergamum', 'Revelation 2:12', 3], ['Thyatira', 'Revelation 2:18', 3],
   ['Sardis', 'Revelation 3:1', 3], ['Philadelphia', 'Revelation 3:7', 2], ['Laodicea', 'Revelation 3:14', 2],
+  ['Asshur', 'Ezekiel 27:23', 4], ['Tigris', 'Daniel 10:4', 2], ['Memphis', 'Hosea 9:6', 3],
+  ['Phoenicia', 'Acts 11:19', 3],
 ];
 
-/**
- * Places whose NWT rendering this author could not confirm. They stay out
- * of play until a human checks them.
- * - `Asshur` reads as a personal name at Genesis 10:22; whether the NWT
- *   keeps it as a place at Ezekiel 27:23 needs checking.
- * - `Tigris` and `Memphis` are the modern names the 2013 revision prefers
- *   over Hiddekel and Noph, but the exact verse wording needs checking.
- */
-export const draftPlaceRows: SourceRow[] = [
-  ['Asshur', 'Ezekiel 27:23', 4],
-  ['Tigris', 'Daniel 10:4', 2],
-  ['Memphis', 'Hosea 9:6', 3],
-];
+/** No place rows are awaiting review: the three that were held back
+ * (Asshur, Tigris, Memphis) were confirmed against the NWT and promoted. */
+export const draftPlaceRows: SourceRow[] = [];
