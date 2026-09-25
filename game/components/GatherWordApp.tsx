@@ -708,8 +708,94 @@ function OnlineEntry({ onBack, onConnected, initialCode }: { onBack: () => void;
 function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; leave: () => void; sound: boolean }) {
   const [snapshot, setSnapshot] = useState<RoomSnapshot | null>(null); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const [placed, setPlaced] = useState<number[]>([]); const [order, setOrder] = useState<number[] | null>(null);
   const previousStatus = useRef<RoomSnapshot['status'] | null>(null);
-  const load = useCallback(async () => { try { const response = await fetch(`/api/rooms/${credentials.code}?playerId=${credentials.playerId}`, { headers: { 'x-room-token': credentials.token } }); const data = await response.json() as RoomSnapshot & { error?: string }; if (!response.ok) throw new Error(data.error || 'Could not update the room.'); setSnapshot((previous) => { if (previous?.currentIndex !== data.currentIndex || previous?.status !== data.status) { setPlaced([]); setOrder(null); } return data; }); setError(''); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Reconnecting…'); } }, [credentials]);
-  useEffect(() => { const initial = window.setTimeout(load, 0); const timer = window.setInterval(() => { if (document.visibilityState === 'visible') load(); }, 1800); return () => { window.clearTimeout(initial); window.clearInterval(timer); }; }, [load]);
+  // `action` below reaches into `socketRef` to decide whether to send over
+  // the wire or fall back to the REST endpoint the D1-era room used
+  // exclusively. `busyTimer` is a safety net: a socket send has no matching
+  // reply to await, so without it a request the server silently dropped
+  // would leave `busy` -- and so the board -- locked forever.
+  const socketRef = useRef<WebSocket | null>(null);
+  const busyTimer = useRef<number | null>(null);
+  const applySnapshot = useCallback((data: RoomSnapshot) => {
+    setSnapshot((previous) => { if (previous?.currentIndex !== data.currentIndex || previous?.status !== data.status) { setPlaced([]); setOrder(null); } return data; });
+  }, []);
+  // One effect owns the whole connection lifecycle: dial the socket, retry
+  // once with backoff on a close, and fall back to the 1.8-second REST poll
+  // this replaced once the socket has failed to open twice -- a phone on a
+  // hostile network must still be able to play. Everything it needs is
+  // either a dependency below or declared inside it on purpose: splitting
+  // it into several `useCallback`s would give three functions that only
+  // ever make sense called in this one order.
+  useEffect(() => {
+    let cancelled = false;
+    let socket: WebSocket | null = null;
+    let pollTimer: number | null = null;
+    let reconnectTimer: number | null = null;
+    let openFailures = 0;
+
+    const loadOnce = async () => {
+      try {
+        const response = await fetch(`/api/rooms/${credentials.code}?playerId=${credentials.playerId}`, { headers: { 'x-room-token': credentials.token } });
+        const data = await response.json() as RoomSnapshot & { error?: string };
+        if (!response.ok) throw new Error(data.error || 'Could not update the room.');
+        if (cancelled) return;
+        applySnapshot(data); setError('');
+      } catch (caught) {
+        if (!cancelled) setError(caught instanceof Error ? caught.message : 'Reconnecting…');
+      }
+    };
+
+    const stopPolling = () => { if (pollTimer !== null) { window.clearInterval(pollTimer); pollTimer = null; } };
+
+    // The permanent fallback once the socket has given up -- same shape as
+    // the interval this replaced, right down to only polling while the tab
+    // is actually visible.
+    const startPolling = () => {
+      if (pollTimer !== null || cancelled) return;
+      setError((current) => current || 'Reconnecting…');
+      void loadOnce();
+      pollTimer = window.setInterval(() => { if (document.visibilityState === 'visible') void loadOnce(); }, 1800);
+    };
+
+    const connectSocket = () => {
+      if (cancelled) return;
+      const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const ws = new WebSocket(`${scheme}://${window.location.host}/api/rooms/${credentials.code}/socket?playerId=${encodeURIComponent(credentials.playerId)}&token=${encodeURIComponent(credentials.token)}`);
+      socket = ws; socketRef.current = ws;
+      ws.onopen = () => { openFailures = 0; stopPolling(); setError(''); };
+      ws.onmessage = (event) => {
+        if (busyTimer.current !== null) { window.clearTimeout(busyTimer.current); busyTimer.current = null; }
+        setBusy(false);
+        try {
+          const payload = JSON.parse(String(event.data)) as { type: string; snapshot?: RoomSnapshot; message?: string };
+          if (payload.type === 'snapshot' && payload.snapshot) { applySnapshot(payload.snapshot); setError(''); }
+          else if (payload.type === 'error' && payload.message) showToast(payload.message, 'error');
+        } catch { /* not a frame this client understands -- ignore it */ }
+      };
+      ws.onclose = () => {
+        if (cancelled) return;
+        socket = null; socketRef.current = null;
+        openFailures += 1;
+        // Two failed opens and the socket stops trying -- REST, not a third
+        // attempt, is what a hostile network gets from here on.
+        if (openFailures >= 2) { startPolling(); return; }
+        setError('Reconnecting…');
+        reconnectTimer = window.setTimeout(connectSocket, 1500);
+      };
+      ws.onerror = () => ws.close();
+    };
+
+    void loadOnce();
+    connectSocket();
+
+    return () => {
+      cancelled = true;
+      stopPolling();
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+      if (busyTimer.current !== null) { window.clearTimeout(busyTimer.current); busyTimer.current = null; }
+      socket?.close();
+      socketRef.current = null;
+    };
+  }, [credentials.code, credentials.playerId, credentials.token, applySnapshot]);
   useEffect(() => { duckMusic(true); return () => duckMusic(false); }, []);
   useEffect(() => {
     if (sound && snapshot?.status === 'PUZZLE_RESOLVED' && previousStatus.current !== 'PUZZLE_RESOLVED') {
@@ -718,7 +804,38 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
     }
     previousStatus.current = snapshot?.status ?? null;
   }, [snapshot?.status, snapshot?.resolution, snapshot?.viewerId, sound]);
-  const action = async (input: Record<string, unknown>) => { setBusy(true); setError(''); try { const response = await fetch(`/api/rooms/${credentials.code}/action`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-room-token': credentials.token }, body: JSON.stringify({ ...input, playerId: credentials.playerId }) }); const data = await response.json() as RoomSnapshot & { error?: string }; if (!response.ok) throw new Error(data.error || 'That action did not work.'); setSnapshot(data); if (data.status !== 'PUZZLE_OPEN') { setPlaced([]); setOrder(null); } } catch (caught) { const message = caught instanceof Error ? caught.message : 'That action did not work.'; setError(message); showToast(message, 'error'); } finally { setBusy(false); } };
+  const action = async (input: Record<string, unknown>) => {
+    setBusy(true); setError('');
+    const socket = socketRef.current;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      // No request/response pairing over the socket -- the server answers
+      // with a broadcast snapshot (or an error frame), which is what clears
+      // `busy` in `ws.onmessage` above. `busyTimer` there is the guard
+      // against one that never arrives.
+      try {
+        socket.send(JSON.stringify({ ...input, playerId: credentials.playerId }));
+      } catch {
+        setBusy(false); setError('That action did not go through.');
+        return;
+      }
+      if (busyTimer.current !== null) window.clearTimeout(busyTimer.current);
+      busyTimer.current = window.setTimeout(() => setBusy(false), 6000);
+      return;
+    }
+    // REST fallback: the moment before the socket first opens, and
+    // permanently once it has failed to open twice.
+    try {
+      const response = await fetch(`/api/rooms/${credentials.code}/action`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-room-token': credentials.token }, body: JSON.stringify({ ...input, playerId: credentials.playerId }) });
+      const data = await response.json() as RoomSnapshot & { error?: string };
+      if (!response.ok) throw new Error(data.error || 'That action did not work.');
+      applySnapshot(data);
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'That action did not work.';
+      setError(message); showToast(message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
   // Auto-check once the last tile lands, so a room plays the same way solo
   // and the Daily Word do. The ref holds the exact answer already sent, which
   // stops the effect resubmitting while the request is in flight and stops it
