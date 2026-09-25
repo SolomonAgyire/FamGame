@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useSyncExternalStore } from 'react';
-import { TileBoard } from '@/components/TileBoard';
+import { shuffledOrder, TileBoard } from '@/components/TileBoard';
 import { dailyPuzzleFor } from '@/lib/daily';
 import { getEntryById, normalizeAnswer } from '@/lib/game-engine';
 import { dayKey, getProgressServerSnapshot, getProgressSnapshot, recordMatch, saveProgress, subscribeProgress } from '@/lib/progress';
@@ -10,7 +10,7 @@ import { buildShareText, shareResult } from '@/lib/share';
 import { applyLetterHint, HINT_LABELS, hintsFor } from '@/lib/hints';
 import { scoreSolve } from '@/lib/scoring';
 import { showToast } from '@/lib/toast';
-import { playCorrect, playWrong } from '@/lib/audio';
+import { playCorrect, playTap, playWrong } from '@/lib/audio';
 import { LEVEL_NAMES } from '@/lib/types';
 
 /** Four goes at it, then the word is shown. Enough room to think, not so
@@ -127,6 +127,7 @@ export function DailyWord({ sound, onHome }: { sound: boolean; onHome: () => voi
   const entry = getEntryById(daily.entryId);
 
   const [placed, setPlaced] = useState<number[]>([]);
+  const [order, setOrder] = useState<number[] | null>(null);
   const [hints, setHints] = useState(0);
   const [guesses, setGuesses] = useState(0);
   const [note, setNote] = useState<Note | null>(null);
@@ -260,10 +261,12 @@ export function DailyWord({ sound, onHome }: { sound: boolean; onHome: () => voi
         <div><p className="puzzle-kicker">Everyone gets this word today · {levelName}</p><h1>Unscramble the answer</h1></div>
         <span className="points-pill">{value} pts</span>
       </div>
-      <TileBoard scramble={daily.scramble} placed={placed} setPlaced={setPlaced} />
+      <TileBoard scramble={daily.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} />
       {hints > 0 && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{ladder.slice(0, hints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
       <div className="game-actions">
-        <button type="button" className="soft-button" onClick={() => setPlaced([])}>↻ Reset</button>
+        <button type="button" className="soft-button" onClick={() => { playTap(); setOrder(shuffledOrder(daily.scramble.length)); }}>↻ Shuffle</button>
+        <button type="button" className="soft-button" disabled={placed.length === 0} onClick={() => { playTap(); setPlaced(placed.slice(0, -1)); }}>↩ Undo</button>
+        <button type="button" className="soft-button" disabled={placed.length === 0} onClick={() => setPlaced([])}>✕ Clear</button>
         <button type="button" className="soft-button" disabled={!nextHint} onClick={takeHint}>{nextHint ? `✦ Hint · ${HINT_LABELS[nextHint.kind]}` : '✦ Hints used'}</button>
         <button type="button" className="check-button" onClick={check}>Check answer</button>
         <button type="button" className="text-button" onClick={() => finish(false, Math.max(1, guesses))}>Give up</button>

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { advanceMatch, buildLevelQueue, createFreshRecipe, eligibleWords, getEntryById, getPuzzleEntry, nextPlayableLevelAbove, normalizeAnswer, playableLevelFrom, unplayableReason } from '@/lib/game-engine';
-import { duckMusic, playCorrect, playWrong, startMusic, stopMusic } from '@/lib/audio';
+import { duckMusic, playCorrect, playTap, playWrong, startMusic, stopMusic } from '@/lib/audio';
 import { showToast, subscribeToasts, type Toast } from '@/lib/toast';
 import type { Category, GameSettings, Level, MatchRecipe, PlayMode, PuzzleRecipe, Team } from '@/lib/types';
 import { LEVEL_NAMES } from '@/lib/types';
@@ -11,7 +11,7 @@ import { scoreSolve } from '@/lib/scoring';
 import { saveProgress, recordMatch, masteredCount, subscribeProgress, getProgressSnapshot, getProgressServerSnapshot } from '@/lib/progress';
 import { highestUnlocked } from '@/lib/levels';
 import { LevelPath } from '@/components/LevelPath';
-import { TileBoard } from '@/components/TileBoard';
+import { shuffledOrder, TileBoard } from '@/components/TileBoard';
 import { DailyWord, StreakHeader, useHydrated } from '@/components/DailyWord';
 import { dailyPuzzleFor } from '@/lib/daily';
 
@@ -197,13 +197,21 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
   const [solvedIds, setSolvedIds] = useState<string[]>([]);
   const [revealCount, setRevealCount] = useState(0);
   const [combo, setCombo] = useState(0);
+  // The tray's display order. Null means "as the scramble came"; shuffling
+  // writes a permutation of the same indexes, so placed tiles never move.
+  const [order, setOrder] = useState<number[] | null>(null);
+  const [shake, setShake] = useState<number | null>(null);
   const [summary, setSummary] = useState<{ points: number; isBest: boolean; previousBest: number; lifetime: number; mastered: number } | null>(null);
   const [unlocked, setUnlocked] = useState<{ level: Level; name: string } | null>(null);
   const puzzle = recipe.puzzles[index]; const entry = getPuzzleEntry(recipe, index);
   const assembled = puzzle ? placed.map((source) => puzzle.scramble[source]).join('') : '';
   // Declared before the effects below since the auto-advance effect needs
   // to reference `next` -- React's compiler requires that ordering.
-  const resetPuzzle = () => { setPlaced([]); setHints(0); setResolved(null); setWrongStreak(0); setClaimedBy(mode === 'teams' ? null : 'group'); };
+  // The last arrangement that was rejected. With the Check button gone,
+  // filling the final slot is the commit -- so taking one tile out and
+  // putting the very same tile back must not re-submit the same miss.
+  const rejectedRef = useRef<string | null>(null);
+  const resetPuzzle = () => { setPlaced([]); setHints(0); setResolved(null); setWrongStreak(0); setOrder(null); setShake(null); rejectedRef.current = null; setClaimedBy(mode === 'teams' ? null : 'group'); };
   // Read live rather than from `finished`: the auto-advance timer below
   // runs the `next` it captured when the puzzle resolved, where `finished`
   // is still false. Tapping "See results" on the last puzzle leaves that
@@ -266,33 +274,21 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolved]);
-  // A level with no approved words in the chosen categories builds a match
-  // with no puzzles. Rendering nothing left only the header on screen, with
-  // no way back.
-  if (!entry || !puzzle) return <main className="page-shell"><section className="panel results-panel">
-    <div className="celebration">🔒</div>
-    <p className="section-kicker">Nothing to play here</p>
-    <h1 className="page-title">This level is empty</h1>
-    <p className="page-subtitle">{unplayableReason(settings) ?? 'That match could not be built. Choose a different level or word set.'}</p>
-    <div className="result-actions">
-      <button className="primary-button" type="button" onClick={onChangeSet}>Change set</button>
-      <button className="text-button" type="button" onClick={onHome}>Home</button>
-    </div>
-  </section></main>;
-  const currentValue = scoreSolve({ letterCount: puzzle.scramble.length, level: entry.band, combo, hintsUsed: hints });
-  const ladder = hintsFor(entry);
+  const currentValue = puzzle && entry ? scoreSolve({ letterCount: puzzle.scramble.length, level: entry.band, combo, hintsUsed: hints }) : 0;
+  const ladder = entry ? hintsFor(entry) : [];
   const nextHint = ladder[hints];
   // The first rung is spent on the board rather than in the hint box: a
   // letter the player can see in its slot is worth more than a sentence
   // telling them which letter it is.
   const takeHint = () => {
-    if (!nextHint) return;
+    if (!nextHint || !entry || !puzzle) return;
     if (nextHint.kind === 'letter') setPlaced(applyLetterHint(entry, placed, puzzle.scramble));
     setHints(hints + 1);
   };
   const check = () => {
+    if (!entry || !puzzle || resolved) return;
     if (mode === 'teams' && !claimedBy) { showToast('A team needs to claim this puzzle first.'); return; }
-    if (placed.length !== puzzle.scramble.length) { showToast('Place every letter before checking.'); return; }
+    if (placed.length !== puzzle.scramble.length) return;
     const correct = normalizeAnswer(assembled) === entry.answer;
     if (correct) {
       setScores(scores.map((team) => team.id === claimedBy ? { ...team, score: team.score + currentValue } : team));
@@ -308,16 +304,44 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
       setWrongCount(wrongCount + 1);
       setCombo(0);
       setMissPop(Date.now());
+      setShake(Date.now());
+      rejectedRef.current = assembled;
       if (sound) playWrong();
       const nextStreak = wrongStreak + 1;
       setWrongStreak(nextStreak);
       // Three misses in a row on the same word -- reveal it and move on
       // rather than leaving the player stuck.
       if (nextStreak >= 3) { setResolved({ correct: false, revealed: true, award: 0 }); return; }
-      if (mode === 'teams') { setClaimedBy(null); setPlaced([]); }
+      if (mode === 'teams') { setClaimedBy(null); setPlaced([]); rejectedRef.current = null; }
     }
   };
   const reveal = () => { setRevealCount(revealCount + 1); setCombo(0); setResolved({ correct: false, revealed: true, award: 0 }); };
+  // Auto-check: the final tile is the commit. A quarter-second beat first,
+  // so the player sees the word finished before it is judged -- and so
+  // reaching for a button never costs seconds under a timer.
+  useEffect(() => {
+    if (!puzzle || resolved) return;
+    if (placed.length !== puzzle.scramble.length) return;
+    if (placed.map((source) => puzzle.scramble[source]).join('') === rejectedRef.current) return;
+    const timer = window.setTimeout(check, 250);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placed, resolved, puzzle]);
+  // A level with no approved words in the chosen categories builds a match
+  // with no puzzles. Rendering nothing left only the header on screen, with
+  // no way back.
+  if (!entry || !puzzle) return <main className="page-shell"><section className="panel results-panel">
+    <div className="celebration">🔒</div>
+    <p className="section-kicker">Nothing to play here</p>
+    <h1 className="page-title">This level is empty</h1>
+    <p className="page-subtitle">{unplayableReason(settings) ?? 'That match could not be built. Choose a different level or word set.'}</p>
+    <div className="result-actions">
+      <button className="primary-button" type="button" onClick={onChangeSet}>Change set</button>
+      <button className="text-button" type="button" onClick={onHome}>Home</button>
+    </div>
+  </section></main>;
+  const shuffleTray = () => { playTap(); setOrder(shuffledOrder(puzzle.scramble.length)); };
+  const undo = () => { if (placed.length === 0) return; playTap(); rejectedRef.current = null; setPlaced(placed.slice(0, -1)); };
   const rematch = () => { finishedRef.current = false; setRecipe(createFreshRecipe(settings)); setIndex(0); setScores(scores.map((team) => ({ ...team, score: 0 }))); setCorrectCount(0); setWrongCount(0); setRevealCount(0); setFinished(false); resetPuzzle(); setSolvedIds([]); setCombo(0); setSummary(null); setUnlocked(null); };
   if (finished) return <Results mode={mode} scores={scores} correct={correctCount} wrong={wrongCount} total={recipe.puzzles.length} summary={summary} unlocked={unlocked} rematch={rematch} changeSet={onChangeSet} home={onHome} />;
   return <main className="game-shell">
@@ -326,10 +350,10 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
     <div className="game-topbar"><div><span>Puzzle {index + 1} of {recipe.puzzles.length}</span><div className="progress"><i style={{ width: `${((index + 1) / recipe.puzzles.length) * 100}%` }} /></div></div><div className="score-strip">{scores.map((team) => <span key={team.id}><i style={{ background: team.color }} />{team.name} <strong key={team.score}>{team.score}</strong></span>)}</div></div>
     {mode === 'teams' && !resolved && <div className="claim-panel"><p>{claimedBy ? <><strong>{scores.find((team) => team.id === claimedBy)?.name}</strong> is building</> : 'Who knows it? Claim the puzzle.'}</p><div>{scores.map((team) => <button type="button" key={team.id} disabled={Boolean(claimedBy)} style={{ '--team-color': team.color } as React.CSSProperties} onClick={() => setClaimedBy(team.id)}>{claimedBy === team.id ? 'Building…' : `Claim · ${team.name}`}</button>)}{claimedBy && <button type="button" className="release" onClick={() => { setClaimedBy(null); setPlaced([]); }}>Release</button>}</div></div>}
     <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{entry.categories[0]} · {LEVEL_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Unscramble the answer'}</h1></div><span className="points-pill">{currentValue} pts</span></div>
-      <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} locked={Boolean(resolved) || (mode === 'teams' && !claimedBy)} />
+      <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} shakeKey={shake ?? undefined} locked={Boolean(resolved) || (mode === 'teams' && !claimedBy)} />
       {hints > 0 && !resolved && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{ladder.slice(0, hints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
       {resolved ? <div className="resolution"><span>{resolved.revealed ? 'The answer was' : 'Beautiful work!'}</span><strong>{entry.display}</strong><p>{entry.references[0]} · {resolved.award ? `+${resolved.award} points` : 'No points this time'}</p><button type="button" className="primary-button" onClick={next}>{index === recipe.puzzles.length - 1 ? 'See results' : 'Next puzzle'}</button></div>
-      : <div className="game-actions"><button type="button" className="soft-button" onClick={() => setPlaced([])}>↻ Reset</button><button type="button" className="soft-button" disabled={!nextHint} onClick={takeHint}>{nextHint ? `✦ Hint · ${HINT_LABELS[nextHint.kind]}` : '✦ Hints used'}</button><button type="button" className="check-button" onClick={check}>Check answer</button><button type="button" className="text-button" onClick={reveal}>Reveal & continue</button></div>}
+      : <div className="game-actions"><button type="button" className="soft-button" onClick={shuffleTray}>↻ Shuffle</button><button type="button" className="soft-button" disabled={placed.length === 0} onClick={undo}>↩ Undo</button><button type="button" className="soft-button" disabled={placed.length === 0} onClick={() => { rejectedRef.current = null; setPlaced([]); }}>✕ Clear</button><button type="button" className="soft-button" disabled={!nextHint} onClick={takeHint}>{nextHint ? `✦ Hint · ${HINT_LABELS[nextHint.kind]}` : '✦ Hints used'}</button><button type="button" className="text-button" onClick={reveal}>Reveal & continue</button></div>}
       <button type="button" className="quit-button" onClick={onHome}>End match</button>
     </section></main>;
 }
@@ -368,6 +392,7 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
   const [band, setBand] = useState<Level>(startLevel);
   const [queue, setQueue] = useState<PuzzleRecipe[]>(() => buildLevelQueue(startLevel, categories));
   const [placed, setPlaced] = useState<number[]>([]);
+  const [order, setOrder] = useState<number[] | null>(null);
   const [score, setScore] = useState(0);
   const [solved, setSolved] = useState(0);
   const [strikes, setStrikes] = useState(0);
@@ -376,7 +401,9 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
   const [combo, setCombo] = useState(0);
   const [finished, setFinished] = useState<'strikes' | 'cleared' | null>(null);
   const [celebration, setCelebration] = useState<{ id: number; title: string; subtitle: string } | null>(null);
-  const bestRef = useRef(getHighScore());
+  // Read once at mount. Held in state rather than a ref because the
+  // results screen renders it, and a ref must not be read during render.
+  const [personalBest] = useState(getHighScore);
   const milestoneRef = useRef(0);
   const beatBestRef = useRef(false);
   const savedRef = useRef(false);
@@ -386,46 +413,8 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
   const puzzle = queue[0];
   const entry = puzzle ? getEntryById(puzzle.entryId) : undefined;
 
-  // Per-word countdown. Hitting zero counts as a miss, same as a wrong check.
-  useEffect(() => {
-    if (resolved || finished || !entry) return;
-    if (timeLeft <= 0) { resolveWord(false); return; }
-    const timer = window.setTimeout(() => setTimeLeft((value) => value - 1), 1000);
-    return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeLeft, resolved, finished, entry]);
-
-  // Auto-advance shortly after each word resolves -- an arcade mode keeps moving.
-  useEffect(() => {
-    if (!resolved) return;
-    const timer = window.setTimeout(advance, 650);
-    return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolved]);
-
-  useEffect(() => {
-    if (!celebration) return;
-    const timer = window.setTimeout(() => setCelebration(null), 1600);
-    return () => window.clearTimeout(timer);
-  }, [celebration]);
-
-  useEffect(() => {
-    if (finished && !savedRef.current) {
-      savedRef.current = true;
-      if (score > bestRef.current) saveHighScore(score);
-    }
-  }, [finished, score]);
-
-  if (!entry || !puzzle) return <main className="page-shell"><section className="panel results-panel">
-    <div className="celebration">🔒</div>
-    <p className="section-kicker">Time Attack</p>
-    <h1 className="page-title">No words to race</h1>
-    <p className="page-subtitle">{unplayableReason({ categories, maxBand: band, length: 1 }) ?? 'Choose a different word set to start a run.'}</p>
-    <div className="result-actions"><button className="primary-button" type="button" onClick={onHome}>Home</button></div>
-  </section></main>;
-
   function checkMilestones(newScore: number) {
-    if (newScore > bestRef.current && !beatBestRef.current) {
+    if (newScore > personalBest && !beatBestRef.current) {
       beatBestRef.current = true;
       setCelebration({ id: Date.now(), title: 'New High Score!', subtitle: `${newScore} points` });
       return;
@@ -438,6 +427,7 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
   }
 
   function resolveWord(correct: boolean) {
+    if (!puzzle) return;
     if (correct) {
       // The same award solo and online use, with the clock supplying the
       // speed bonus. A flat 5 ignored both word length and the level
@@ -474,6 +464,7 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
     if (remaining.length > 0) {
       setQueue(remaining);
       setPlaced([]);
+      setOrder(null);
       setResolved(null);
       setTimeLeft(BAND_TIME_LIMITS[band]);
       return;
@@ -485,6 +476,7 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
       setBand(nextBand);
       setQueue(buildLevelQueue(nextBand, categories));
       setPlaced([]);
+      setOrder(null);
       setResolved(null);
       setStrikes(0);
       setTimeLeft(BAND_TIME_LIMITS[nextBand]);
@@ -494,16 +486,67 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
     setFinished('cleared');
   }
 
-  const check = () => {
-    if (resolved || placed.length !== puzzle.scramble.length) return;
-    const assembled = placed.map((source) => puzzle.scramble[source]).join('');
-    resolveWord(normalizeAnswer(assembled) === entry.answer);
-  };
+
+  // Per-word countdown. Hitting zero counts as a miss, same as a wrong check.
+  useEffect(() => {
+    if (resolved || finished || !entry) return;
+    // The miss is scheduled rather than run inline: resolving a word sets
+    // four pieces of state, and doing that synchronously inside an effect
+    // cascades a second render before the first has painted.
+    if (timeLeft <= 0) {
+      const strike = window.setTimeout(() => resolveWord(false), 0);
+      return () => window.clearTimeout(strike);
+    }
+    const timer = window.setTimeout(() => setTimeLeft((value) => value - 1), 1000);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeLeft, resolved, finished, entry]);
+
+  // Auto-advance shortly after each word resolves -- an arcade mode keeps moving.
+  useEffect(() => {
+    if (!resolved) return;
+    const timer = window.setTimeout(advance, 650);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolved]);
+
+  useEffect(() => {
+    if (!celebration) return;
+    const timer = window.setTimeout(() => setCelebration(null), 1600);
+    return () => window.clearTimeout(timer);
+  }, [celebration]);
+
+  // Auto-check: the final tile is the commit. Reaching for a button cost
+  // real seconds in the one mode that charges for them.
+  useEffect(() => {
+    if (resolved || finished || !entry || !puzzle) return;
+    if (placed.length !== puzzle.scramble.length) return;
+    const timer = window.setTimeout(() => {
+      resolveWord(normalizeAnswer(placed.map((source) => puzzle.scramble[source]).join('')) === entry.answer);
+    }, 250);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placed, resolved, finished, entry, puzzle]);
+
+  useEffect(() => {
+    if (finished && !savedRef.current) {
+      savedRef.current = true;
+      if (score > personalBest) saveHighScore(score);
+    }
+  }, [finished, score, personalBest]);
+
+  if (!entry || !puzzle) return <main className="page-shell"><section className="panel results-panel">
+    <div className="celebration">🔒</div>
+    <p className="section-kicker">Time Attack</p>
+    <h1 className="page-title">No words to race</h1>
+    <p className="page-subtitle">{unplayableReason({ categories, maxBand: band, length: 1 }) ?? 'Choose a different word set to start a run.'}</p>
+    <div className="result-actions"><button className="primary-button" type="button" onClick={onHome}>Home</button></div>
+  </section></main>;
 
   if (finished) {
-    const best = Math.max(score, bestRef.current);
+    const best = Math.max(score, personalBest);
     return <main className="page-shell"><section className="panel results-panel">
-      {score >= bestRef.current && score > 0 && <Confetti key="final" />}
+      {score >= personalBest && score > 0 && <Confetti key="final" />}
       <div className="celebration">{finished === 'cleared' ? '🏆' : '⏱️'}</div>
       <p className="section-kicker">Time Attack</p>
       <h1 className="page-title">{finished === 'cleared' ? 'Perfect clear!' : 'Run over'}</h1>
@@ -531,9 +574,9 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
     </div>
     <section className="puzzle-card play-card">
       <div className="card-top"><div><p className="puzzle-kicker">{entry.categories[0]} · {LEVEL_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Unscramble the answer'}</h1></div><span className={`points-pill timer-pill ${urgent ? 'urgent' : ''}`}>{timeLeft}s</span></div>
-      <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} locked={Boolean(resolved)} />
+      <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} locked={Boolean(resolved)} />
       {resolved && <div className="resolution"><span>{resolved.correct ? `+${resolved.gained} points` : 'Missed it'}</span><strong>{entry.display}</strong><p>{entry.references[0]}</p></div>}
-      {!resolved && <div className="game-actions"><button type="button" className="check-button full-button" onClick={check}>Check answer</button></div>}
+      {!resolved && <div className="game-actions"><button type="button" className="soft-button" onClick={() => { playTap(); setOrder(shuffledOrder(puzzle.scramble.length)); }}>↻ Shuffle</button><button type="button" className="soft-button" disabled={placed.length === 0} onClick={() => { playTap(); setPlaced(placed.slice(0, -1)); }}>↩ Undo</button><button type="button" className="soft-button" disabled={placed.length === 0} onClick={() => setPlaced([])}>✕ Clear</button></div>}
     </section>
     <button type="button" className="quit-button" onClick={onHome}>End run</button>
   </main>;
@@ -579,9 +622,9 @@ function OnlineEntry({ onBack, onConnected, initialCode }: { onBack: () => void;
 }
 
 function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; leave: () => void; sound: boolean }) {
-  const [snapshot, setSnapshot] = useState<RoomSnapshot | null>(null); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const [placed, setPlaced] = useState<number[]>([]);
+  const [snapshot, setSnapshot] = useState<RoomSnapshot | null>(null); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const [placed, setPlaced] = useState<number[]>([]); const [order, setOrder] = useState<number[] | null>(null);
   const previousStatus = useRef<RoomSnapshot['status'] | null>(null);
-  const load = useCallback(async () => { try { const response = await fetch(`/api/rooms/${credentials.code}?playerId=${credentials.playerId}`, { headers: { 'x-room-token': credentials.token } }); const data = await response.json() as RoomSnapshot & { error?: string }; if (!response.ok) throw new Error(data.error || 'Could not update the room.'); setSnapshot((previous) => { if (previous?.currentIndex !== data.currentIndex || previous?.status !== data.status) setPlaced([]); return data; }); setError(''); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Reconnecting…'); } }, [credentials]);
+  const load = useCallback(async () => { try { const response = await fetch(`/api/rooms/${credentials.code}?playerId=${credentials.playerId}`, { headers: { 'x-room-token': credentials.token } }); const data = await response.json() as RoomSnapshot & { error?: string }; if (!response.ok) throw new Error(data.error || 'Could not update the room.'); setSnapshot((previous) => { if (previous?.currentIndex !== data.currentIndex || previous?.status !== data.status) { setPlaced([]); setOrder(null); } return data; }); setError(''); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Reconnecting…'); } }, [credentials]);
   useEffect(() => { const initial = window.setTimeout(load, 0); const timer = window.setInterval(() => { if (document.visibilityState === 'visible') load(); }, 1800); return () => { window.clearTimeout(initial); window.clearInterval(timer); }; }, [load]);
   useEffect(() => { duckMusic(true); return () => duckMusic(false); }, []);
   useEffect(() => {
@@ -590,7 +633,7 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
     }
     previousStatus.current = snapshot?.status ?? null;
   }, [snapshot?.status, snapshot?.resolution, sound]);
-  const action = async (input: Record<string, unknown>) => { setBusy(true); setError(''); try { const response = await fetch(`/api/rooms/${credentials.code}/action`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-room-token': credentials.token }, body: JSON.stringify({ ...input, playerId: credentials.playerId }) }); const data = await response.json() as RoomSnapshot & { error?: string }; if (!response.ok) throw new Error(data.error || 'That action did not work.'); setSnapshot(data); if (data.status !== 'PUZZLE_OPEN') setPlaced([]); } catch (caught) { const message = caught instanceof Error ? caught.message : 'That action did not work.'; setError(message); showToast(message, 'error'); } finally { setBusy(false); } };
+  const action = async (input: Record<string, unknown>) => { setBusy(true); setError(''); try { const response = await fetch(`/api/rooms/${credentials.code}/action`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-room-token': credentials.token }, body: JSON.stringify({ ...input, playerId: credentials.playerId }) }); const data = await response.json() as RoomSnapshot & { error?: string }; if (!response.ok) throw new Error(data.error || 'That action did not work.'); setSnapshot(data); if (data.status !== 'PUZZLE_OPEN') { setPlaced([]); setOrder(null); } } catch (caught) { const message = caught instanceof Error ? caught.message : 'That action did not work.'; setError(message); showToast(message, 'error'); } finally { setBusy(false); } };
   if (!snapshot) return <main className="page-shell"><section className="panel loading-panel"><span className="loader" /><h1>Opening room {credentials.code}</h1><p>{error || 'Gathering everyone…'}</p><button type="button" className="text-button" onClick={leave}>Leave</button></section></main>;
   const viewer = snapshot.players.find((player) => player.id === credentials.playerId); const isHost = Boolean(viewer?.isHost);
   if (snapshot.status === 'LOBBY') return <OnlineLobby key={snapshot.version} snapshot={snapshot} viewer={viewer} isHost={isHost} busy={busy} action={action} leave={leave} />;
@@ -614,10 +657,10 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
   const onlineScores = snapshot.mode === 'teams' ? ([['sun', 'Sun Team'], ['olive', 'Olive Team']] as const).map(([id, name]) => ({ id, name, score: snapshot.players.filter((player) => player.teamId === id).reduce((sum, player) => sum + player.score, 0) })) : snapshot.players.map((player) => ({ id: player.id, name: player.name, score: player.score }));
   return <main className="game-shell"><div className="room-banner"><span>Room <strong>{snapshot.code}</strong></span><span>{error || '● Connected'}</span></div><div className="game-topbar"><div><span>Puzzle {snapshot.currentIndex + 1} of {snapshot.puzzleCount}</span><div className="progress"><i style={{ width: `${((snapshot.currentIndex + 1) / snapshot.puzzleCount) * 100}%` }} /></div></div><div className="score-strip">{onlineScores.map((side) => <span key={side.id}>{side.name} <strong key={side.score}>{side.score}</strong></span>)}</div></div>
     <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{puzzle.category} · {LEVEL_NAMES[puzzle.band - 1]}</p><h1>{snapshot.status === 'PUZZLE_RESOLVED' ? puzzle.display : 'Everyone is solving…'}</h1></div><span className="points-pill">{scoreSolve({ letterCount: puzzle.scramble.length, level: puzzle.band, combo: 0, hintsUsed: snapshot.viewerHints })} pts</span></div>
-      <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} locked={snapshot.status !== 'PUZZLE_OPEN' || busy} />
+      <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} locked={snapshot.status !== 'PUZZLE_OPEN' || busy} />
       {snapshot.viewerHints > 0 && snapshot.status === 'PUZZLE_OPEN' && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{puzzle.hints.slice(0, snapshot.viewerHints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
       {snapshot.status === 'PUZZLE_RESOLVED' ? <div className="resolution">{Boolean(snapshot.resolution?.award) && <Confetti key={snapshot.currentIndex} />}<span>{snapshot.resolution?.revealed ? 'The answer was' : `${snapshot.resolution?.solverName} solved it!`}</span><strong>{puzzle.display}</strong><p>{puzzle.reference} · {snapshot.resolution?.award ? `+${snapshot.resolution.award} points` : 'No points this time'}</p>{isHost ? <button type="button" className="primary-button" onClick={() => action({ action: 'next' })}>Next puzzle</button> : <p>Waiting for the host…</p>}</div>
-      : <div className="game-actions"><button className="soft-button" type="button" onClick={() => setPlaced([])}>↻ Reset</button><button className="soft-button" type="button" disabled={snapshot.viewerHints >= puzzle.hints.length || busy} onClick={() => action({ action: 'hint' })}>{puzzle.hints[snapshot.viewerHints] ? `✦ Hint · ${HINT_LABELS[puzzle.hints[snapshot.viewerHints].kind]}` : '✦ Hints used'}</button><button className="check-button" type="button" disabled={placed.length !== puzzle.scramble.length || busy} onClick={() => action({ action: 'check', answer })}>Check answer</button>{isHost && <button className="text-button" type="button" onClick={() => action({ action: 'reveal' })}>Host reveal</button>}</div>}
+      : <div className="game-actions"><button className="soft-button" type="button" onClick={() => { playTap(); setOrder(shuffledOrder(puzzle.scramble.length)); }}>↻ Shuffle</button><button className="soft-button" type="button" disabled={placed.length === 0} onClick={() => { playTap(); setPlaced(placed.slice(0, -1)); }}>↩ Undo</button><button className="soft-button" type="button" disabled={placed.length === 0} onClick={() => setPlaced([])}>✕ Clear</button><button className="soft-button" type="button" disabled={snapshot.viewerHints >= puzzle.hints.length || busy} onClick={() => action({ action: 'hint' })}>{puzzle.hints[snapshot.viewerHints] ? `✦ Hint · ${HINT_LABELS[puzzle.hints[snapshot.viewerHints].kind]}` : '✦ Hints used'}</button><button className="check-button" type="button" disabled={placed.length !== puzzle.scramble.length || busy} onClick={() => action({ action: 'check', answer })}>Check answer</button>{isHost && <button className="text-button" type="button" onClick={() => action({ action: 'reveal' })}>Host reveal</button>}</div>}
       <button type="button" className="quit-button" onClick={leave}>Leave room</button>
     </section></main>;
 }

@@ -337,6 +337,40 @@ legend { margin-bottom: 4px; font-size: 15px; font-weight: 700; color: var(--ink
 .board { margin: 24px 0; }
 .answer-area { min-height: 56px; margin-bottom: 18px; }
 .scramble-area { min-height: 56px; padding: 14px; border-radius: 22px; background: var(--surface2); border: 1px dashed var(--line); }
+
+/* ============================================================
+   Tile sizing — a word's silhouette is most of the puzzle, so the
+   whole answer has to stay on one line. The tile is sized against
+   the board's own width for the exact number of characters in the
+   answer (numerals included: "1 Kings" is six tiles), and the
+   glyph shrinks with it. A flat clamp() wrapped an eleven-letter
+   word 7 + 4 at 390px and threw that silhouette away.
+   ============================================================ */
+.board {
+  container-type: inline-size;
+  --tiles: 8;
+  --tile-gap: 7px;
+  --tray-pad: calc(var(--tile-gap) + 5px);
+  --tile-size: clamp(15px, min(8.5vw, calc((100cqi - var(--tray-pad) * 2 - (var(--tiles) - 1) * var(--tile-gap)) / var(--tiles))), 50px);
+}
+.board .answer-area, .board .scramble-area { gap: var(--tile-gap); align-items: center; align-content: center; }
+.board .scramble-area { padding: var(--tray-pad); }
+.board .letter-tile, .board .answer-slot {
+  width: var(--tile-size);
+  font-size: clamp(10px, calc(var(--tile-size) * .46), 21px);
+}
+
+/* A miss shakes the answer row and leaves the tiles alone: the work
+   is kept, only the verdict is delivered. */
+.answer-area.wrong { animation: board-shake .38s ease; }
+@keyframes board-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-7px); }
+  45% { transform: translateX(6px); }
+  70% { transform: translateX(-4px); }
+  88% { transform: translateX(2px); }
+}
+@media (prefers-reduced-motion: reduce) { .answer-area.wrong { animation: none; } }
 .hint-box {
   margin: 12px 0; padding: 12px 14px; border-radius: 18px;
   background: linear-gradient(135deg, #fff6e0, #fff0cf); border: 1px solid #f0dba0;
@@ -354,7 +388,7 @@ legend { margin-bottom: 4px; font-size: 15px; font-weight: 700; color: var(--ink
 .error-box { background: #ffe4e0; color: var(--danger); }
 .game-actions { display: flex; flex-wrap: wrap; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); gap: 8px; align-items: center; }
 .check-button { margin-left: auto; }
-.game-actions .text-button { min-height: 42px; padding: 0 8px; }
+.game-actions .text-button { min-height: 42px; padding: 0 8px; margin-left: auto; }
 
 .resolution { position: relative; overflow: hidden; margin-top: 20px; padding: 22px; border-radius: 24px; background: linear-gradient(180deg, #f2fbf4, #eaf9f0); text-align: center; border: 1px solid #cdeed8; }
 .confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
