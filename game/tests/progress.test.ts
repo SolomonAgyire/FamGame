@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyProgress, dayKey, loadProgress, saveProgress, PROGRESS_KEY } from '../lib/progress';
+import { highestUnlocked, levelStatus } from '../lib/levels';
+import { advanceMatch } from '../lib/game-engine';
 
 test('an empty progress record starts at zero with level 1 unlocked', () => {
   const record = emptyProgress();
@@ -8,7 +10,9 @@ test('an empty progress record starts at zero with level 1 unlocked', () => {
   assert.equal(record.lifetimePoints, 0);
   assert.equal(record.totalSolved, 0);
   assert.equal(record.totalWrong, 0);
-  assert.equal(record.unlockedLevel, 1);
+  // Unlock state is derived, never stored -- there is no field to disagree with it.
+  assert.equal(highestUnlocked(record), 1);
+  assert.equal('unlockedLevel' in record, false);
   assert.deepEqual(record.bestByMode, {});
   assert.deepEqual(record.solveCounts, {});
   assert.deepEqual(record.levelProgress, {});
@@ -67,7 +71,7 @@ test('recording a match accumulates lifetime totals', () => {
 });
 
 test('a personal best is reported the first time and beaten scores are tracked per mode and level', () => {
-  let record = emptyProgress();
+  const record = emptyProgress();
   const first = recordMatch(record, { mode: 'solo', level: 2, points: 50, solvedIds: ['book.john'], wrong: 0 });
   assert.equal(first.isBest, true);
   assert.equal(first.previousBest, 0);
@@ -110,4 +114,92 @@ test('playing records the day and never lets the day list grow without bound', (
   }
   assert.equal(record.daysPlayed.length, 60);
   assert.equal(record.daysPlayed[0], dayKey(new Date(2026, 0, 70, 12)));
+});
+
+// --- Regression: a match recorded twice (finding 1) ---------------------
+
+test('a finished match is recorded once even when the auto-advance timer fires after it', () => {
+  // Tapping "See results" on the last puzzle left the 2.2s auto-advance
+  // timer armed, and the callback it captured ran the finish branch a
+  // second time: lifetime points doubled and every solved word gained two
+  // solves instead of one, so mastery landed after two real solves.
+  const solvedIds = ['book.john', 'book.ruth', 'book.acts'];
+  let record = emptyProgress();
+  let state = { index: 9, total: 10, finished: false };
+
+  for (let call = 0; call < 2; call += 1) {
+    const step = advanceMatch(state);
+    if (step.record) record = recordMatch(record, { mode: 'solo', level: 1, points: 120, solvedIds, wrong: 2 }).record;
+    state = { ...state, index: step.index, finished: step.finished };
+  }
+
+  assert.equal(record.lifetimePoints, 120, 'the match must not be scored twice');
+  assert.equal(record.levelProgress['1'].correct, 3);
+  assert.equal(record.levelProgress['1'].attempts, 5);
+  for (const id of solvedIds) assert.equal(record.solveCounts[id], 1, `${id} must count one solve, not two`);
+});
+
+test('advancing steps through a match and reports the finish exactly once', () => {
+  let state = { index: 0, total: 3, finished: false };
+  const recorded: number[] = [];
+  for (let call = 0; call < 6; call += 1) {
+    const step = advanceMatch(state);
+    if (step.record) recorded.push(call);
+    state = { index: step.index, total: state.total, finished: step.finished };
+  }
+  assert.deepEqual(recorded, [2], 'only the step off the last puzzle records the match');
+  assert.equal(state.index, 2);
+  assert.equal(state.finished, true);
+});
+
+// --- Regression: stored fields that contradicted derived truth (finding 8) ---
+
+test('a record written with the old unlockedLevel and cleared fields still loads, without them', () => {
+  const legacy = {
+    version: 1,
+    lifetimePoints: 310,
+    totalSolved: 24,
+    totalWrong: 6,
+    bestByMode: { 'solo:1': 120 },
+    solveCounts: { 'book.john': 2 },
+    unlockedLevel: 1,
+    levelProgress: {
+      '1': { solvedIds: ['book.john', 'book.ruth'], correct: 24, attempts: 30, cleared: false },
+    },
+    streak: { current: 3, best: 4, lastPlayedDay: '2026-09-20', freezes: 1 },
+    daysPlayed: ['2026-09-20'],
+  };
+  const store = new Map<string, string>([[PROGRESS_KEY, JSON.stringify(legacy)]]);
+  (globalThis as Record<string, unknown>).localStorage = {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => { store.set(k, v); },
+  };
+
+  const loaded = loadProgress();
+  assert.equal(loaded.lifetimePoints, 310, 'everything still read stays');
+  assert.equal(loaded.streak.current, 3);
+  assert.deepEqual(loaded.levelProgress['1'].solvedIds, ['book.john', 'book.ruth']);
+  assert.equal('unlockedLevel' in loaded, false, 'the dead top-level field is dropped');
+  assert.equal('cleared' in loaded.levelProgress['1'], false, 'the dead per-level flag is dropped');
+
+  saveProgress(loaded);
+  const rewritten = JSON.parse(store.get(PROGRESS_KEY) as string);
+  assert.equal('unlockedLevel' in rewritten, false, 'and is not written back to disk');
+  assert.equal('cleared' in rewritten.levelProgress['1'], false);
+  delete (globalThis as Record<string, unknown>).localStorage;
+});
+
+test('a version 1 record with a malformed level entry loads instead of throwing', () => {
+  const store = new Map<string, string>([[PROGRESS_KEY, JSON.stringify({
+    version: 1, levelProgress: { '2': { solvedIds: 'not-an-array', correct: null } }, streak: 'nonsense',
+  })]]);
+  (globalThis as Record<string, unknown>).localStorage = {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => { store.set(k, v); },
+  };
+  const loaded = loadProgress();
+  assert.deepEqual(loaded.levelProgress['2'], { solvedIds: [], correct: 0, attempts: 0 });
+  assert.equal(loaded.streak.current, 0);
+  assert.doesNotThrow(() => levelStatus(loaded, 2));
+  delete (globalThis as Record<string, unknown>).localStorage;
 });

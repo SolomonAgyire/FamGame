@@ -9,7 +9,7 @@ function withLevel(level: Level, solvedCount: number, correct: number, attempts:
   const record = emptyProgress();
   record.levelProgress[String(level)] = {
     solvedIds: Array.from({ length: solvedCount }, (_, i) => `word.${level}.${i}`),
-    correct, attempts, cleared: false,
+    correct, attempts,
   };
   return record;
 }
@@ -45,7 +45,7 @@ test('unlocking stops at level 9', () => {
   for (let level = 1; level <= 9; level += 1) {
     record.levelProgress[String(level)] = {
       solvedIds: Array.from({ length: WORDS_TO_CLEAR }, (_, i) => `w${level}-${i}`),
-      correct: 20, attempts: 20, cleared: true,
+      correct: 20, attempts: 20,
     };
   }
   assert.equal(highestUnlocked(record), 9);

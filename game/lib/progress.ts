@@ -9,7 +9,6 @@ export type LevelProgress = {
   solvedIds: string[];
   correct: number;
   attempts: number;
-  cleared: boolean;
 };
 
 export type ProgressRecord = {
@@ -21,8 +20,9 @@ export type ProgressRecord = {
   bestByMode: Record<string, number>;
   /** entryId -> how many times it has been solved. Drives mastery. */
   solveCounts: Record<string, number>;
-  /** Highest level the player may enter. 1..9 */
-  unlockedLevel: number;
+  /** Nothing here says which levels are unlocked or cleared: `lib/levels.ts`
+   * derives both from `levelProgress`, so a stored flag could only ever
+   * drift out of agreement with the truth. */
   levelProgress: Record<string, LevelProgress>;
   streak: { current: number; best: number; lastPlayedDay: string | null; freezes: number };
   /** Day keys played, newest first, capped at 60. */
@@ -37,7 +37,6 @@ export function emptyProgress(): ProgressRecord {
     totalWrong: 0,
     bestByMode: {},
     solveCounts: {},
-    unlockedLevel: 1,
     levelProgress: {},
     streak: { current: 0, best: 0, lastPlayedDay: null, freezes: 0 },
     daysPlayed: [],
@@ -65,23 +64,69 @@ function storage(): Storage | null {
   }
 }
 
+function numberOr(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function plainRecord<T>(value: unknown): Record<string, T> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, T> : {};
+}
+
+/** Copies a stored `version: 1` record field by field. Earlier builds also
+ * wrote `unlockedLevel` and a per-level `cleared` flag; both were derived
+ * elsewhere and are simply dropped here, so an old record still loads and
+ * is rewritten without them. Anything malformed falls back to its empty
+ * value rather than reaching `levelStatus` and throwing. */
+function migrate(parsed: Record<string, unknown>): ProgressRecord {
+  const base = emptyProgress();
+  const levelProgress: Record<string, LevelProgress> = {};
+  for (const [key, value] of Object.entries(plainRecord<unknown>(parsed.levelProgress))) {
+    const entry = plainRecord<unknown>(value);
+    levelProgress[key] = {
+      solvedIds: Array.isArray(entry.solvedIds) ? entry.solvedIds.filter((id): id is string => typeof id === 'string') : [],
+      correct: numberOr(entry.correct, 0),
+      attempts: numberOr(entry.attempts, 0),
+    };
+  }
+  const streak = plainRecord<unknown>(parsed.streak);
+  return {
+    version: 1,
+    lifetimePoints: numberOr(parsed.lifetimePoints, 0),
+    totalSolved: numberOr(parsed.totalSolved, 0),
+    totalWrong: numberOr(parsed.totalWrong, 0),
+    bestByMode: plainRecord<number>(parsed.bestByMode),
+    solveCounts: plainRecord<number>(parsed.solveCounts),
+    levelProgress,
+    streak: {
+      current: numberOr(streak.current, base.streak.current),
+      best: numberOr(streak.best, base.streak.best),
+      lastPlayedDay: typeof streak.lastPlayedDay === 'string' ? streak.lastPlayedDay : null,
+      freezes: numberOr(streak.freezes, base.streak.freezes),
+    },
+    daysPlayed: Array.isArray(parsed.daysPlayed) ? parsed.daysPlayed.filter((day): day is string => typeof day === 'string') : [],
+  };
+}
+
 export function loadProgress(): ProgressRecord {
   const store = storage();
   if (!store) return emptyProgress();
   try {
     const raw = store.getItem(PROGRESS_KEY);
     if (!raw) return emptyProgress();
-    const parsed = JSON.parse(raw) as Partial<ProgressRecord>;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return emptyProgress();
     // A record written by a newer build may have a shape this build cannot
     // reason about. Starting fresh is safer than half-reading it.
-    if (parsed.version !== 1) return emptyProgress();
-    return { ...emptyProgress(), ...parsed, streak: { ...emptyProgress().streak, ...(parsed.streak ?? {}) } };
+    if ((parsed as { version?: unknown }).version !== 1) return emptyProgress();
+    return migrate(parsed as Record<string, unknown>);
   } catch {
     return emptyProgress();
   }
 }
 
 export function saveProgress(record: ProgressRecord): void {
+  cached = record;
+  for (const listener of listeners) listener();
   const store = storage();
   if (!store) return;
   try {
@@ -89,6 +134,33 @@ export function saveProgress(record: ProgressRecord): void {
   } catch {
     /* quota or private mode -- the game keeps working without persistence */
   }
+}
+
+/* --- Reading progress from a component ---------------------------------
+ * `useSyncExternalStore` needs three things: a subscription, a client
+ * snapshot with a stable identity between renders, and a server snapshot.
+ * The server snapshot is one frozen empty record, so the server render and
+ * the first client render always agree and hydration stays clean; React
+ * then re-renders with the stored record. Reading storage in a mount
+ * effect and calling setState would do the same job with an extra render,
+ * and trips `react-hooks/set-state-in-effect`. */
+
+const SERVER_SNAPSHOT: ProgressRecord = emptyProgress();
+let cached: ProgressRecord | null = null;
+const listeners = new Set<() => void>();
+
+export function subscribeProgress(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+}
+
+export function getProgressSnapshot(): ProgressRecord {
+  if (!cached) cached = loadProgress();
+  return cached;
+}
+
+export function getProgressServerSnapshot(): ProgressRecord {
+  return SERVER_SNAPSHOT;
 }
 
 export const MASTERY_THRESHOLD = 3;
@@ -136,7 +208,7 @@ export function recordMatch(
   }
 
   const levelKey = String(result.level);
-  const existing = next.levelProgress[levelKey] ?? { solvedIds: [], correct: 0, attempts: 0, cleared: false };
+  const existing = next.levelProgress[levelKey] ?? { solvedIds: [], correct: 0, attempts: 0 };
   next.levelProgress[levelKey] = {
     ...existing,
     solvedIds: [...new Set([...existing.solvedIds, ...distinct])],
