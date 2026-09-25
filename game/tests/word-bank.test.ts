@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LEVEL_NAMES } from '../lib/types';
-import { normalizeAnswer } from '../lib/game-engine';
+import { PLAYABLE_BANK, normalizeAnswer } from '../lib/game-engine';
 import { WORD_BANK, difficultyScore, LEVEL_TARGETS } from '../data/word-bank';
 
 test('there are nine levels with the agreed names in order', () => {
@@ -108,4 +108,10 @@ test('the twelve tribes and the major nations are present', () => {
   assert.ok(tribes.length >= 12, `expected at least 12 tribes, found ${tribes.length}`);
   const nations = WORD_BANK.filter((entry) => entry.categories.includes('nation'));
   assert.ok(nations.length >= 20, `expected at least 20 nations, found ${nations.length}`);
+});
+
+test('draft words never reach play', () => {
+  assert.ok(PLAYABLE_BANK.length > 0);
+  for (const entry of PLAYABLE_BANK) assert.equal(entry.status, 'approved');
+  assert.ok(PLAYABLE_BANK.length < WORD_BANK.length, 'there should be drafts awaiting review');
 });

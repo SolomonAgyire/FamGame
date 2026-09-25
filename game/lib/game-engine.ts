@@ -3,6 +3,10 @@ import type { Category, DifficultyBand, GameSettings, MatchRecipe, PuzzleRecipe,
 
 const HISTORY_KEY = 'gatherword-match-history-v1';
 
+/** Words cleared for play. Drafts stay out until a human has checked the
+ * spelling and reference against the NWT. */
+export const PLAYABLE_BANK = WORD_BANK.filter((entry) => entry.status === 'approved');
+
 function hash32(value: string) {
   let hash = 2166136261;
   for (let i = 0; i < value.length; i += 1) {
@@ -39,13 +43,13 @@ export function normalizeAnswer(value: string) {
 }
 
 export function eligibleWords(settings: GameSettings) {
-  return WORD_BANK.filter((entry) => entry.band <= settings.maxBand && entry.categories.some((category) => settings.categories.includes(category)));
+  return PLAYABLE_BANK.filter((entry) => entry.level <= settings.maxBand && entry.categories.some((category) => settings.categories.includes(category)));
 }
 
 /** Words at exactly one band (not "up to"), for level-by-level modes like
  * Time Attack where each level is a single difficulty tier. */
 export function wordsForBand(band: DifficultyBand, categories: Category[]) {
-  return WORD_BANK.filter((entry) => entry.band === band && entry.categories.some((category) => categories.includes(category)));
+  return PLAYABLE_BANK.filter((entry) => entry.level === band && entry.categories.some((category) => categories.includes(category)));
 }
 
 /** A shuffled, freshly-scrambled queue of every word at one band, for a
