@@ -36,17 +36,25 @@ function ToastHost() {
 
 type EntryMode = 'solo' | 'together' | 'online' | 'timeattack' | 'daily';
 type Screen = 'home' | 'setup' | 'online-entry' | 'online-lobby';
-type RoomPlayer = { id: string; name: string; isHost: boolean; ready: boolean; score: number; joinedAt: number; teamId?: 'sun' | 'olive' };
+type RoomPlayer = {
+  id: string; name: string; isHost: boolean; ready: boolean; score: number; joinedAt: number; teamId?: 'sun' | 'olive';
+  role: 'player' | 'spectator'; lastSeen: number; left: boolean; sitOutCurrent: boolean;
+};
+type SolveRecord = { solverId: string; solverName: string; award: number; position: number };
 type RoomSnapshot = {
   code: string; status: 'LOBBY' | 'PUZZLE_OPEN' | 'PUZZLE_RESOLVED' | 'RESULTS'; mode: 'individuals' | 'teams' | 'cooperative';
   settings: GameSettings; players: RoomPlayer[]; currentIndex: number; puzzleCount: number; version: number; viewerId: string; viewerHints: number;
   puzzle: null | { id: string; scramble: string; category: Category; band: number; hints: { kind: HintKind; text: string }[]; display?: string; reference?: string };
-  resolution: null | { solverId: string | null; solverName: string | null; award: number; revealed: boolean };
+  resolution: null | { solvers: SolveRecord[]; answeredIds: string[]; revealed: boolean; paused: boolean };
 };
 type Credentials = { code: string; token: string; playerId: string };
 
 const DEFAULT_SETTINGS: GameSettings = { categories: ['book', 'person', 'place'], maxBand: 1, length: 10 };
 const TEAM_COLORS = ['#dd6f57', '#2e7d68', '#bc861a', '#6c6faa'];
+// Mirrors `MAX_PLAYERS` in lib/room-service.ts -- kept as a plain constant
+// here rather than imported, since that module pulls in Workers-only APIs
+// that a client component must not bundle.
+const MAX_ROOM_PLAYERS = 30;
 
 function Header({ onHome, sound, setSound }: { onHome: () => void; sound: boolean; setSound: (value: boolean) => void }) {
   return <header className="app-header">
@@ -700,10 +708,11 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
   useEffect(() => { duckMusic(true); return () => duckMusic(false); }, []);
   useEffect(() => {
     if (sound && snapshot?.status === 'PUZZLE_RESOLVED' && previousStatus.current !== 'PUZZLE_RESOLVED') {
-      if (snapshot.resolution?.award) playCorrect(); else if (snapshot.resolution?.revealed) playWrong();
+      const solved = snapshot.resolution?.solvers.some((solver) => solver.solverId === snapshot.viewerId);
+      if (solved) playCorrect(); else if (snapshot.resolution?.revealed) playWrong();
     }
     previousStatus.current = snapshot?.status ?? null;
-  }, [snapshot?.status, snapshot?.resolution, sound]);
+  }, [snapshot?.status, snapshot?.resolution, snapshot?.viewerId, sound]);
   const action = async (input: Record<string, unknown>) => { setBusy(true); setError(''); try { const response = await fetch(`/api/rooms/${credentials.code}/action`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-room-token': credentials.token }, body: JSON.stringify({ ...input, playerId: credentials.playerId }) }); const data = await response.json() as RoomSnapshot & { error?: string }; if (!response.ok) throw new Error(data.error || 'That action did not work.'); setSnapshot(data); if (data.status !== 'PUZZLE_OPEN') { setPlaced([]); setOrder(null); } } catch (caught) { const message = caught instanceof Error ? caught.message : 'That action did not work.'; setError(message); showToast(message, 'error'); } finally { setBusy(false); } };
   // Auto-check once the last tile lands, so a room plays the same way solo
   // and the Daily Word do. The ref holds the exact answer already sent, which
@@ -744,11 +753,30 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
     </div>
   </section></main>;
   const onlineScores = snapshot.mode === 'teams' ? ([['sun', 'Sun Team'], ['olive', 'Olive Team']] as const).map(([id, name]) => ({ id, name, score: snapshot.players.filter((player) => player.teamId === id).reduce((sum, player) => sum + player.score, 0) })) : snapshot.players.map((player) => ({ id: player.id, name: player.name, score: player.score }));
+  // Past the player cap a joiner comes in watching rather than playing, and
+  // anyone who joined mid-match sits out the puzzle that was already live
+  // when they arrived -- both get a locked board and their own message
+  // instead of the usual actions row.
+  const spectating = viewer?.role === 'spectator';
+  const sittingOut = Boolean(viewer?.sitOutCurrent) && snapshot.status === 'PUZZLE_OPEN';
+  const solvers = snapshot.resolution?.solvers ?? [];
+  // More than one person can now solve the same puzzle inside the scoring
+  // window, so "resolved" no longer means "locked for everyone else" --
+  // only this player's own solve, tracked here, locks their board while the
+  // room keeps taking answers from whoever else is still typing.
+  const viewerSolve = solvers.find((solver) => solver.solverId === snapshot.viewerId);
+  const boardLocked = snapshot.status !== 'PUZZLE_OPEN' || busy || spectating || sittingOut || Boolean(viewerSolve);
+  const lead = solvers.length === 0 ? 'The answer was'
+    : solvers.length === 1 ? `${solvers[0].solverName} solved it!`
+    : `${solvers[0].solverName} and ${solvers.length - 1} other${solvers.length > 2 ? 's' : ''} solved it!`;
   return <main className="game-shell"><div className="room-banner"><span>Room <strong>{snapshot.code}</strong></span><span>{error || '● Connected'}</span></div><div className="game-topbar"><div><span>Puzzle {snapshot.currentIndex + 1} of {snapshot.puzzleCount}</span><div className="progress"><i style={{ width: `${((snapshot.currentIndex + 1) / snapshot.puzzleCount) * 100}%` }} /></div></div><div className="score-strip">{onlineScores.map((side) => <span key={side.id}>{side.name} <strong key={side.score}>{side.score}</strong></span>)}</div></div>
     <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{puzzle.category} · {LEVEL_NAMES[puzzle.band - 1]}</p><h1>{snapshot.status === 'PUZZLE_RESOLVED' ? puzzle.display : 'Everyone is solving…'}</h1></div><span className="points-pill">{scoreSolve({ letterCount: puzzle.scramble.length, level: puzzle.band, combo: 0, hintsUsed: snapshot.viewerHints })} pts</span></div>
-      <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} locked={snapshot.status !== 'PUZZLE_OPEN' || busy} />
-      {snapshot.viewerHints > 0 && snapshot.status === 'PUZZLE_OPEN' && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{puzzle.hints.slice(0, snapshot.viewerHints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
-      {snapshot.status === 'PUZZLE_RESOLVED' ? <Resolution lead={snapshot.resolution?.revealed ? 'The answer was' : `${snapshot.resolution?.solverName} solved it!`} word={puzzle.display ?? ''} reference={puzzle.reference} award={snapshot.resolution?.award ? `+${snapshot.resolution.award} points` : 'No points this time'}>{Boolean(snapshot.resolution?.award) && <Confetti key={snapshot.currentIndex} />}{isHost ? <button type="button" className="primary-button" onClick={() => action({ action: 'next' })}>Next puzzle</button> : <p>Waiting for the host…</p>}</Resolution>
+      <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} locked={boardLocked} />
+      {snapshot.viewerHints > 0 && snapshot.status === 'PUZZLE_OPEN' && !spectating && !sittingOut && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{puzzle.hints.slice(0, snapshot.viewerHints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
+      {snapshot.status === 'PUZZLE_RESOLVED' ? <Resolution lead={lead} word={puzzle.display ?? ''} reference={puzzle.reference} award={viewerSolve ? `+${viewerSolve.award} points` : 'No points this time'}>{solvers.length > 0 && <Confetti key={snapshot.currentIndex} />}{isHost ? <button type="button" className="primary-button" onClick={() => action({ action: 'next' })}>Next puzzle</button> : <p>Waiting for the host…</p>}</Resolution>
+      : spectating ? <p className="notice">You&rsquo;re watching this room.</p>
+      : sittingOut ? <p className="notice">You&rsquo;ll join in on the next puzzle.</p>
+      : viewerSolve ? <p className="notice">Nice! +{viewerSolve.award} points — waiting for the round to finish…</p>
       : <div className="game-actions"><button className="soft-button" type="button" onClick={() => { playTap(); setOrder(shuffledOrder(puzzle.scramble.length)); }}>↻ Shuffle</button><button className="soft-button" type="button" disabled={placed.length === 0} onClick={() => { playTap(); setPlaced(placed.slice(0, -1)); }}>↩ Undo</button><button className="soft-button" type="button" disabled={placed.length === 0} onClick={() => setPlaced([])}>✕ Clear</button><button className="soft-button" type="button" disabled={snapshot.viewerHints >= puzzle.hints.length || busy} onClick={() => action({ action: 'hint' })}>{puzzle.hints[snapshot.viewerHints] ? `✦ Hint · ${HINT_LABELS[puzzle.hints[snapshot.viewerHints].kind]}` : '✦ Hints used'}</button>{isHost && <button className="text-button" type="button" onClick={() => action({ action: 'reveal' })}>Host reveal</button>}</div>}
       <button type="button" className="quit-button" onClick={leave}>Leave room</button>
     </section></main>;
@@ -761,8 +789,10 @@ function OnlineLobby({ snapshot, viewer, isHost, busy, action, leave }: { snapsh
   // letting them start a match nobody can play.
   const blocked = unplayableReason(settings);
   const copy = async () => { try { await navigator.clipboard.writeText(joinUrl); } catch { /* clipboard can be blocked */ } };
-  return <main className="page-shell"><section className="panel lobby-panel"><div className="lobby-heading"><div><p className="section-kicker">Private room</p><h1 className="room-code">{snapshot.code}</h1><p>Share this code with up to 11 more players.</p></div><button type="button" className="secondary-button" onClick={copy}>Copy invite link</button></div>
-    <div className="lobby-grid"><div><h2>Players <span>{snapshot.players.length}/12</span></h2><div className="player-list">{snapshot.players.map((player) => <div key={player.id}><span className="avatar">{player.name[0]?.toUpperCase()}</span><strong>{player.name}{player.id === viewer?.id ? ' (you)' : ''}</strong>{player.isHost && <small>Host</small>}<em className={player.ready ? 'ready' : ''}>{player.ready ? 'Ready' : 'Not ready'}</em></div>)}</div>{!isHost && <button type="button" className="primary-button full-button" onClick={() => action({ action: 'ready', ready: !viewer?.ready })}>{viewer?.ready ? 'I’m not ready' : 'I’m ready'}</button>}</div>
+  const seatedCount = snapshot.players.filter((player) => player.role === 'player' && !player.left).length;
+  const spectatorCount = snapshot.players.filter((player) => player.role === 'spectator' && !player.left).length;
+  return <main className="page-shell"><section className="panel lobby-panel"><div className="lobby-heading"><div><p className="section-kicker">Private room</p><h1 className="room-code">{snapshot.code}</h1><p>Share this code with up to {MAX_ROOM_PLAYERS - 1} more players.</p></div><button type="button" className="secondary-button" onClick={copy}>Copy invite link</button></div>
+    <div className="lobby-grid"><div><h2>Players <span>{seatedCount}/{MAX_ROOM_PLAYERS}{spectatorCount > 0 ? ` · ${spectatorCount} watching` : ''}</span></h2><div className="player-list">{snapshot.players.filter((player) => !player.left).map((player) => <div key={player.id}><span className="avatar">{player.name[0]?.toUpperCase()}</span><strong>{player.name}{player.id === viewer?.id ? ' (you)' : ''}</strong>{player.isHost && <small>Host</small>}{player.role === 'spectator' ? <em>Watching</em> : <em className={player.ready ? 'ready' : ''}>{player.ready ? 'Ready' : 'Not ready'}</em>}</div>)}</div>{!isHost && viewer?.role === 'player' && <button type="button" className="primary-button full-button" onClick={() => action({ action: 'ready', ready: !viewer?.ready })}>{viewer?.ready ? 'I’m not ready' : 'I’m ready'}</button>}</div>
       <div className="lobby-settings"><h2>Match setup</h2>{isHost ? <><div className="tabs compact three-tabs"><button className={mode === 'individuals' ? 'active' : ''} onClick={() => setMode('individuals')}>Individuals</button><button className={mode === 'teams' ? 'active' : ''} onClick={() => setMode('teams')}>Teams</button><button className={mode === 'cooperative' ? 'active' : ''} onClick={() => setMode('cooperative')}>Co-op</button></div>
         <fieldset><legend>Which level?</legend><div className="band-grid">
           {LEVEL_NAMES.map((name, index) => <button type="button" key={name}
