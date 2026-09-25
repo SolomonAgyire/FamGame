@@ -6,6 +6,8 @@ import { duckMusic, playCorrect, playTap, playWrong, startMusic, stopMusic } fro
 import { showToast, subscribeToasts, type Toast } from '@/lib/toast';
 import type { Category, DifficultyBand, GameSettings, MatchRecipe, PlayMode, PuzzleRecipe, Team } from '@/lib/types';
 import { LEVEL_NAMES } from '@/lib/types';
+import { scoreSolve } from '@/lib/scoring';
+import { loadProgress, saveProgress, recordMatch, masteredCount } from '@/lib/progress';
 
 function ToastHost() {
   const [toasts, setToasts] = useState<(Toast & { leaving?: boolean })[]>([]);
@@ -174,13 +176,38 @@ function LocalGame({ mode, settings, teams: initialTeams, sound, onHome, onChang
   const [celebration, setCelebration] = useState<{ id: number; title: string; subtitle: string } | null>(null);
   const [missPop, setMissPop] = useState<number | null>(null);
   const [wrongStreak, setWrongStreak] = useState(0);
+  const [solvedIds, setSolvedIds] = useState<string[]>([]);
+  const [combo, setCombo] = useState(0);
+  const [summary, setSummary] = useState<{ points: number; isBest: boolean; previousBest: number; lifetime: number; mastered: number } | null>(null);
   const puzzle = recipe.puzzles[index]; const entry = getPuzzleEntry(recipe, index);
   const assembled = puzzle ? placed.map((source) => puzzle.scramble[source]).join('') : '';
-  const currentValue = Math.max(1, 5 - hints);
   // Declared before the effects below since the auto-advance effect needs
   // to reference `next` -- React's compiler requires that ordering.
   const resetPuzzle = () => { setPlaced([]); setHints(0); setResolved(null); setWrongStreak(0); setClaimedBy(mode === 'teams' ? null : 'group'); };
-  const next = () => { if (index >= recipe.puzzles.length - 1) setFinished(true); else { setIndex(index + 1); resetPuzzle(); } };
+  const next = () => {
+    if (index >= recipe.puzzles.length - 1) {
+      const total = scores.reduce((sum, team) => sum + team.score, 0);
+      const outcome = recordMatch(loadProgress(), {
+        mode: mode === 'solo' ? 'solo' : mode,
+        level: settings.maxBand,
+        points: total,
+        solvedIds,
+        wrong: wrongCount,
+      });
+      saveProgress(outcome.record);
+      setSummary({
+        points: total,
+        isBest: outcome.isBest,
+        previousBest: outcome.previousBest,
+        lifetime: outcome.record.lifetimePoints,
+        mastered: masteredCount(outcome.record),
+      });
+      setFinished(true);
+    } else {
+      setIndex(index + 1);
+      resetPuzzle();
+    }
+  };
   useEffect(() => { duckMusic(true); return () => duckMusic(false); }, []);
   useEffect(() => {
     if (!celebration) return;
@@ -201,6 +228,7 @@ function LocalGame({ mode, settings, teams: initialTeams, sound, onHome, onChang
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolved]);
   if (!entry || !puzzle) return null;
+  const currentValue = scoreSolve({ letterCount: puzzle.scramble.length, level: entry.band, combo, hintsUsed: hints });
   const check = () => {
     if (mode === 'teams' && !claimedBy) { showToast('A team needs to claim this puzzle first.'); return; }
     if (placed.length !== puzzle.scramble.length) { showToast('Place every letter before checking.'); return; }
@@ -208,6 +236,8 @@ function LocalGame({ mode, settings, teams: initialTeams, sound, onHome, onChang
     if (correct) {
       setScores(scores.map((team) => team.id === claimedBy ? { ...team, score: team.score + currentValue } : team));
       setCorrectCount(correctCount + 1);
+      setSolvedIds((current) => [...current, entry.id]);
+      setCombo(combo + 1);
       setResolved({ correct: true, revealed: false, award: currentValue });
       if (sound) playCorrect();
       const solverName = mode === 'teams' ? scores.find((team) => team.id === claimedBy)?.name : undefined;
@@ -215,6 +245,7 @@ function LocalGame({ mode, settings, teams: initialTeams, sound, onHome, onChang
     } else {
       setScores(scores.map((team) => team.id === claimedBy ? { ...team, score: Math.max(0, team.score - 1) } : team));
       setWrongCount(wrongCount + 1);
+      setCombo(0);
       setMissPop(Date.now());
       if (sound) playWrong();
       const nextStreak = wrongStreak + 1;
@@ -226,8 +257,8 @@ function LocalGame({ mode, settings, teams: initialTeams, sound, onHome, onChang
     }
   };
   const reveal = () => setResolved({ correct: false, revealed: true, award: 0 });
-  const rematch = () => { setRecipe(createFreshRecipe(settings)); setIndex(0); setScores(scores.map((team) => ({ ...team, score: 0 }))); setCorrectCount(0); setWrongCount(0); setFinished(false); resetPuzzle(); };
-  if (finished) return <Results mode={mode} scores={scores} correct={correctCount} wrong={wrongCount} total={recipe.puzzles.length} rematch={rematch} changeSet={onChangeSet} home={onHome} />;
+  const rematch = () => { setRecipe(createFreshRecipe(settings)); setIndex(0); setScores(scores.map((team) => ({ ...team, score: 0 }))); setCorrectCount(0); setWrongCount(0); setFinished(false); resetPuzzle(); setSolvedIds([]); setCombo(0); setSummary(null); };
+  if (finished) return <Results mode={mode} scores={scores} correct={correctCount} wrong={wrongCount} total={recipe.puzzles.length} summary={summary} rematch={rematch} changeSet={onChangeSet} home={onHome} />;
   return <main className="game-shell">
     {celebration && <BigCelebration key={celebration.id} title={celebration.title} subtitle={celebration.subtitle} />}
     {missPop !== null && <MissPopup key={missPop} />}
@@ -423,10 +454,24 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
   </main>;
 }
 
-function Results({ mode, scores, correct, wrong, total, rematch, changeSet, home }: { mode: PlayMode; scores: Team[]; correct: number; wrong: number; total: number; rematch: () => void; changeSet: () => void; home: () => void }) {
+function Results({ mode, scores, correct, wrong, total, summary, rematch, changeSet, home }: {
+  mode: PlayMode; scores: Team[]; correct: number; wrong: number; total: number;
+  summary: { points: number; isBest: boolean; previousBest: number; lifetime: number; mastered: number } | null;
+  rematch: () => void; changeSet: () => void; home: () => void;
+}) {
   const ranking = [...scores].sort((a, b) => b.score - a.score); const winner = ranking[0];
   return <main className="page-shell"><section className="panel results-panel"><div className="celebration">✦</div><p className="section-kicker">Match complete</p><h1 className="page-title">{mode === 'teams' ? `${winner.name} wins!` : mode === 'solo' ? 'Nicely done!' : 'Wonderful teamwork!'}</h1><p className="page-subtitle">You turned every scramble into a chance to remember.</p>
-    <div className="result-score"><strong>{winner.score}</strong><span>points</span></div>{mode === 'teams' && <div className="leaderboard">{ranking.map((team, index) => <div key={team.id}><span>{index + 1}</span><i style={{ background: team.color }} /><strong>{team.name}</strong><b>{team.score}</b></div>)}</div>}
+    <div className="result-score"><strong>{winner.score}</strong><span>points</span></div>
+    {summary && <div className="score-compare">
+      {summary.isBest
+        ? <p className="best-flag">Your best yet at this level — previous best {summary.previousBest}</p>
+        : <p className="best-flag quiet">Your best at this level is {summary.previousBest}</p>}
+      <div className="lifetime-row">
+        <span><strong>{summary.lifetime.toLocaleString()}</strong>Points all time</span>
+        <span><strong>{summary.mastered}</strong>Words mastered</span>
+      </div>
+    </div>}
+    {mode === 'teams' && <div className="leaderboard">{ranking.map((team, index) => <div key={team.id}><span>{index + 1}</span><i style={{ background: team.color }} /><strong>{team.name}</strong><b>{team.score}</b></div>)}</div>}
     <div className="stat-grid"><div><strong>{correct}</strong><span>Solved</span></div><div><strong>{wrong}</strong><span>Wrong checks</span></div><div><strong>{Math.round((correct / total) * 100)}%</strong><span>Completion</span></div></div>
     <div className="result-actions"><button className="primary-button" type="button" onClick={rematch}>Play again <span>↻</span></button><button className="secondary-button" type="button" onClick={changeSet}>Change set</button><button className="text-button" type="button" onClick={home}>Home</button></div>
   </section></main>;
