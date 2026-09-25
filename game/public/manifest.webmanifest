@@ -1,0 +1,32 @@
+{
+  "name": "WordIn — Bible Word Game",
+  "short_name": "WordIn",
+  "description": "A warm Bible word-unscramble game for solo players, families, and teams.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#dff3ff",
+  "theme_color": "#ffbe3d",
+  "categories": ["games", "education"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

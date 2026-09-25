@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { advanceMatch, buildLevelQueue, createFreshRecipe, eligibleWords, getEntryById, getPuzzleEntry, nextPlayableLevelAbove, normalizeAnswer, playableLevelFrom, unplayableReason } from '@/lib/game-engine';
 import { duckMusic, playCorrect, playTap, playWrong, startMusic, stopMusic } from '@/lib/audio';
 import { showToast, subscribeToasts, type Toast } from '@/lib/toast';
+import { InstallPrompt } from '@/components/InstallPrompt';
 import type { Category, GameSettings, Level, MatchRecipe, PlayMode, PuzzleRecipe, Team } from '@/lib/types';
 import { LEVEL_NAMES } from '@/lib/types';
 import { applyLetterHint, HINT_LABELS, hintsFor, type HintKind } from '@/lib/hints';
@@ -82,6 +83,7 @@ function HomeScreen({ mode, setMode, start, level, setLevel, blocked, dailyNumbe
       <StreakHeader />
       <h1 className="hero-title">Unscramble the word</h1>
       <p className="hero-copy">Bible books, people, and places. Play solo, pass the phone around, or invite a room.</p>
+      <InstallPrompt />
       <SamplePuzzle />
       <div className="mode-grid" role="radiogroup" aria-label="Choose how to play">
         {/* The Daily Word is the habit, so it sits across the top and is
