@@ -7,7 +7,7 @@ import { showToast, subscribeToasts, type Toast } from '@/lib/toast';
 import type { Category, GameSettings, Level, MatchRecipe, PlayMode, PuzzleRecipe, Team } from '@/lib/types';
 import { LEVEL_NAMES } from '@/lib/types';
 import { scoreSolve } from '@/lib/scoring';
-import { loadProgress, saveProgress, recordMatch, masteredCount, subscribeProgress, getProgressSnapshot, getProgressServerSnapshot } from '@/lib/progress';
+import { saveProgress, recordMatch, masteredCount, subscribeProgress, getProgressSnapshot, getProgressServerSnapshot } from '@/lib/progress';
 import { highestUnlocked } from '@/lib/levels';
 import { LevelPath } from '@/components/LevelPath';
 
@@ -214,7 +214,7 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
       // number that gets recorded. Summing every team would store a
       // different quantity from the one shown directly above it.
       const headline = scores.reduce((best, team) => Math.max(best, team.score), 0);
-      const before = loadProgress();
+      const before = getProgressSnapshot();
       const wasUnlocked = highestUnlocked(before);
       const outcome = recordMatch(before, {
         mode: mode === 'solo' ? 'solo' : mode,
@@ -351,7 +351,7 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
   // Start where the player is -- but a level with no approved words in the
   // chosen categories would open on an empty board, so slide to the nearest
   // level that has some.
-  const startLevel = useMemo(() => playableLevelFrom(highestUnlocked(loadProgress()), categories) ?? 1, [categories]);
+  const startLevel = useMemo(() => playableLevelFrom(highestUnlocked(getProgressSnapshot()), categories) ?? 1, [categories]);
   const [band, setBand] = useState<Level>(startLevel);
   const [queue, setQueue] = useState<PuzzleRecipe[]>(() => buildLevelQueue(startLevel, categories));
   const [placed, setPlaced] = useState<number[]>([]);
