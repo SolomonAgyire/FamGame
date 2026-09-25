@@ -29,9 +29,22 @@ export type ProgressRecord = {
    * derives both from `levelProgress`, so a stored flag could only ever
    * drift out of agreement with the truth. */
   levelProgress: Record<string, LevelProgress>;
-  streak: { current: number; best: number; lastPlayedDay: string | null; freezes: number };
+  streak: {
+    current: number;
+    best: number;
+    lastPlayedDay: string | null;
+    freezes: number;
+    /** The streak that a gap just cost, kept so it can be won back.
+     * `onDay` is the last day the streak actually stood -- the day BEFORE
+     * the gap -- because the size of the gap is what decides whether the
+     * repair window has closed, and the break day alone cannot say. */
+    brokenStreak: { value: number; onDay: string } | null;
+  };
   /** Day keys played, newest first, capped at 60. */
   daysPlayed: string[];
+  /** Distinct words solved today, reset by the first match of a new day.
+   * It is what a streak repair is bought with. */
+  solvesToday: { day: string; count: number };
   /** The most recent Daily Word result, or null before the first one. */
   daily: DailyResult | null;
 };
@@ -45,8 +58,9 @@ export function emptyProgress(): ProgressRecord {
     bestByMode: {},
     solveCounts: {},
     levelProgress: {},
-    streak: { current: 0, best: 0, lastPlayedDay: null, freezes: 0 },
+    streak: { current: 0, best: 0, lastPlayedDay: null, freezes: 0, brokenStreak: null },
     daysPlayed: [],
+    solvesToday: { day: '', count: 0 },
     daily: null,
   };
 }
@@ -101,6 +115,8 @@ function migrate(parsed: Record<string, unknown>): ProgressRecord {
   // cannot smuggle in a key this build does not understand. The cost is
   // that a field added here and forgotten below is dropped on every load.
   const daily = plainRecord<unknown>(parsed.daily);
+  const broken = plainRecord<unknown>(streak.brokenStreak);
+  const solves = plainRecord<unknown>(parsed.solvesToday);
   return {
     version: 1,
     lifetimePoints: numberOr(parsed.lifetimePoints, 0),
@@ -114,8 +130,12 @@ function migrate(parsed: Record<string, unknown>): ProgressRecord {
       best: numberOr(streak.best, base.streak.best),
       lastPlayedDay: typeof streak.lastPlayedDay === 'string' ? streak.lastPlayedDay : null,
       freezes: numberOr(streak.freezes, base.streak.freezes),
+      brokenStreak: typeof broken.onDay === 'string' && typeof broken.value === 'number' && Number.isFinite(broken.value)
+        ? { value: broken.value, onDay: broken.onDay }
+        : null,
     },
     daysPlayed: Array.isArray(parsed.daysPlayed) ? parsed.daysPlayed.filter((day): day is string => typeof day === 'string') : [],
+    solvesToday: typeof solves.day === 'string' ? { day: solves.day, count: numberOr(solves.count, 0) } : base.solvesToday,
     daily: typeof daily.day === 'string' ? {
       day: daily.day,
       solved: daily.solved === true,
@@ -237,6 +257,12 @@ export function recordMatch(
 
   const today = dayKey(result.now ?? new Date());
   next.daysPlayed = [today, ...next.daysPlayed.filter((day) => day !== today)].slice(0, MAX_DAYS_TRACKED);
+  // Yesterday's count is not carried over -- a repair has to be paid for
+  // with today's solving.
+  next.solvesToday = {
+    day: today,
+    count: (record.solvesToday.day === today ? record.solvesToday.count : 0) + distinct.length,
+  };
 
   return { record: next, isBest, previousBest };
 }

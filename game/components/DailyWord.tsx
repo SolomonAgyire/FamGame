@@ -4,8 +4,8 @@ import { useMemo, useState, useSyncExternalStore } from 'react';
 import { TileBoard } from '@/components/TileBoard';
 import { dailyPuzzleFor } from '@/lib/daily';
 import { getEntryById, normalizeAnswer } from '@/lib/game-engine';
-import { getProgressServerSnapshot, getProgressSnapshot, recordMatch, saveProgress, subscribeProgress } from '@/lib/progress';
-import { applyPlay, streakState, weekStrip } from '@/lib/streak';
+import { dayKey, getProgressServerSnapshot, getProgressSnapshot, recordMatch, saveProgress, subscribeProgress } from '@/lib/progress';
+import { applyPlay, repairableStreak, repairStreak, REPAIR_PUZZLES, streakState, weekStrip } from '@/lib/streak';
 import { buildShareText, shareResult } from '@/lib/share';
 import { scoreSolve } from '@/lib/scoring';
 import { showToast } from '@/lib/toast';
@@ -57,10 +57,22 @@ export function StreakHeader() {
   const now = useNow();
   const state = streakState(record, now);
   const week = weekStrip(record, now);
+  const winnable = repairableStreak(record, now);
+  const solvedToday = record.solvesToday.day === dayKey(now) ? record.solvesToday.count : 0;
 
   if (!hydrated) return null;
 
   const live = state.playedToday || state.daysMissed === 0;
+
+  const winBack = () => {
+    const outcome = repairStreak(getProgressSnapshot(), now, solvedToday);
+    if (!outcome.repaired) {
+      showToast(`Solve ${REPAIR_PUZZLES} puzzles today to win it back.`);
+      return;
+    }
+    saveProgress(outcome.record);
+    showToast(`Your ${winnable}-day streak is back.`);
+  };
 
   return <section className="streak-header" aria-label="Your streak">
     <div className="streak-row">
@@ -84,6 +96,20 @@ export function StreakHeader() {
         <span className="sr-only">{day.day} {day.played ? 'played' : 'not played'}</span>
       </li>)}
     </ol>
+    {winnable !== null && <button
+      type="button"
+      className="repair-banner"
+      disabled={solvedToday < REPAIR_PUZZLES}
+      onClick={winBack}
+    >
+      <strong>{solvedToday >= REPAIR_PUZZLES
+        ? `Win back your ${winnable}-day streak`
+        : `Solve ${REPAIR_PUZZLES} puzzles to win back your ${winnable}-day streak`}</strong>
+      <small>{Math.min(solvedToday, REPAIR_PUZZLES)} of {REPAIR_PUZZLES} solved today</small>
+      <span className="repair-meter" aria-hidden="true">
+        <i style={{ width: `${Math.min(100, (solvedToday / REPAIR_PUZZLES) * 100)}%` }} />
+      </span>
+    </button>}
   </section>;
 }
 

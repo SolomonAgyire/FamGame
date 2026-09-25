@@ -626,7 +626,10 @@ footer {
   box-shadow: 0 4px 0 var(--berry-deep);
   transition: transform .08s ease, box-shadow .08s ease;
 }
-.repair-banner:active { transform: translateY(4px); box-shadow: 0 0 0 var(--berry-deep); }
+.repair-banner:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 0 0 var(--berry-deep); }
+/* Still short of three solves: the banner is the goal, not a dead button,
+   so it keeps its colour and only loses its press. */
+.repair-banner:disabled { cursor: default; opacity: 1; background: linear-gradient(180deg, #ffc7cf, #ff97a8); box-shadow: 0 4px 0 #e0788c; }
 .repair-banner strong { font-family: var(--font-display); font-weight: 600; font-size: 15px; }
 .repair-banner small { font-size: 11px; font-weight: 700; opacity: .92; }
 .repair-meter { display: block; width: 100%; height: 6px; margin-top: 5px; border-radius: 999px; background: rgba(255,255,255,.4); overflow: hidden; }

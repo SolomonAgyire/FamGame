@@ -113,6 +113,13 @@ export function applyPlay(record: ProgressRecord, now: Date): PlayOutcome {
         best: Math.max(best, nextCurrent),
         lastPlayedDay: today,
         freezes: clampFreezes(freezes - spent + earned),
+        // Stashed so `repairStreak` has something to restore. `onDay` is
+        // the last day the streak stood, which is what makes the size of
+        // the gap -- and so whether the window is still open -- knowable
+        // later. A streak of one was not worth winning back.
+        brokenStreak: broke && lastPlayedDay && current > 1
+          ? { value: current, onDay: lastPlayedDay }
+          : record.streak.brokenStreak,
       },
       // `recordMatch` keeps this list too, and writes the same day key the
       // same way, so a finished match calling both cannot double-count.
@@ -163,4 +170,44 @@ export function weekStrip(record: ProgressRecord, now: Date): WeekDay[] {
     const day = shiftDay(today, index - (WEEK - 1));
     return { day, played: played.has(day) };
   });
+}
+
+/** The streak still winnable back today, or null.
+ *
+ * This answers a different question from `streakState().repairable`, which
+ * asks whether a break that HAS NOT HAPPENED YET would land inside the
+ * window. Once the break is recorded, `lastPlayedDay` is today and that
+ * flag reads false, so the header asks here instead. */
+export function repairableStreak(record: ProgressRecord, now: Date): number | null {
+  const broken = record.streak.brokenStreak;
+  if (!broken) return null;
+  const missed = daysBetween(broken.onDay, dayKey(now)) - 1;
+  if (missed < 1 || missed > REPAIR_WINDOW_DAYS) return null;
+  return broken.value;
+}
+
+/** Buy a broken streak back with `REPAIR_PUZZLES` solves, inside
+ * `REPAIR_WINDOW_DAYS` of the last day it stood. The restored streak is
+ * the old one plus today, and the stash is cleared so it cannot be spent
+ * twice. */
+export function repairStreak(
+  record: ProgressRecord,
+  now: Date,
+  puzzlesSolved: number,
+): { record: ProgressRecord; repaired: boolean } {
+  const value = repairableStreak(record, now);
+  if (value === null || puzzlesSolved < REPAIR_PUZZLES) return { record, repaired: false };
+  const current = value + 1;
+  return {
+    record: {
+      ...record,
+      streak: {
+        ...record.streak,
+        current,
+        best: Math.max(record.streak.best, current),
+        brokenStreak: null,
+      },
+    },
+    repaired: true,
+  };
 }

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyProgress, dayKey } from '../lib/progress';
-import { applyPlay, streakState, weekStrip, MAX_FREEZES, MILESTONES } from '../lib/streak';
+import { applyPlay, repairStreak, streakState, weekStrip, MAX_FREEZES, MILESTONES } from '../lib/streak';
 
 const at = (y: number, m: number, d: number, h = 12) => new Date(y, m - 1, d, h);
 
@@ -90,4 +90,28 @@ test('the week strip is seven days oldest first and marks the days played', () =
   assert.equal(strip[6].played, true);
   assert.equal(strip[4].played, true);  // the 10th
   assert.equal(strip[5].played, false); // the 11th
+});
+
+test('solving three puzzles within the window restores a broken streak', () => {
+  let r = emptyProgress();
+  for (let d = 1; d <= 6; d += 1) r = applyPlay(r, at(2026, 9, d)).record;
+  const broken = applyPlay(r, at(2026, 9, 9)); // two days missed, no freeze left
+  assert.equal(broken.record.streak.current, 1);
+  const fixed = repairStreak(broken.record, at(2026, 9, 9), 3);
+  assert.equal(fixed.repaired, true);
+  assert.equal(fixed.record.streak.current, 7, 'the old streak plus today');
+});
+
+test('fewer than three puzzles does not repair', () => {
+  let r = emptyProgress();
+  for (let d = 1; d <= 6; d += 1) r = applyPlay(r, at(2026, 9, d)).record;
+  const broken = applyPlay(r, at(2026, 9, 9)).record;
+  assert.equal(repairStreak(broken, at(2026, 9, 9), 2).repaired, false);
+});
+
+test('a repair is refused once the window has passed', () => {
+  let r = emptyProgress();
+  for (let d = 1; d <= 6; d += 1) r = applyPlay(r, at(2026, 9, d)).record;
+  const broken = applyPlay(r, at(2026, 9, 20)).record;
+  assert.equal(repairStreak(broken, at(2026, 9, 20), 5).repaired, false);
 });
