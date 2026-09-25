@@ -8,6 +8,7 @@ import type { Category, GameSettings, Level, MatchRecipe, PlayMode, PuzzleRecipe
 import { LEVEL_NAMES } from '@/lib/types';
 import { applyLetterHint, HINT_LABELS, hintsFor, type HintKind } from '@/lib/hints';
 import { scoreSolve } from '@/lib/scoring';
+import { secondsFor, timerModeFor } from '@/lib/timing';
 import { saveProgress, recordMatch, masteredCount, subscribeProgress, getProgressSnapshot, getProgressServerSnapshot } from '@/lib/progress';
 import { highestUnlocked } from '@/lib/levels';
 import { LevelPath } from '@/components/LevelPath';
@@ -186,6 +187,11 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
   // has to replay the level that was actually just played.
   const [settings] = useState(chosenSettings);
   const [recipe, setRecipe] = useState<MatchRecipe>(() => createFreshRecipe(settings));
+  const [timeLeft, setTimeLeft] = useState(() => secondsForPuzzle(recipe, 0));
+  // Whether this player has ever played at this level before. The clock
+  // explains itself the first time they meet it and never again; it is
+  // read from what they have already done rather than from a new flag.
+  const [metLevelBefore] = useState(() => (getProgressSnapshot().levelProgress[String(chosenSettings.maxBand)]?.attempts ?? 0) > 0);
   const [index, setIndex] = useState(0); const [placed, setPlaced] = useState<number[]>([]); const [hints, setHints] = useState(0);
   const [scores, setScores] = useState<Team[]>(() => mode === 'teams' ? initialTeams.map((team) => ({ ...team, score: 0 })) : [{ id: 'group', name: mode === 'solo' ? 'You' : 'Everyone', color: '#2e7d68', score: 0 }]);
   const [claimedBy, setClaimedBy] = useState<string | null>(mode === 'teams' ? null : 'group');
@@ -253,6 +259,7 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
       return;
     }
     setIndex(step.index);
+    setTimeLeft(secondsForPuzzle(recipe, step.index));
     resetPuzzle();
   };
   useEffect(() => { duckMusic(true); return () => duckMusic(false); }, []);
@@ -274,7 +281,14 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolved]);
-  const currentValue = puzzle && entry ? scoreSolve({ letterCount: puzzle.scramble.length, level: entry.band, combo, hintsUsed: hints }) : 0;
+  const timerMode = timerModeFor(entry?.band ?? settings.maxBand);
+  const secondsTotal = puzzle && entry ? secondsFor(entry.band, puzzle.scramble.length) : 0;
+  const currentValue = puzzle && entry ? scoreSolve({
+    letterCount: puzzle.scramble.length, level: entry.band, combo, hintsUsed: hints,
+    // Only the modes that show a clock can pay for beating it.
+    secondsLeft: timerMode === 'none' ? undefined : timeLeft,
+    secondsTotal: timerMode === 'none' ? undefined : secondsTotal,
+  }) : 0;
   const ladder = entry ? hintsFor(entry) : [];
   const nextHint = ladder[hints];
   // The first rung is spent on the board rather than in the hint box: a
@@ -316,6 +330,16 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
     }
   };
   const reveal = () => { setRevealCount(revealCount + 1); setCombo(0); setResolved({ correct: false, revealed: true, award: 0 }); };
+  // Only ever called at Strong Faith and above. It counts as a miss, the
+  // way Time Attack has always treated a spent clock.
+  const ranOut = () => {
+    if (!entry || resolved) return;
+    setWrongCount(wrongCount + 1);
+    setCombo(0);
+    setMissPop(Date.now());
+    if (sound) playWrong();
+    setResolved({ correct: false, revealed: true, award: 0 });
+  };
   // Auto-check: the final tile is the commit. A quarter-second beat first,
   // so the player sees the word finished before it is judged -- and so
   // reaching for a button never costs seconds under a timer.
@@ -327,6 +351,21 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placed, resolved, puzzle]);
+  // The clock. Levels 1-4 never start one; 5 and 6 run one that costs
+  // nothing when it empties; 7 and above count an empty clock as a miss.
+  useEffect(() => {
+    if (!puzzle || resolved || finished || timerMode === 'none' || timeLeft <= 0) return;
+    const timer = window.setTimeout(() => setTimeLeft((value) => value - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [timeLeft, resolved, finished, puzzle, timerMode]);
+  // Separated from the tick above so neither has to resolve a word inline:
+  // doing that inside an effect cascades a render before the first paints.
+  useEffect(() => {
+    if (!puzzle || resolved || finished || timerMode !== 'enforced' || timeLeft > 0) return;
+    const strike = window.setTimeout(ranOut, 0);
+    return () => window.clearTimeout(strike);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeLeft, resolved, finished, puzzle, timerMode]);
   // A level with no approved words in the chosen categories builds a match
   // with no puzzles. Rendering nothing left only the header on screen, with
   // no way back.
@@ -342,14 +381,15 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
   </section></main>;
   const shuffleTray = () => { playTap(); setOrder(shuffledOrder(puzzle.scramble.length)); };
   const undo = () => { if (placed.length === 0) return; playTap(); rejectedRef.current = null; setPlaced(placed.slice(0, -1)); };
-  const rematch = () => { finishedRef.current = false; setRecipe(createFreshRecipe(settings)); setIndex(0); setScores(scores.map((team) => ({ ...team, score: 0 }))); setCorrectCount(0); setWrongCount(0); setRevealCount(0); setFinished(false); resetPuzzle(); setSolvedIds([]); setCombo(0); setSummary(null); setUnlocked(null); };
+  const rematch = () => { finishedRef.current = false; const fresh = createFreshRecipe(settings); setRecipe(fresh); setTimeLeft(secondsForPuzzle(fresh, 0)); setIndex(0); setScores(scores.map((team) => ({ ...team, score: 0 }))); setCorrectCount(0); setWrongCount(0); setRevealCount(0); setFinished(false); resetPuzzle(); setSolvedIds([]); setCombo(0); setSummary(null); setUnlocked(null); };
   if (finished) return <Results mode={mode} scores={scores} correct={correctCount} wrong={wrongCount} total={recipe.puzzles.length} summary={summary} unlocked={unlocked} rematch={rematch} changeSet={onChangeSet} home={onHome} />;
   return <main className="game-shell">
     {celebration && <BigCelebration key={celebration.id} title={celebration.title} subtitle={celebration.subtitle} />}
     {missPop !== null && <MissPopup key={missPop} />}
     <div className="game-topbar"><div><span>Puzzle {index + 1} of {recipe.puzzles.length}</span><div className="progress"><i style={{ width: `${((index + 1) / recipe.puzzles.length) * 100}%` }} /></div></div><div className="score-strip">{scores.map((team) => <span key={team.id}><i style={{ background: team.color }} />{team.name} <strong key={team.score}>{team.score}</strong></span>)}</div></div>
     {mode === 'teams' && !resolved && <div className="claim-panel"><p>{claimedBy ? <><strong>{scores.find((team) => team.id === claimedBy)?.name}</strong> is building</> : 'Who knows it? Claim the puzzle.'}</p><div>{scores.map((team) => <button type="button" key={team.id} disabled={Boolean(claimedBy)} style={{ '--team-color': team.color } as React.CSSProperties} onClick={() => setClaimedBy(team.id)}>{claimedBy === team.id ? 'Building…' : `Claim · ${team.name}`}</button>)}{claimedBy && <button type="button" className="release" onClick={() => { setClaimedBy(null); setPlaced([]); }}>Release</button>}</div></div>}
-    <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{entry.categories[0]} · {LEVEL_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Unscramble the answer'}</h1></div><span className="points-pill">{currentValue} pts</span></div>
+    <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{entry.categories[0]} · {LEVEL_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Unscramble the answer'}</h1></div><div className="card-pills">{timerMode !== 'none' && <span className={`points-pill timer-pill ${timerMode === 'enforced' && timeLeft <= Math.ceil(secondsTotal * 0.3) ? 'urgent' : ''} ${timerMode === 'bonus' ? 'bonus' : ''}`}>{timeLeft > 0 ? `${timeLeft}s` : timerMode === 'bonus' ? 'bonus gone' : '0s'}</span>}<span className="points-pill">{currentValue} pts</span></div></div>
+      {timerMode === 'bonus' && !metLevelBefore && !resolved && <p className="notice">A clock from here on — but running out costs you nothing. Beat it and it pays a speed bonus.</p>}
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} shakeKey={shake ?? undefined} locked={Boolean(resolved) || (mode === 'teams' && !claimedBy)} />
       {hints > 0 && !resolved && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{ladder.slice(0, hints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
       {resolved ? <div className="resolution"><span>{resolved.revealed ? 'The answer was' : 'Beautiful work!'}</span><strong>{entry.display}</strong><p>{entry.references[0]} · {resolved.award ? `+${resolved.award} points` : 'No points this time'}</p><button type="button" className="primary-button" onClick={next}>{index === recipe.puzzles.length - 1 ? 'See results' : 'Next puzzle'}</button></div>
@@ -358,7 +398,15 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
     </section></main>;
 }
 
-const BAND_TIME_LIMITS: Record<Level, number> = { 1: 40, 2: 36, 3: 32, 4: 28, 5: 24, 6: 22, 7: 20, 8: 18, 9: 16 };
+/** How long puzzle `index` of a match is worth. A flat per-level limit is
+ * what made Deuteronomy in fourteen seconds impossible; the clock has to
+ * track how much there is to read. Zero means no clock at all. */
+function secondsForPuzzle(recipe: MatchRecipe, index: number): number {
+  const puzzle = recipe.puzzles[index];
+  const entry = getPuzzleEntry(recipe, index);
+  return puzzle && entry ? secondsFor(entry.band, puzzle.scramble.length) : 0;
+}
+
 const HIGH_SCORE_KEY = 'wordin-timeattack-highscore';
 
 function getHighScore(): number {
@@ -396,7 +444,7 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
   const [score, setScore] = useState(0);
   const [solved, setSolved] = useState(0);
   const [strikes, setStrikes] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(() => BAND_TIME_LIMITS[startLevel]);
+  const [timeLeft, setTimeLeft] = useState<number>(() => secondsFor(startLevel, queue[0]?.scramble.length ?? 0));
   const [resolved, setResolved] = useState<{ correct: boolean; gained: number } | null>(null);
   const [combo, setCombo] = useState(0);
   const [finished, setFinished] = useState<'strikes' | 'cleared' | null>(null);
@@ -437,8 +485,8 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
         level: band,
         combo,
         hintsUsed: 0,
-        secondsLeft: timeLeft,
-        secondsTotal: BAND_TIME_LIMITS[band],
+        secondsLeft: timerModeFor(band) === 'none' ? undefined : timeLeft,
+        secondsTotal: timerModeFor(band) === 'none' ? undefined : secondsFor(band, puzzle.scramble.length),
       });
       const newScore = score + gained;
       setScore(newScore);
@@ -466,20 +514,21 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
       setPlaced([]);
       setOrder(null);
       setResolved(null);
-      setTimeLeft(BAND_TIME_LIMITS[band]);
+      setTimeLeft(secondsFor(band, remaining[0].scramble.length));
       return;
     }
     // Skip past any level the chosen categories have no words at -- there
     // is no Bible book at Eternity, and stepping into it blanked the run.
     const nextBand = nextPlayableLevelAbove(band, categories);
     if (nextBand) {
+      const nextQueue = buildLevelQueue(nextBand, categories);
       setBand(nextBand);
-      setQueue(buildLevelQueue(nextBand, categories));
+      setQueue(nextQueue);
       setPlaced([]);
       setOrder(null);
       setResolved(null);
       setStrikes(0);
-      setTimeLeft(BAND_TIME_LIMITS[nextBand]);
+      setTimeLeft(secondsFor(nextBand, nextQueue[0]?.scramble.length ?? 0));
       showToast(`Leveling up: ${LEVEL_NAMES[nextBand - 1]}!`);
       return;
     }
@@ -487,20 +536,25 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
   }
 
 
-  // Per-word countdown. Hitting zero counts as a miss, same as a wrong check.
+  // Per-word countdown, sized to the word. Below Reaching Out there is no
+  // clock at all and a run ends on strikes alone.
   useEffect(() => {
-    if (resolved || finished || !entry) return;
-    // The miss is scheduled rather than run inline: resolving a word sets
-    // four pieces of state, and doing that synchronously inside an effect
-    // cascades a second render before the first has painted.
-    if (timeLeft <= 0) {
-      const strike = window.setTimeout(() => resolveWord(false), 0);
-      return () => window.clearTimeout(strike);
-    }
-    const timer = window.setTimeout(() => setTimeLeft((value) => value - 1), 1000);
+    if (resolved || finished || !entry || timerModeFor(band) === 'none' || timeLeft <= 0) return;
+    const timer = window.setTimeout(() => setTimeLeft((value: number) => value - 1), 1000);
     return () => window.clearTimeout(timer);
+  }, [timeLeft, resolved, finished, entry, band]);
+
+  // A spent clock is a miss only once it is enforced. At Reaching Out and
+  // Maturity it costs the speed bonus and nothing else. The miss is
+  // scheduled rather than run inline: resolving a word sets four pieces of
+  // state, and doing that synchronously inside an effect cascades a second
+  // render before the first has painted.
+  useEffect(() => {
+    if (resolved || finished || !entry || timerModeFor(band) !== 'enforced' || timeLeft > 0) return;
+    const strike = window.setTimeout(() => resolveWord(false), 0);
+    return () => window.clearTimeout(strike);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeLeft, resolved, finished, entry]);
+  }, [timeLeft, resolved, finished, entry, band]);
 
   // Auto-advance shortly after each word resolves -- an arcade mode keeps moving.
   useEffect(() => {
@@ -564,16 +618,17 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
     </section></main>;
   }
 
-  const timeLimit = BAND_TIME_LIMITS[band];
-  const urgent = timeLeft <= Math.ceil(timeLimit * 0.3);
+  const timerMode = timerModeFor(band);
+  const timeLimit = secondsFor(band, puzzle.scramble.length);
+  const urgent = timerMode === 'enforced' && timeLeft <= Math.ceil(timeLimit * 0.3);
   return <main className="game-shell">
     {celebration && <BigCelebration key={celebration.id} title={celebration.title} subtitle={celebration.subtitle} />}
     <div className="game-topbar">
-      <div><span>{LEVEL_NAMES[band - 1]} · {solved} solved</span><div className="progress"><i style={{ width: `${(timeLeft / timeLimit) * 100}%`, background: urgent ? 'var(--danger)' : undefined }} /></div></div>
+      <div><span>{LEVEL_NAMES[band - 1]} · {solved} solved</span><div className="progress"><i style={{ width: `${timerMode === 'none' ? 100 : (timeLeft / Math.max(1, timeLimit)) * 100}%`, background: urgent ? 'var(--danger)' : undefined }} /></div></div>
       <div className="score-strip"><span>Score <strong key={score}>{score}</strong></span><span>{'❤️'.repeat(3 - strikes)}{'🖤'.repeat(strikes)}</span></div>
     </div>
     <section className="puzzle-card play-card">
-      <div className="card-top"><div><p className="puzzle-kicker">{entry.categories[0]} · {LEVEL_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Unscramble the answer'}</h1></div><span className={`points-pill timer-pill ${urgent ? 'urgent' : ''}`}>{timeLeft}s</span></div>
+      <div className="card-top"><div><p className="puzzle-kicker">{entry.categories[0]} · {LEVEL_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Unscramble the answer'}</h1></div><span className={`points-pill timer-pill ${urgent ? 'urgent' : ''} ${timerMode === 'bonus' ? 'bonus' : ''}`}>{timerMode === 'none' ? `${queue.length} left` : timeLeft > 0 ? `${timeLeft}s` : timerMode === 'bonus' ? 'bonus gone' : '0s'}</span></div>
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} locked={Boolean(resolved)} />
       {resolved && <div className="resolution"><span>{resolved.correct ? `+${resolved.gained} points` : 'Missed it'}</span><strong>{entry.display}</strong><p>{entry.references[0]}</p></div>}
       {!resolved && <div className="game-actions"><button type="button" className="soft-button" onClick={() => { playTap(); setOrder(shuffledOrder(puzzle.scramble.length)); }}>↻ Shuffle</button><button type="button" className="soft-button" disabled={placed.length === 0} onClick={() => { playTap(); setPlaced(placed.slice(0, -1)); }}>↩ Undo</button><button type="button" className="soft-button" disabled={placed.length === 0} onClick={() => setPlaced([])}>✕ Clear</button></div>}

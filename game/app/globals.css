@@ -155,6 +155,14 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   box-shadow: 0 3px 0 var(--sun-deep);
 }
 
+/* The clock reads as its own thing, not as a second score. Violet while
+   it is only a bonus, sky once it is enforced, danger-red at the end. */
+.card-pills { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.timer-pill {
+  background: linear-gradient(180deg, #8fd2f5, var(--sky)); color: #fff;
+  box-shadow: 0 3px 0 var(--sky-deep); font-variant-numeric: tabular-nums;
+}
+.timer-pill.bonus { background: linear-gradient(180deg, #c9a9ef, var(--violet)); box-shadow: 0 3px 0 var(--violet-deep); }
 .timer-pill.urgent { background: linear-gradient(180deg, #ff9a86, var(--danger)); color: #fff; box-shadow: 0 3px 0 #b3402f; animation: timer-pulse .6s ease-in-out infinite; }
 @keyframes timer-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
 
