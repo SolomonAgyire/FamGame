@@ -705,6 +705,25 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
     previousStatus.current = snapshot?.status ?? null;
   }, [snapshot?.status, snapshot?.resolution, sound]);
   const action = async (input: Record<string, unknown>) => { setBusy(true); setError(''); try { const response = await fetch(`/api/rooms/${credentials.code}/action`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-room-token': credentials.token }, body: JSON.stringify({ ...input, playerId: credentials.playerId }) }); const data = await response.json() as RoomSnapshot & { error?: string }; if (!response.ok) throw new Error(data.error || 'That action did not work.'); setSnapshot(data); if (data.status !== 'PUZZLE_OPEN') { setPlaced([]); setOrder(null); } } catch (caught) { const message = caught instanceof Error ? caught.message : 'That action did not work.'; setError(message); showToast(message, 'error'); } finally { setBusy(false); } };
+  // Auto-check once the last tile lands, so a room plays the same way solo
+  // and the Daily Word do. The ref holds the exact answer already sent, which
+  // stops the effect resubmitting while the request is in flight and stops it
+  // re-sending a rejected answer the player has not changed yet.
+  const actionRef = useRef(action);
+  useEffect(() => { actionRef.current = action; });
+  const submittedRef = useRef<string | null>(null);
+  const openScramble = snapshot?.status === 'PUZZLE_OPEN' ? snapshot.puzzle?.scramble ?? null : null;
+  const pendingAnswer = openScramble && placed.length === openScramble.length
+    ? placed.map((source) => openScramble[source]).join('')
+    : null;
+  useEffect(() => {
+    if (!pendingAnswer || busy) return;
+    if (submittedRef.current === pendingAnswer) return;
+    submittedRef.current = pendingAnswer;
+    const timer = window.setTimeout(() => { void actionRef.current({ action: 'check', answer: pendingAnswer }); }, 250);
+    return () => window.clearTimeout(timer);
+  }, [pendingAnswer, busy]);
+  useEffect(() => { submittedRef.current = null; }, [snapshot?.currentIndex, snapshot?.status]);
   if (!snapshot) return <main className="page-shell"><section className="panel loading-panel"><span className="loader" /><h1>Opening room {credentials.code}</h1><p>{error || 'Gathering everyone…'}</p><button type="button" className="text-button" onClick={leave}>Leave</button></section></main>;
   const viewer = snapshot.players.find((player) => player.id === credentials.playerId); const isHost = Boolean(viewer?.isHost);
   if (snapshot.status === 'LOBBY') return <OnlineLobby key={snapshot.version} snapshot={snapshot} viewer={viewer} isHost={isHost} busy={busy} action={action} leave={leave} />;
@@ -724,14 +743,13 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
       <button className="text-button" type="button" onClick={leave}>Leave room</button>
     </div>
   </section></main>;
-  const answer = placed.map((index) => puzzle.scramble[index]).join('');
   const onlineScores = snapshot.mode === 'teams' ? ([['sun', 'Sun Team'], ['olive', 'Olive Team']] as const).map(([id, name]) => ({ id, name, score: snapshot.players.filter((player) => player.teamId === id).reduce((sum, player) => sum + player.score, 0) })) : snapshot.players.map((player) => ({ id: player.id, name: player.name, score: player.score }));
   return <main className="game-shell"><div className="room-banner"><span>Room <strong>{snapshot.code}</strong></span><span>{error || '● Connected'}</span></div><div className="game-topbar"><div><span>Puzzle {snapshot.currentIndex + 1} of {snapshot.puzzleCount}</span><div className="progress"><i style={{ width: `${((snapshot.currentIndex + 1) / snapshot.puzzleCount) * 100}%` }} /></div></div><div className="score-strip">{onlineScores.map((side) => <span key={side.id}>{side.name} <strong key={side.score}>{side.score}</strong></span>)}</div></div>
     <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{puzzle.category} · {LEVEL_NAMES[puzzle.band - 1]}</p><h1>{snapshot.status === 'PUZZLE_RESOLVED' ? puzzle.display : 'Everyone is solving…'}</h1></div><span className="points-pill">{scoreSolve({ letterCount: puzzle.scramble.length, level: puzzle.band, combo: 0, hintsUsed: snapshot.viewerHints })} pts</span></div>
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} locked={snapshot.status !== 'PUZZLE_OPEN' || busy} />
       {snapshot.viewerHints > 0 && snapshot.status === 'PUZZLE_OPEN' && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{puzzle.hints.slice(0, snapshot.viewerHints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
       {snapshot.status === 'PUZZLE_RESOLVED' ? <Resolution lead={snapshot.resolution?.revealed ? 'The answer was' : `${snapshot.resolution?.solverName} solved it!`} word={puzzle.display ?? ''} reference={puzzle.reference} award={snapshot.resolution?.award ? `+${snapshot.resolution.award} points` : 'No points this time'}>{Boolean(snapshot.resolution?.award) && <Confetti key={snapshot.currentIndex} />}{isHost ? <button type="button" className="primary-button" onClick={() => action({ action: 'next' })}>Next puzzle</button> : <p>Waiting for the host…</p>}</Resolution>
-      : <div className="game-actions"><button className="soft-button" type="button" onClick={() => { playTap(); setOrder(shuffledOrder(puzzle.scramble.length)); }}>↻ Shuffle</button><button className="soft-button" type="button" disabled={placed.length === 0} onClick={() => { playTap(); setPlaced(placed.slice(0, -1)); }}>↩ Undo</button><button className="soft-button" type="button" disabled={placed.length === 0} onClick={() => setPlaced([])}>✕ Clear</button><button className="soft-button" type="button" disabled={snapshot.viewerHints >= puzzle.hints.length || busy} onClick={() => action({ action: 'hint' })}>{puzzle.hints[snapshot.viewerHints] ? `✦ Hint · ${HINT_LABELS[puzzle.hints[snapshot.viewerHints].kind]}` : '✦ Hints used'}</button><button className="check-button" type="button" disabled={placed.length !== puzzle.scramble.length || busy} onClick={() => action({ action: 'check', answer })}>Check answer</button>{isHost && <button className="text-button" type="button" onClick={() => action({ action: 'reveal' })}>Host reveal</button>}</div>}
+      : <div className="game-actions"><button className="soft-button" type="button" onClick={() => { playTap(); setOrder(shuffledOrder(puzzle.scramble.length)); }}>↻ Shuffle</button><button className="soft-button" type="button" disabled={placed.length === 0} onClick={() => { playTap(); setPlaced(placed.slice(0, -1)); }}>↩ Undo</button><button className="soft-button" type="button" disabled={placed.length === 0} onClick={() => setPlaced([])}>✕ Clear</button><button className="soft-button" type="button" disabled={snapshot.viewerHints >= puzzle.hints.length || busy} onClick={() => action({ action: 'hint' })}>{puzzle.hints[snapshot.viewerHints] ? `✦ Hint · ${HINT_LABELS[puzzle.hints[snapshot.viewerHints].kind]}` : '✦ Hints used'}</button>{isHost && <button className="text-button" type="button" onClick={() => action({ action: 'reveal' })}>Host reveal</button>}</div>}
       <button type="button" className="quit-button" onClick={leave}>Leave room</button>
     </section></main>;
 }
@@ -790,6 +808,13 @@ export default function GatherWordApp() {
     return () => window.removeEventListener('pointerdown', unlock);
   }, [sound]);
   useEffect(() => { if (!sound) stopMusic(); }, [sound]);
+  // Progress lives only in this browser, and some browsers evict storage for
+  // sites left unopened for a week -- which would cost a player their level
+  // unlocks and lifetime points, not just a streak. Ask to be kept. The API
+  // is missing on older browsers and may reject, so nothing depends on it.
+  useEffect(() => {
+    try { void navigator.storage?.persist?.(); } catch { /* not available; progress is still best-effort */ }
+  }, []);
   const [timeAttackActive, setTimeAttackActive] = useState(false);
   const [dailyActive, setDailyActive] = useState(false);
   // Today's number and whether it is done drive the badge on the home tile.
