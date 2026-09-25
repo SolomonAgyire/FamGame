@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { buildLevelQueue, createFreshRecipe, eligibleWords, getEntryById, getPuzzleEntry, normalizeAnswer } from '@/lib/game-engine';
 import { duckMusic, playCorrect, playTap, playWrong, startMusic, stopMusic } from '@/lib/audio';
 import { showToast, subscribeToasts, type Toast } from '@/lib/toast';
-import type { Category, DifficultyBand, GameSettings, Level, MatchRecipe, PlayMode, PuzzleRecipe, Team } from '@/lib/types';
+import type { Category, GameSettings, Level, MatchRecipe, PlayMode, PuzzleRecipe, Team } from '@/lib/types';
 import { LEVEL_NAMES } from '@/lib/types';
 import { scoreSolve } from '@/lib/scoring';
 import { loadProgress, saveProgress, recordMatch, masteredCount } from '@/lib/progress';
@@ -279,7 +279,7 @@ function LocalGame({ mode, settings, teams: initialTeams, sound, onHome, onChang
     </section></main>;
 }
 
-const BAND_TIME_LIMITS: Record<DifficultyBand, number> = { 1: 40, 2: 36, 3: 32, 4: 28, 5: 24, 6: 22, 7: 20, 8: 18, 9: 16 };
+const BAND_TIME_LIMITS: Record<Level, number> = { 1: 40, 2: 36, 3: 32, 4: 28, 5: 24, 6: 22, 7: 20, 8: 18, 9: 16 };
 const HIGH_SCORE_KEY = 'wordin-timeattack-highscore';
 
 function getHighScore(): number {
@@ -306,13 +306,14 @@ function MissPopup() {
 }
 
 function TimeAttackGame({ categories, sound, onHome }: { categories: Category[]; sound: boolean; onHome: () => void }) {
-  const [band, setBand] = useState<DifficultyBand>(1);
-  const [queue, setQueue] = useState<PuzzleRecipe[]>(() => buildLevelQueue(1, categories));
+  const startLevel = useMemo(() => highestUnlocked(loadProgress()), []);
+  const [band, setBand] = useState<Level>(startLevel);
+  const [queue, setQueue] = useState<PuzzleRecipe[]>(() => buildLevelQueue(startLevel, categories));
   const [placed, setPlaced] = useState<number[]>([]);
   const [score, setScore] = useState(0);
   const [solved, setSolved] = useState(0);
   const [strikes, setStrikes] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(BAND_TIME_LIMITS[1]);
+  const [timeLeft, setTimeLeft] = useState(() => BAND_TIME_LIMITS[startLevel]);
   const [resolved, setResolved] = useState<{ correct: boolean; gained: number } | null>(null);
   const [finished, setFinished] = useState<'strikes' | 'cleared' | null>(null);
   const [celebration, setCelebration] = useState<{ id: number; title: string; subtitle: string } | null>(null);
@@ -401,8 +402,8 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
       setTimeLeft(BAND_TIME_LIMITS[band]);
       return;
     }
-    if (band < 4) {
-      const nextBand = (band + 1) as DifficultyBand;
+    if (band < 9) {
+      const nextBand = (band + 1) as Level;
       setBand(nextBand);
       setQueue(buildLevelQueue(nextBand, categories));
       setPlaced([]);
