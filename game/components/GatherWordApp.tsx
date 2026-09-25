@@ -65,26 +65,25 @@ function Header({ onHome, sound, setSound }: { onHome: () => void; sound: boolea
   </header>;
 }
 
-function HomeScreen({ mode, setMode, start, level, setLevel, blocked, dailyNumber, dailyDone }: { mode: EntryMode; setMode: (mode: EntryMode) => void; start: () => void; level: Level; setLevel: (level: Level) => void; blocked: string | null; dailyNumber: number | null; dailyDone: boolean }) {
+function HomeScreen({ startAs, level, setLevel, blocked, dailyNumber, dailyDone }: { startAs: (mode: EntryMode) => void; level: Level; setLevel: (level: Level) => void; blocked: string | null; dailyNumber: number | null; dailyDone: boolean }) {
   const [expanded, setExpanded] = useState<EntryMode | null>(null);
   const modes = [
-    { id: 'solo' as const, title: 'Solo Journey', icon: '🧩', tint: 'sky', detail: 'Play by yourself, at your own pace. No timer, no pressure.' },
+    { id: 'solo' as const, title: 'Solo Journey', icon: '🧩', tint: 'sky', detail: 'Play by yourself, at your own pace. The first four levels are untimed.' },
     { id: 'together' as const, title: 'Play Together', icon: '🤝', tint: 'grass', detail: 'Pass one phone around. Solve as a team, or split into teams that take turns claiming each puzzle.' },
     { id: 'online' as const, title: 'Online Room', icon: '🌐', tint: 'violet', detail: 'Everyone joins from their own phone with a six-character code -- great for players in different places.' },
     { id: 'timeattack' as const, title: 'Time Attack', icon: '⚡', tint: 'berry', detail: 'A solo race against the clock. Each level is faster and harder -- chase your high score.' },
   ];
-  const modeTitle = modes.find((item) => item.id === mode)?.title;
   // Only solo and together play the level chosen here. An online room picks
   // its level in the lobby, and Time Attack starts from the player's
   // progress, so neither is held up by an empty pool on this screen.
-  const stopped = Boolean(blocked) && (mode === 'solo' || mode === 'together');
+  const stopped = Boolean(blocked);
   return <main className="home-shell">
     <section className="home-grid">
       <StreakHeader />
       {/* The Daily Word is the habit, so it sits directly under the streak it
           feeds, above everything else, and is never gated by a level. */}
-      <div className={`daily-bar ${mode === 'daily' ? 'active' : ''}`}>
-        <button type="button" role="radio" aria-checked={mode === 'daily'} onClick={() => setMode('daily')}>
+      <div className="daily-bar">
+        <button type="button" onClick={() => startAs('daily')}>
           <span className="mode-icon" aria-hidden="true">☀️</span>
           <strong>Daily Word</strong>
           {dailyNumber !== null && <span className="daily-bar-num">#{dailyNumber}</span>}
@@ -92,22 +91,26 @@ function HomeScreen({ mode, setMode, start, level, setLevel, blocked, dailyNumbe
         </button>
       </div>
       <h1 className="hero-title">Unscramble the word</h1>
-      <p className="hero-copy">Bible books, people, and places. Play solo, pass the phone around, or invite a room.</p>
       <InstallPrompt />
       <SamplePuzzle />
-      <div className="mode-grid" role="radiogroup" aria-label="Choose how to play">
-        {modes.map((item) => <div key={item.id} className={`mode-tile mode-tint-${item.tint} ${mode === item.id ? 'active' : ''} ${expanded === item.id ? 'expanded' : ''}`}>
-          <button type="button" role="radio" aria-checked={mode === item.id} onClick={() => setMode(item.id)} className="mode-tile-main">
-            <span className="mode-icon" aria-hidden="true">{item.icon}</span><strong>{item.title}</strong>
-          </button>
-          <button type="button" className="mode-info-button" aria-label={`More about ${item.title}`} aria-expanded={expanded === item.id} onClick={(event) => { event.stopPropagation(); setExpanded(expanded === item.id ? null : item.id); }}>i</button>
-          {expanded === item.id && <p className="mode-detail">{item.detail}</p>}
-        </div>)}
-      </div>
       <LevelBar selected={level} onSelect={setLevel} />
       {stopped && <p className="field-help warn" role="status">{blocked}</p>}
-      <button type="button" className="primary-button hero-button" disabled={stopped} onClick={start}>{mode === 'daily' ? (dailyDone ? "See today's result" : 'Play the Daily Word') : `Start ${modeTitle} · ${LEVEL_NAMES[level - 1]}`}</button>
-      <p className="free-note">No account needed. Free to play.</p>
+      {/* Each tile starts its mode on tap. A separate Start button below cost
+          a row of its own and a second decision for something the tile had
+          already said. */}
+      <div className="mode-grid">
+        {modes.map((item) => {
+          const gated = Boolean(blocked) && (item.id === 'solo' || item.id === 'together');
+          return <div key={item.id} className={`mode-tile mode-tint-${item.tint} ${expanded === item.id ? 'expanded' : ''}`}>
+            <button type="button" disabled={gated} onClick={() => startAs(item.id)} className="mode-tile-main">
+              <span className="mode-icon" aria-hidden="true">{item.icon}</span><strong>{item.title}</strong>
+              {(item.id === 'solo' || item.id === 'together') && <small className="mode-level">{LEVEL_NAMES[level - 1]}</small>}
+            </button>
+            <button type="button" className="mode-info-button" aria-label={`More about ${item.title}`} aria-expanded={expanded === item.id} onClick={(event) => { event.stopPropagation(); setExpanded(expanded === item.id ? null : item.id); }}>i</button>
+            {expanded === item.id && <p className="mode-detail">{item.detail}</p>}
+          </div>;
+        })}
+      </div>
     </section>
   </main>;
 }
@@ -875,7 +878,16 @@ export default function GatherWordApp() {
   const dailyKey = useMemo(() => dailyPuzzleFor(today), [today]);
   const dailyDone = progress.daily?.day === dailyKey.dayKey;
   const home = () => { setLocalMode(null); setTimeAttackActive(false); setDailyActive(false); setScreen('home'); };
-  const startEntry = () => { if (entryMode === 'online') setScreen('online-entry'); else if (entryMode === 'timeattack') setTimeAttackActive(true); else if (entryMode === 'daily') setDailyActive(true); else setScreen('setup'); };
+  // Takes the mode explicitly: a tile sets the mode and starts it in one
+  // tap, and reading `entryMode` here would still see the previous value.
+  const startEntry = (next?: EntryMode) => {
+    const target = next ?? entryMode;
+    if (target !== entryMode) setEntryMode(target);
+    if (target === 'online') setScreen('online-entry');
+    else if (target === 'timeattack') setTimeAttackActive(true);
+    else if (target === 'daily') setDailyActive(true);
+    else setScreen('setup');
+  };
   const startLocal = () => { setLocalGameKey((value) => value + 1); setLocalMode(entryMode === 'solo' ? 'solo' : togetherMode); };
   const connect = (value: Credentials) => { setCredentials(value); sessionStorage.setItem('gatherword-room', JSON.stringify(value)); setScreen('online-lobby'); };
   const leave = () => { setCredentials(null); sessionStorage.removeItem('gatherword-room'); history.replaceState({}, '', window.location.pathname); setScreen('online-entry'); };
@@ -883,7 +895,7 @@ export default function GatherWordApp() {
     {dailyActive ? <DailyWord sound={sound} onHome={home} />
     : timeAttackActive ? <TimeAttackGame key={localGameKey} categories={settings.categories} sound={sound} onHome={home} />
     : localMode ? <LocalGame key={localGameKey} mode={localMode} settings={settings} teams={teams} sound={sound} onHome={home} onChangeSet={() => { setLocalMode(null); setScreen('setup'); }} />
-    : screen === 'home' ? <HomeScreen mode={entryMode} setMode={setEntryMode} start={startEntry} level={level} setLevel={setLevel} blocked={unplayableReason(settings)} dailyNumber={hydrated ? dailyKey.number : null} dailyDone={dailyDone} />
+    : screen === 'home' ? <HomeScreen startAs={startEntry} level={level} setLevel={setLevel} blocked={unplayableReason(settings)} dailyNumber={hydrated ? dailyKey.number : null} dailyDone={dailyDone} />
     : screen === 'setup' ? <SetupScreen entryMode={entryMode} settings={settings} setSettings={setSettings} togetherMode={togetherMode} setTogetherMode={setTogetherMode} teams={teams} setTeams={setTeams} start={startLocal} back={home} />
     : screen === 'online-entry' ? <OnlineEntry onBack={home} onConnected={connect} initialCode={initialCode} />
     : credentials ? <OnlineRoom credentials={credentials} leave={leave} sound={sound} /> : null}
