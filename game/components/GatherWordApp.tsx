@@ -12,7 +12,7 @@ import { scoreSolve } from '@/lib/scoring';
 import { secondsFor, timerModeFor } from '@/lib/timing';
 import { saveProgress, recordMatch, masteredCount, subscribeProgress, getProgressSnapshot, getProgressServerSnapshot } from '@/lib/progress';
 import { highestUnlocked } from '@/lib/levels';
-import { LevelPath } from '@/components/LevelPath';
+import { LevelBar } from '@/components/LevelBar';
 import { Standings } from '@/components/Standings';
 import { shuffledOrder, TileBoard } from '@/components/TileBoard';
 import { DailyWord, StreakHeader, useHydrated } from '@/components/DailyWord';
@@ -105,7 +105,7 @@ function HomeScreen({ mode, setMode, start, level, setLevel, blocked, dailyNumbe
           {expanded === item.id && <p className="mode-detail">{item.detail}</p>}
         </div>)}
       </div>
-      <LevelPath selected={level} onSelect={setLevel} />
+      <LevelBar selected={level} onSelect={setLevel} />
       {stopped && <p className="field-help warn" role="status">{blocked}</p>}
       <button type="button" className="primary-button hero-button" disabled={stopped} onClick={start}>{mode === 'daily' ? (dailyDone ? "See today's result" : 'Play the Daily Word') : `Start ${modeTitle} · ${LEVEL_NAMES[level - 1]}`}</button>
       <p className="free-note">No account needed. No timer. Free to play.</p>

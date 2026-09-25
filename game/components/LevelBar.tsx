@@ -1,0 +1,90 @@
+'use client';
+
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { getProgressServerSnapshot, getProgressSnapshot, subscribeProgress } from '@/lib/progress';
+import { levelStatus } from '@/lib/levels';
+import { LevelPath } from '@/components/LevelPath';
+import type { Level } from '@/lib/types';
+
+const LEVELS: Level[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+/** The nine levels are a journey, not a difficulty dial, so the collapsed
+ * control keeps the whole path visible as a nine-segment rail instead of
+ * reducing it to a number in a dropdown. Expanded, it is the same list as
+ * before -- it just no longer costs most of the home screen to show. */
+export function LevelBar({ selected, onSelect }: { selected: Level; onSelect: (level: Level) => void }) {
+  const record = useSyncExternalStore(subscribeProgress, getProgressSnapshot, getProgressServerSnapshot);
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const status = levelStatus(record, selected);
+
+  const close = useCallback(() => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') close(); };
+    window.addEventListener('keydown', onKey);
+    // The sheet covers the page; letting the page behind it scroll is how a
+    // phone user loses their place.
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = previous;
+    };
+  }, [open, close]);
+
+  const pick = (level: Level) => { onSelect(level); close(); };
+
+  return <>
+    <button
+      ref={triggerRef}
+      type="button"
+      className="level-bar"
+      aria-expanded={open}
+      aria-haspopup="dialog"
+      onClick={() => setOpen(true)}
+    >
+      <span className={`level-badge ${status.cleared ? 'is-cleared' : ''}`} aria-hidden="true">
+        {status.cleared ? '✓' : selected}
+      </span>
+      <span className="level-bar-text">
+        <strong>{status.name}</strong>
+        <small>{status.cleared ? 'Cleared' : `${status.solved} of ${status.needed} words`}</small>
+        <span className="level-rail" aria-hidden="true">
+          {LEVELS.map((level) => {
+            const each = levelStatus(record, level);
+            return <i
+              key={level}
+              className={each.cleared ? 'done' : level === selected ? 'here' : each.unlocked ? 'open' : 'shut'}
+            />;
+          })}
+        </span>
+      </span>
+      <span className="level-bar-chevron" aria-hidden="true">⌄</span>
+      <span className="sr-only">Change level. Currently {status.name}, level {selected} of 9.</span>
+    </button>
+
+    {open && <div className="sheet-backdrop" onClick={close}>
+      <div
+        className="sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Choose your level"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="sheet-grip" aria-hidden="true" />
+        <div className="sheet-head">
+          <h2>Your journey</h2>
+          <button type="button" className="sheet-close" onClick={close} aria-label="Close">×</button>
+        </div>
+        <div className="sheet-body">
+          <LevelPath selected={selected} onSelect={pick} />
+        </div>
+      </div>
+    </div>}
+  </>;
+}
