@@ -17,7 +17,9 @@ function hash32(value: string) {
   return hash >>> 0;
 }
 
-function rng(seed: string) {
+/** A deterministic stream from a string seed. Exported so the Daily Word
+ * can derive the same puzzle for everyone from the date alone. */
+export function seededRandom(seed: string) {
   let state = hash32(seed) || 1;
   return () => {
     state += 0x6d2b79f5;
@@ -108,12 +110,15 @@ export function advanceMatch(state: { index: number; total: number; finished: bo
 /** A shuffled, freshly-scrambled queue of every word at one band, for a
  * level that should never repeat a word within a run. */
 export function buildLevelQueue(band: DifficultyBand, categories: Category[]): PuzzleRecipe[] {
-  const random = rng(secureSeed());
+  const random = seededRandom(secureSeed());
   const words = shuffle(wordsForLevel(band, categories), random);
   return words.map((entry) => ({ entryId: entry.id, scramble: makeScramble(entry.playable, random) }));
 }
 
-function makeScramble(answer: string, random: () => number) {
+/** A shuffle of the answer that is never the answer itself. Single-letter
+ * and all-same-letter words are handed back unchanged because no
+ * arrangement of them could differ. */
+export function makeScramble(answer: string, random: () => number) {
   if (new Set(answer).size < 2) return answer;
   let scrambled = answer;
   for (let attempt = 0; attempt < 12 && scrambled === answer; attempt += 1) {
@@ -123,7 +128,7 @@ function makeScramble(answer: string, random: () => number) {
 }
 
 export function createRecipe(settings: GameSettings, seed: string): MatchRecipe {
-  const random = rng(seed);
+  const random = seededRandom(seed);
   const byCategory = settings.categories.map((category) => ({
     category,
     words: shuffle(eligibleWords(settings).filter((entry) => entry.categories.includes(category)), random),
