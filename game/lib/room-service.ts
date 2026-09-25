@@ -62,7 +62,7 @@ export function cleanName(value: string) {
 export function validateSettings(input: Partial<GameSettings>): GameSettings {
   const allowed = ['book', 'person', 'place'] as const;
   const categories = allowed.filter((category) => input.categories?.includes(category));
-  const maxBand = Math.min(9, Math.max(1, Number(input.maxBand) || 2)) as Level;
+  const maxBand = Math.min(9, Math.max(1, Math.floor(Number(input.maxBand) || 1))) as Level;
   const length = Math.min(30, Math.max(3, Math.floor(Number(input.length) || 10)));
   return { categories: categories.length ? categories : ['book'], maxBand, length };
 }
