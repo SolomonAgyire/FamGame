@@ -6,7 +6,10 @@
  * it unit-testable at all: `room-service.ts` imports `cloudflare:workers`
  * at the top of the file, which only resolves inside the Workers runtime,
  * so nothing in that file can be imported by a plain Node test. */
+import { getPuzzleEntry } from '@/lib/game-engine';
+import { hintsFor } from '@/lib/hints';
 import { awardForFinishOrder, isWindowOpen } from '@/lib/room-scoring';
+import type { Category, GameSettings, Level, MatchRecipe } from '@/lib/types';
 
 export type RoomMode = 'individuals' | 'teams' | 'cooperative';
 export type RoomRole = 'player' | 'spectator';
@@ -166,4 +169,88 @@ export function resumeProgress(progress: PuzzleProgress, now: number): PuzzlePro
   if (!progress.paused) return progress;
   const pausedFor = progress.pausedAt ? now - progress.pausedAt : 0;
   return { ...progress, paused: false, pausedAt: null, firstSolveAt: progress.firstSolveAt !== null ? progress.firstSolveAt + pausedFor : null };
+}
+
+/** Clamps whatever a client sends into a legal `GameSettings` -- never
+ * trusts categories, band or length from a request body directly. Moved
+ * here from the D1-era `room-service.ts` (Stage 1) so `RoomDO` (Stage 2)
+ * can run the exact same clamp when a host saves settings, starts a match
+ * or asks for a rematch, without either side reimplementing it. */
+export function validateSettings(input: Partial<GameSettings>): GameSettings {
+  const allowed = ['book', 'person', 'place'] as const;
+  const categories = allowed.filter((category) => input.categories?.includes(category));
+  const maxBand = Math.min(9, Math.max(1, Math.floor(Number(input.maxBand) || 1))) as Level;
+  const length = Math.min(30, Math.max(3, Math.floor(Number(input.length) || 10)));
+  return { categories: categories.length ? categories : ['book'], maxBand, length };
+}
+
+export type RoomStatus = 'LOBBY' | 'PUZZLE_OPEN' | 'PUZZLE_RESOLVED' | 'RESULTS';
+export type RoomPuzzleStatus = 'WAITING' | 'OPEN' | 'RESOLVED';
+
+/** `RoomDO`'s whole picture of one room, held in Durable Object storage.
+ * Stage 1 kept this as four separate JSON-encoded D1 columns
+ * (`players_json`, `match_json`, `resolution_json`, `hint_state_json`);
+ * Stage 2 moves the live match off D1 entirely, so it is just plain
+ * fields now -- there is no serialization boundary to encode around
+ * inside the object that owns the data. */
+export type RoomState = {
+  code: string;
+  status: RoomStatus;
+  mode: RoomMode;
+  settings: GameSettings;
+  players: RoomPlayer[];
+  match: MatchRecipe | null;
+  currentIndex: number;
+  puzzleStatus: RoomPuzzleStatus;
+  resolution: PuzzleProgress | null;
+  hints: Record<string, number>;
+  version: number;
+  createdAt: number;
+  lastActivity: number;
+};
+
+export type PublicPlayer = Omit<RoomPlayer, 'tokenHash'>;
+
+export type RoomSnapshotDTO = {
+  code: string; status: RoomStatus; mode: RoomMode; settings: GameSettings; players: PublicPlayer[];
+  currentIndex: number; puzzleCount: number; version: number; viewerId: string; viewerHints: number;
+  puzzle: null | { id: string; scramble: string; category: Category; band: Level; hints: { kind: string; text: string }[]; display?: string; reference?: string };
+  resolution: null | { solvers: SolveRecord[]; answeredIds: string[]; revealed: boolean; paused: boolean };
+};
+
+/** Shapes one player's view of the room for the wire: strips `tokenHash`
+ * from every player (never sent, not even the viewer's own), and only
+ * reveals the answer/reference once the puzzle has actually resolved.
+ * Ported from the D1-era `room-service.ts` with the same behaviour --
+ * only the input changed, from four parsed JSON columns to plain
+ * `RoomState` fields -- so both `RoomDO` and (through it) every REST and
+ * WebSocket response describe a room exactly the same way. */
+export function publicSnapshot(room: RoomState, viewerId: string): RoomSnapshotDTO {
+  const players: PublicPlayer[] = room.players.map((player) => ({
+    id: player.id, name: player.name, isHost: player.isHost, ready: player.ready, score: player.score,
+    role: player.role, joinedAt: player.joinedAt, lastSeen: player.lastSeen, left: player.left,
+    sitOutCurrent: player.sitOutCurrent, teamId: player.teamId,
+  }));
+  const match = room.match;
+  const recipePuzzle = match?.puzzles[room.currentIndex];
+  const entry = match ? getPuzzleEntry(match, room.currentIndex) : undefined;
+  const resolved = room.status === 'PUZZLE_RESOLVED' || room.status === 'RESULTS';
+  const viewer = room.players.find((player) => player.id === viewerId);
+  const viewerHints = room.mode === 'teams'
+    ? Math.max(0, ...room.players.filter((player) => player.teamId === viewer?.teamId).map((player) => room.hints[player.id] || 0))
+    : (room.hints[viewerId] || 0);
+  const progress = room.resolution ?? EMPTY_PROGRESS;
+  return {
+    code: room.code, status: room.status, mode: room.mode, settings: room.settings, players,
+    currentIndex: room.currentIndex, puzzleCount: match?.puzzles.length || room.settings.length,
+    version: room.version, viewerId, viewerHints,
+    puzzle: recipePuzzle && entry ? {
+      id: entry.id, scramble: recipePuzzle.scramble,
+      category: entry.categories[0], band: entry.band,
+      hints: hintsFor(entry).map(({ kind, text }) => ({ kind, text })),
+      display: resolved ? entry.display : undefined,
+      reference: resolved ? entry.references[0] : undefined,
+    } : null,
+    resolution: recipePuzzle ? { solvers: progress.solvers, answeredIds: progress.answered, revealed: progress.revealed, paused: progress.paused } : null,
+  };
 }

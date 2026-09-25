@@ -25,5 +25,21 @@
       "database_name": "gatherword-db",
       "database_id": "80f4799c-e14b-46a2-af83-f9bdd93d676d"
     }
+  ],
+
+  // One Durable Object per online room (see game/durable/RoomDO.ts). D1
+  // above keeps just the code -> room index and the two-hour TTL; the
+  // live match -- players, settings, current puzzle, score -- lives here
+  // instead of being re-read from D1 on every 1.8-second poll.
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "RoomDO" }]
+  },
+
+  // SQLite-backed classes only ("new_sqlite_classes", never "new_classes")
+  // -- the free plan does not include key-value-backed Durable Objects, and
+  // this is the one line that decides whether Stage 2 stays at $0. A
+  // migration tag is permanent once deployed, so this stays "v1" forever.
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["RoomDO"] }
   ]
 }

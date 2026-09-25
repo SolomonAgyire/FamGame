@@ -1,41 +1,29 @@
+/** The D1 side of an online room -- Stage 2 of Phase F moved the live
+ * match (players, settings, match recipe, current puzzle, score) into
+ * `durable/RoomDO.ts`, one Durable Object per room. What is left here is
+ * exactly what the plan asked D1 to keep: a code -> room index (so a
+ * fresh code can be checked for collisions, and a request can tell a
+ * room that never existed from one that did) and the two-hour TTL (a
+ * sliding window, refreshed on every join, action and socket connect).
+ *
+ * Every function below is a thin proxy: check the index, then hand the
+ * request to that room's Durable Object and relay its answer back. None
+ * of the actual game rules live here any more -- `RoomDO` calls into
+ * `lib/room-rules.ts` for those, same as this file used to. */
 import { env } from 'cloudflare:workers';
-import { createRecipe, getPuzzleEntry, normalizeAnswer, unplayableReason } from '@/lib/game-engine';
-import { hintsFor } from '@/lib/hints';
-import { scoreSolve } from '@/lib/scoring';
-import {
-  activePlayers, applyCorrectSolve, applyWrongSolve, EMPTY_PROGRESS, eligiblePlayers,
-  pauseProgress, refundSolvers, resumeProgress, roleForJoin, shouldCloseWindow,
-  type PuzzleProgress, type RoomMode, type RoomPlayer,
-} from '@/lib/room-rules';
-import type { GameSettings, Level, MatchRecipe } from '@/lib/types';
+import type { GameSettings } from '@/lib/types';
 
 export type { RoomMode, RoomPlayer, RoomRole } from '@/lib/room-rules';
 export { MAX_PLAYERS, MAX_SPECTATORS } from '@/lib/room-rules';
 
-function parseProgress(json: string | null): PuzzleProgress {
-  if (!json) return { ...EMPTY_PROGRESS };
-  return JSON.parse(json) as PuzzleProgress;
-}
-
-type RoomRow = {
-  code: string;
-  status: 'LOBBY' | 'PUZZLE_OPEN' | 'PUZZLE_RESOLVED' | 'RESULTS';
-  mode: RoomMode;
-  settings_json: string;
-  players_json: string;
-  match_json: string | null;
-  current_index: number;
-  puzzle_status: 'WAITING' | 'OPEN' | 'RESOLVED';
-  resolution_json: string | null;
-  hint_state_json: string;
-  version: number;
-  created_at: number;
-  last_activity: number;
-  expires_at: number;
-};
-
 const ROOM_TTL = 2 * 60 * 60 * 1000;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const ROOM_DO_ORIGIN = 'https://room-do';
+
+/** Thrown for a code the index has never heard of, or one whose TTL has
+ * already lapsed -- the one case every route answers with 404 rather
+ * than 400/401, same as the D1-era version of this file did. */
+export class RoomNotFoundError extends Error {}
 
 function database() {
   if (!env.DB) throw new Error('Online rooms are not available in this environment.');
@@ -48,12 +36,6 @@ function randomString(length: number, alphabet = 'abcdefghijklmnopqrstuvwxyzABCD
   return Array.from(bytes, (value) => alphabet[value % alphabet.length]).join('');
 }
 
-async function digest(value: string) {
-  const bytes = new TextEncoder().encode(value);
-  const hash = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
 export function cleanCode(value: string) {
   return value.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 6);
 }
@@ -62,68 +44,75 @@ export function cleanName(value: string) {
   return value.trim().replace(/\s+/g, ' ').slice(0, 24);
 }
 
-export function validateSettings(input: Partial<GameSettings>): GameSettings {
-  const allowed = ['book', 'person', 'place'] as const;
-  const categories = allowed.filter((category) => input.categories?.includes(category));
-  const maxBand = Math.min(9, Math.max(1, Math.floor(Number(input.maxBand) || 1))) as Level;
-  const length = Math.min(30, Math.max(3, Math.floor(Number(input.length) || 10)));
-  return { categories: categories.length ? categories : ['book'], maxBand, length };
+/** One Durable Object instance per room code -- `idFromName` is
+ * deterministic, so any request for the same code always lands on the
+ * same object without D1 ever having to record which one it was. */
+function getStub(code: string) {
+  return env.ROOMS.get(env.ROOMS.idFromName(code));
 }
 
-/** A puzzle that has been open long enough, or that everyone eligible has
- * already solved, resolves on the next read -- even if that read is just a
- * player polling for a snapshot rather than submitting an answer. Without
- * this, a room where the last few players never answer would stay open
- * forever: nothing else runs on a schedule to close it. */
-async function resolveExpiredWindow(row: RoomRow): Promise<RoomRow> {
-  if (row.status !== 'PUZZLE_OPEN' || !row.resolution_json) return row;
-  const progress = parseProgress(row.resolution_json);
-  const players = JSON.parse(row.players_json) as RoomPlayer[];
-  const now = Date.now();
-  if (!shouldCloseWindow(progress, eligiblePlayers(players).length, now)) return row;
-  const result = await database().prepare(
-    `UPDATE rooms SET status = 'PUZZLE_RESOLVED', puzzle_status = 'RESOLVED', version = version + 1, last_activity = ? WHERE code = ? AND version = ? AND status = 'PUZZLE_OPEN'`,
-  ).bind(now, row.code, row.version).run();
-  if ((result.meta.changes || 0) === 1) {
-    return { ...row, status: 'PUZZLE_RESOLVED', puzzle_status: 'RESOLVED', version: row.version + 1, last_activity: now };
-  }
-  // Something else changed the row first (another request resolved it, or
-  // a host action landed) -- read the current truth rather than trust a
-  // guess that is already stale.
-  const fresh = await database().prepare('SELECT * FROM rooms WHERE code = ?').bind(row.code).first<RoomRow>();
-  return fresh ?? row;
+async function codeTaken(code: string) {
+  const row = await database().prepare('SELECT code FROM rooms WHERE code = ?').bind(code).first();
+  return Boolean(row);
 }
 
-export async function getRoom(code: string) {
-  const row = await database().prepare('SELECT * FROM rooms WHERE code = ?').bind(cleanCode(code)).first<RoomRow>();
-  if (!row) return row;
-  return resolveExpiredWindow(row);
-}
-
-async function makeUniqueCode() {
+async function reserveCode() {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const code = randomString(6, CODE_CHARS);
-    const existing = await getRoom(code);
-    if (!existing) return code;
+    if (!(await codeTaken(code))) return code;
   }
   throw new Error('Could not create a room code. Please try again.');
+}
+
+/** The only row this file still writes on creation -- everything but the
+ * code and the TTL columns is a placeholder now that the Durable Object
+ * is the source of truth. Kept as real, if unused, JSON so the existing
+ * `NOT NULL` columns need no migration. */
+async function insertIndex(code: string, now: number) {
+  await database().prepare(
+    `INSERT INTO rooms (code, settings_json, players_json, created_at, last_activity, expires_at) VALUES (?, '{}', '[]', ?, ?, ?)`,
+  ).bind(code, now, now, now + ROOM_TTL).run();
+}
+
+async function assertRoomAlive(code: string) {
+  const row = await database().prepare('SELECT expires_at FROM rooms WHERE code = ?').bind(code).first<{ expires_at: number }>();
+  if (!row || row.expires_at < Date.now()) throw new RoomNotFoundError('That room was not found or has expired.');
+}
+
+/** Slides the two-hour TTL forward from whichever of join / action /
+ * socket-connect just happened -- not from every message a live socket
+ * exchanges, which is the whole point of not polling any more. A match
+ * played entirely over one long-lived socket for more than two hours
+ * without a fresh join or REST action is the one case this does not
+ * cover; ordinary matches run for minutes, not hours. */
+async function touchRoom(code: string) {
+  const now = Date.now();
+  await database().prepare('UPDATE rooms SET last_activity = ?, expires_at = ? WHERE code = ?').bind(now, now + ROOM_TTL, code).run();
+}
+
+function messageFrom(data: unknown, fallback: string) {
+  return typeof data === 'object' && data && 'error' in data && typeof (data as { error?: unknown }).error === 'string'
+    ? (data as { error: string }).error
+    : fallback;
 }
 
 export async function createRoom(nameInput: string, settingsInput: Partial<GameSettings>, modeInput: string) {
   const name = cleanName(nameInput);
   if (name.length < 2) throw new Error('Enter a name with at least 2 characters.');
   const now = Date.now();
-  const code = await makeUniqueCode();
-  const token = randomString(42);
-  const player: RoomPlayer = { id: crypto.randomUUID(), name, tokenHash: await digest(token), isHost: true, ready: true, score: 0, role: 'player', joinedAt: now, lastSeen: now, left: false, sitOutCurrent: false };
-  const settings = validateSettings(settingsInput);
-  const mode: RoomMode = modeInput === 'cooperative' ? 'cooperative' : modeInput === 'teams' ? 'teams' : 'individuals';
-  if (mode === 'teams') player.teamId = 'sun';
-  await database().prepare(`INSERT INTO rooms
-    (code, status, mode, settings_json, players_json, match_json, current_index, puzzle_status, resolution_json, hint_state_json, version, created_at, last_activity, expires_at)
-    VALUES (?, 'LOBBY', ?, ?, ?, NULL, 0, 'WAITING', NULL, '{}', 1, ?, ?, ?)`)
-    .bind(code, mode, JSON.stringify(settings), JSON.stringify([player]), now, now, now + ROOM_TTL).run();
-  return { code, token, playerId: player.id };
+  const code = await reserveCode();
+  const response = await getStub(code).fetch(`${ROOM_DO_ORIGIN}/init`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ code, name, settings: settingsInput, mode: modeInput }),
+  });
+  const data = await response.json() as { token?: string; playerId?: string; error?: string };
+  if (!response.ok || !data.token || !data.playerId) throw new Error(messageFrom(data, 'Room creation failed.'));
+  // Only committed to the index once the Durable Object has confirmed it
+  // actually holds a room for this code -- an index row with nothing
+  // behind it would be a room a client could "find" but never join.
+  await insertIndex(code, now);
+  return { code, token: data.token, playerId: data.playerId };
 }
 
 export async function joinRoom(codeInput: string, nameInput: string) {
@@ -131,184 +120,59 @@ export async function joinRoom(codeInput: string, nameInput: string) {
   const name = cleanName(nameInput);
   if (code.length !== 6) throw new Error('Enter a complete 6-character room code.');
   if (name.length < 2) throw new Error('Enter a name with at least 2 characters.');
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const room = await getRoom(code);
-    if (!room || room.expires_at < Date.now()) throw new Error('That room was not found or has expired.');
-    const players = JSON.parse(room.players_json) as RoomPlayer[];
-    // Past the player cap, a joiner is not refused outright -- they come in
-    // as a spectator instead, watching and getting live snapshots but not
-    // scoring or counting toward the "everyone answered" check.
-    const role = roleForJoin(players);
-    if (!role) throw new Error('That room is full.');
-    const now = Date.now();
-    const token = randomString(42);
-    const sunCount = players.filter((item) => item.teamId === 'sun').length;
-    const oliveCount = players.filter((item) => item.teamId === 'olive').length;
-    // Ungated online rooms stay ungated even mid-match: joining is allowed
-    // any time, not just in the lobby. A joiner who lands while a puzzle is
-    // already open just sits that one out and plays from the next.
-    const sitOutCurrent = role === 'player' && room.status !== 'LOBBY';
-    const player: RoomPlayer = {
-      id: crypto.randomUUID(), name, tokenHash: await digest(token), isHost: false, ready: role === 'spectator', score: 0,
-      role, joinedAt: now, lastSeen: now, left: false, sitOutCurrent,
-      ...(role === 'player' && room.mode === 'teams' ? { teamId: sunCount <= oliveCount ? 'sun' as const : 'olive' as const } : {}),
-    };
-    const result = await database().prepare('UPDATE rooms SET players_json = ?, version = version + 1, last_activity = ?, expires_at = ? WHERE code = ? AND version = ?')
-      .bind(JSON.stringify([...players, player]), now, now + ROOM_TTL, code, room.version).run();
-    if ((result.meta.changes || 0) === 1) return { code, token, playerId: player.id, role };
-  }
-  throw new Error('The room changed while you were joining. Please try again.');
+  await assertRoomAlive(code);
+  await touchRoom(code);
+  const response = await getStub(code).fetch(`${ROOM_DO_ORIGIN}/join`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  const data = await response.json() as { token?: string; playerId?: string; role?: string; error?: string };
+  if (!response.ok || !data.token || !data.playerId) throw new Error(messageFrom(data, 'Could not join the room.'));
+  return { code, token: data.token, playerId: data.playerId, role: data.role };
 }
 
-export async function authenticate(room: RoomRow, playerId: string, token: string) {
-  const players = JSON.parse(room.players_json) as RoomPlayer[];
-  const player = players.find((item) => item.id === playerId);
-  if (!player || player.tokenHash !== await digest(token)) throw new Error('Your room session is no longer valid.');
-  if (player.left) throw new Error('You were removed from this room.');
-  return { player, players };
+/** Backs `GET /api/rooms/[code]` -- a room the index has never heard of
+ * throws `RoomNotFoundError` (404); a room the Durable Object refuses to
+ * authenticate throws a plain `Error` (401), same split the D1-era route
+ * made between "gone" and "not you". */
+export async function getRoomSnapshot(codeInput: string, playerId: string, token: string) {
+  const code = cleanCode(codeInput);
+  await assertRoomAlive(code);
+  const response = await getStub(code).fetch(`${ROOM_DO_ORIGIN}/snapshot?playerId=${encodeURIComponent(playerId)}`, {
+    headers: { 'x-room-token': token },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(messageFrom(data, 'Could not load the room.'));
+  return data;
 }
 
-export function publicSnapshot(room: RoomRow, viewerId: string) {
-  const players = (JSON.parse(room.players_json) as RoomPlayer[]).map((player) => ({
-    id: player.id, name: player.name, isHost: player.isHost, ready: player.ready, score: player.score,
-    role: player.role, joinedAt: player.joinedAt, lastSeen: player.lastSeen, left: player.left,
-    sitOutCurrent: player.sitOutCurrent, teamId: player.teamId,
-  }));
-  const settings = JSON.parse(room.settings_json) as GameSettings;
-  const match = room.match_json ? JSON.parse(room.match_json) as MatchRecipe : null;
-  const hints = JSON.parse(room.hint_state_json || '{}') as Record<string, number>;
-  const recipePuzzle = match?.puzzles[room.current_index];
-  const entry = match ? getPuzzleEntry(match, room.current_index) : undefined;
-  const resolved = room.status === 'PUZZLE_RESOLVED' || room.status === 'RESULTS';
-  const viewer = players.find((player) => player.id === viewerId);
-  const viewerHints = room.mode === 'teams' ? Math.max(0, ...players.filter((player) => player.teamId === viewer?.teamId).map((player) => hints[player.id] || 0)) : (hints[viewerId] || 0);
-  const progress = parseProgress(room.resolution_json);
-  return {
-    code: room.code, status: room.status, mode: room.mode, settings, players,
-    currentIndex: room.current_index, puzzleCount: match?.puzzles.length || settings.length,
-    version: room.version, viewerId, viewerHints,
-    puzzle: recipePuzzle && entry ? {
-      id: entry.id, scramble: recipePuzzle.scramble,
-      // The full ladder, not the stored pair: the first rung names a
-      // character, so a room player buys the same three hints a solo
-      // player does. The answer itself is still never sent until the
-      // puzzle resolves.
-      category: entry.categories[0], band: entry.band,
-      hints: hintsFor(entry).map(({ kind, text }) => ({ kind, text })),
-      display: resolved ? entry.display : undefined,
-      reference: resolved ? entry.references[0] : undefined,
-    } : null,
-    // Populated for the whole life of a puzzle, not just once it resolves --
-    // a client needs `solvers` while still PUZZLE_OPEN to know its own
-    // player already solved (and should stop submitting), and `answeredIds`
-    // to show who has gone without saying whether they were right.
-    resolution: recipePuzzle ? { solvers: progress.solvers, answeredIds: progress.answered, revealed: progress.revealed, paused: progress.paused } : null,
-  };
+/** Backs `POST /api/rooms/[code]/action`. Same 404-vs-everything-else
+ * split as above; every actual rule about whether this particular action
+ * is legal right now lives in `RoomDO`, not here. */
+export async function performRoomAction(codeInput: string, playerId: string, token: string, input: Record<string, unknown>) {
+  const code = cleanCode(codeInput);
+  await assertRoomAlive(code);
+  await touchRoom(code);
+  const response = await getStub(code).fetch(`${ROOM_DO_ORIGIN}/action`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-room-token': token },
+    body: JSON.stringify({ ...input, playerId }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(messageFrom(data, 'The room action failed.'));
+  return data;
 }
 
-export async function roomAction(room: RoomRow, playerId: string, token: string, input: Record<string, unknown>) {
-  const { player, players } = await authenticate(room, playerId, token);
-  const action = String(input.action || '');
-  const now = Date.now();
-  let nextPlayers = players;
-  let status = room.status;
-  let settings = JSON.parse(room.settings_json) as GameSettings;
-  let match = room.match_json ? JSON.parse(room.match_json) as MatchRecipe : null;
-  let currentIndex = room.current_index;
-  let puzzleStatus = room.puzzle_status;
-  let resolution = room.resolution_json;
-  let hints = JSON.parse(room.hint_state_json || '{}') as Record<string, number>;
-
-  if (action === 'ready' && status === 'LOBBY' && player.role === 'player') {
-    nextPlayers = players.map((item) => item.id === player.id ? { ...item, ready: Boolean(input.ready) } : item);
-  } else if (action === 'configure' && player.isHost && status === 'LOBBY') {
-    settings = validateSettings(input.settings as Partial<GameSettings>);
-    room.mode = input.mode === 'cooperative' ? 'cooperative' : input.mode === 'teams' ? 'teams' : 'individuals';
-    if (room.mode === 'teams') nextPlayers = players.map((item, index) => item.role === 'player' ? ({ ...item, teamId: index % 2 === 0 ? 'sun' : 'olive' } as RoomPlayer) : item);
-    else nextPlayers = players.map((item) => ({ ...item, teamId: undefined }));
-  } else if (action === 'start' && player.isHost && status === 'LOBBY') {
-    const seated = activePlayers(players);
-    if (room.mode !== 'cooperative' && seated.length < 2) throw new Error('Invite at least one more player, or choose Cooperative.');
-    if (seated.some((item) => !item.isHost && !item.ready)) throw new Error('Everyone needs to be ready first.');
-    // A level the chosen categories have no words at would produce a match
-    // with no puzzles -- an empty screen for everyone, in a room only the
-    // two-hour TTL could clear. Refuse it here, where the host can still
-    // change the setting.
-    const blocked = unplayableReason(settings);
-    if (blocked) throw new Error(blocked);
-    match = createRecipe(settings, randomString(32));
-    nextPlayers = players.map((item) => ({ ...item, score: 0, sitOutCurrent: false }));
-    status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; currentIndex = 0; resolution = JSON.stringify(EMPTY_PROGRESS); hints = {};
-  } else if (action === 'hint' && status === 'PUZZLE_OPEN') {
-    if (player.role === 'spectator') throw new Error('Spectators are just watching this room.');
-    if (player.sitOutCurrent) throw new Error('You will join in on the next puzzle.');
-    hints[player.id] = Math.min(3, (hints[player.id] || 0) + 1);
-  } else if (action === 'check' && status === 'PUZZLE_OPEN' && match) {
-    if (player.role === 'spectator') throw new Error('Spectators are just watching this room.');
-    if (player.sitOutCurrent) throw new Error('You will join in on the next puzzle.');
-    const progress = parseProgress(resolution);
-    if (progress.paused) throw new Error('The host paused this puzzle.');
-    const entry = getPuzzleEntry(match, currentIndex);
-    if (!entry) throw new Error('The current puzzle could not be found.');
-    if (normalizeAnswer(String(input.answer || '')) === entry.answer) {
-      const sideHintCount = room.mode === 'cooperative' ? Math.max(0, ...Object.values(hints)) : room.mode === 'teams' ? Math.max(0, ...players.filter((item) => item.teamId === player.teamId).map((item) => hints[item.id] || 0)) : (hints[player.id] || 0);
-      // The same pure function solo and Time Attack use, so a long word at
-      // a hard level pays what it is worth in every mode. Sharing the same
-      // finish-order curve across every room, whatever its size, is
-      // `applyCorrectSolve`'s job.
-      const base = scoreSolve({ letterCount: entry.playable.length, level: entry.level, combo: 0, hintsUsed: sideHintCount });
-      const outcome = applyCorrectSolve({ players, progress, mode: room.mode, playerId: player.id, playerName: player.name, base, now });
-      nextPlayers = outcome.players;
-      resolution = JSON.stringify(outcome.progress);
-      if (outcome.resolved) { status = 'PUZZLE_RESOLVED'; puzzleStatus = 'RESOLVED'; }
-    } else {
-      const outcome = applyWrongSolve(players, progress, room.mode, player.id, player.teamId);
-      nextPlayers = outcome.players;
-      resolution = JSON.stringify(outcome.progress);
-    }
-  } else if (action === 'reveal' && player.isHost && status === 'PUZZLE_OPEN' && match) {
-    const progress = parseProgress(resolution);
-    progress.revealed = true;
-    status = 'PUZZLE_RESOLVED'; puzzleStatus = 'RESOLVED';
-    resolution = JSON.stringify(progress);
-  } else if (action === 'skip' && player.isHost && status === 'PUZZLE_OPEN' && match) {
-    // Abandon the current puzzle: anyone who already solved it this round
-    // is refunded, since "nobody scores" is the whole point of skipping.
-    const progress = parseProgress(resolution);
-    nextPlayers = refundSolvers(players, progress);
-    if (currentIndex >= match.puzzles.length - 1) { status = 'RESULTS'; resolution = null; }
-    else { currentIndex += 1; status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; resolution = JSON.stringify(EMPTY_PROGRESS); }
-    hints = {};
-  } else if (action === 'pause' && player.isHost && status === 'PUZZLE_OPEN') {
-    resolution = JSON.stringify(pauseProgress(parseProgress(resolution), now));
-  } else if (action === 'resume' && player.isHost && status === 'PUZZLE_OPEN') {
-    resolution = JSON.stringify(resumeProgress(parseProgress(resolution), now));
-  } else if (action === 'kick' && player.isHost) {
-    const targetId = String(input.targetId || '');
-    if (targetId === player.id) throw new Error('You cannot kick yourself.');
-    if (!players.some((item) => item.id === targetId)) throw new Error('That player is not in this room.');
-    nextPlayers = players.map((item) => item.id === targetId ? { ...item, left: true, ready: false } : item);
-  } else if (action === 'end' && player.isHost && (status === 'PUZZLE_OPEN' || status === 'PUZZLE_RESOLVED')) {
-    status = 'RESULTS'; resolution = null;
-  } else if (action === 'next' && player.isHost && status === 'PUZZLE_RESOLVED' && match) {
-    if (currentIndex >= match.puzzles.length - 1) status = 'RESULTS';
-    else { currentIndex += 1; status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; resolution = JSON.stringify(EMPTY_PROGRESS); hints = {}; }
-  } else if (action === 'rematch' && player.isHost && status === 'RESULTS') {
-    const blocked = unplayableReason(settings);
-    if (blocked) throw new Error(blocked);
-    match = createRecipe(settings, randomString(32)); currentIndex = 0; status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; resolution = JSON.stringify(EMPTY_PROGRESS); hints = {};
-    nextPlayers = players.map((item) => ({ ...item, score: 0, sitOutCurrent: false }));
-  } else if (action === 'lobby' && player.isHost) {
-    status = 'LOBBY'; puzzleStatus = 'WAITING'; match = null; currentIndex = 0; resolution = null; hints = {};
-    nextPlayers = players.map((item) => ({ ...item, ready: item.isHost, score: 0, sitOutCurrent: false }));
-  } else throw new Error('That action is not available right now.');
-
-  // Every successful action is proof of life -- record it so a room can
-  // eventually tell a stalled connection from a player who simply left.
-  nextPlayers = nextPlayers.map((item) => item.id === player.id ? { ...item, lastSeen: now } : item);
-
-  const result = await database().prepare(`UPDATE rooms SET status = ?, mode = ?, settings_json = ?, players_json = ?, match_json = ?, current_index = ?, puzzle_status = ?, resolution_json = ?, hint_state_json = ?, version = version + 1, last_activity = ?, expires_at = ? WHERE code = ? AND version = ?`)
-    .bind(status, room.mode, JSON.stringify(settings), JSON.stringify(nextPlayers), match ? JSON.stringify(match) : null, currentIndex, puzzleStatus, resolution, JSON.stringify(hints), now, now + ROOM_TTL, room.code, room.version).run();
-  if ((result.meta.changes || 0) !== 1) throw new Error('The room changed at the same moment. Please try again.');
-  return getRoom(room.code);
+/** Backs `GET /api/rooms/[code]/socket`. The incoming request is handed
+ * to the Durable Object exactly as it arrived -- the `Upgrade` header and
+ * the WebSocket handshake it carries are what actually matter, and only
+ * `RoomDO.fetch` knows how to turn that into an accepted, hibernatable
+ * connection. This function's own job is just the same index check every
+ * other entry point makes first. */
+export async function openRoomSocket(codeInput: string, request: Request) {
+  const code = cleanCode(codeInput);
+  await assertRoomAlive(code);
+  await touchRoom(code);
+  return getStub(code).fetch(request);
 }

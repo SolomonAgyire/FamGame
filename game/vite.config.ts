@@ -27,8 +27,15 @@ export default defineConfig(async () => {
         // alongside this inline config. Duplicating a value in both places
         // causes "specified multiple times" / "assigned to multiple
         // bindings" errors at deploy time.
+        //
+        // `main` points at this project's own `worker-entry.ts` rather than
+        // straight at `vinext/server/app-router-entry`: the Durable Object
+        // binding for the RoomDO class (wrangler.jsonc) needs a same-named
+        // export on whatever `main` resolves to, and vinext's own entry
+        // file can't be edited to add one. `worker-entry.ts` re-exports
+        // vinext's fetch handler unchanged and adds `RoomDO` alongside it.
         config: {
-          main: 'vinext/server/app-router-entry',
+          main: './worker-entry.ts',
         },
       }),
     ],

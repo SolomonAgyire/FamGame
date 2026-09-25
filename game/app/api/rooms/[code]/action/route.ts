@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getRoom, publicSnapshot, roomAction } from '@/lib/room-service';
+import { performRoomAction, RoomNotFoundError } from '@/lib/room-service';
 
 export async function POST(request: Request, { params }: { params: Promise<{ code: string }> }) {
   try {
@@ -7,12 +7,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ cod
     const body = await request.json() as Record<string, unknown>;
     const playerId = String(body.playerId || '');
     const token = request.headers.get('x-room-token') || '';
-    const room = await getRoom(code);
-    if (!room || room.expires_at < Date.now()) return NextResponse.json({ error: 'That room was not found or has expired.' }, { status: 404 });
-    const updated = await roomAction(room, playerId, token, body);
-    if (!updated) throw new Error('The room could not be reloaded.');
-    return NextResponse.json(publicSnapshot(updated, playerId));
+    return NextResponse.json(await performRoomAction(code, playerId, token, body));
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'The room action failed.' }, { status: 400 });
+    const status = error instanceof RoomNotFoundError ? 404 : 400;
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'The room action failed.' }, { status });
   }
 }
