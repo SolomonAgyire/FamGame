@@ -7,6 +7,7 @@ import { getEntryById, normalizeAnswer } from '@/lib/game-engine';
 import { dayKey, getProgressServerSnapshot, getProgressSnapshot, recordMatch, saveProgress, subscribeProgress } from '@/lib/progress';
 import { applyPlay, repairableStreak, repairStreak, REPAIR_PUZZLES, streakState, weekStrip } from '@/lib/streak';
 import { buildShareText, shareResult } from '@/lib/share';
+import { applyLetterHint, HINT_LABELS, hintsFor } from '@/lib/hints';
 import { scoreSolve } from '@/lib/scoring';
 import { showToast } from '@/lib/toast';
 import { playCorrect, playWrong } from '@/lib/audio';
@@ -15,7 +16,9 @@ import { LEVEL_NAMES } from '@/lib/types';
 /** Four goes at it, then the word is shown. Enough room to think, not so
  * much that the share card stops meaning anything. */
 const MAX_GUESSES = 4;
-const MAX_HINTS = 2;
+/** Three rungs, same ladder as every other mode: a letter, then where in
+ * the Bible it sits, then the citation. */
+const MAX_HINTS = 3;
 
 const NEVER_CHANGES = () => () => {};
 
@@ -141,6 +144,13 @@ export function DailyWord({ sound, onHome }: { sound: boolean; onHome: () => voi
   </section></main>;
 
   const assembled = placed.map((source) => daily.scramble[source]).join('');
+  const ladder = hintsFor(entry);
+  const nextHint = hints < MAX_HINTS ? ladder[hints] : undefined;
+  const takeHint = () => {
+    if (!nextHint) return;
+    if (nextHint.kind === 'letter') setPlaced(applyLetterHint(entry, placed, daily.scramble));
+    setHints(hints + 1);
+  };
   const levelName = LEVEL_NAMES[entry.level - 1];
   const value = scoreSolve({ letterCount: daily.scramble.length, level: entry.level, combo: 0, hintsUsed: hints });
 
@@ -251,10 +261,10 @@ export function DailyWord({ sound, onHome }: { sound: boolean; onHome: () => voi
         <span className="points-pill">{value} pts</span>
       </div>
       <TileBoard scramble={daily.scramble} placed={placed} setPlaced={setPlaced} />
-      {hints > 0 && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{entry.hints.slice(0, hints).map((hint) => <p key={hint}>{hint}</p>)}</div></div>}
+      {hints > 0 && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{ladder.slice(0, hints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
       <div className="game-actions">
         <button type="button" className="soft-button" onClick={() => setPlaced([])}>↻ Reset</button>
-        <button type="button" className="soft-button" disabled={hints >= MAX_HINTS} onClick={() => setHints(Math.min(MAX_HINTS, hints + 1))}>✦ Hint {hints}/{MAX_HINTS}</button>
+        <button type="button" className="soft-button" disabled={!nextHint} onClick={takeHint}>{nextHint ? `✦ Hint · ${HINT_LABELS[nextHint.kind]}` : '✦ Hints used'}</button>
         <button type="button" className="check-button" onClick={check}>Check answer</button>
         <button type="button" className="text-button" onClick={() => finish(false, Math.max(1, guesses))}>Give up</button>
       </div>

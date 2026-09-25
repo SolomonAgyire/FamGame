@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { createRecipe, getPuzzleEntry, normalizeAnswer, unplayableReason } from '@/lib/game-engine';
+import { hintsFor } from '@/lib/hints';
 import { scoreSolve } from '@/lib/scoring';
 import type { GameSettings, Level, MatchRecipe } from '@/lib/types';
 
@@ -144,7 +145,12 @@ export function publicSnapshot(room: RoomRow, viewerId: string) {
     version: room.version, viewerId, viewerHints,
     puzzle: recipePuzzle && entry ? {
       id: entry.id, scramble: recipePuzzle.scramble,
-      category: entry.categories[0], band: entry.band, hints: entry.hints,
+      // The full ladder, not the stored pair: the first rung names a
+      // character, so a room player buys the same three hints a solo
+      // player does. The answer itself is still never sent until the
+      // puzzle resolves.
+      category: entry.categories[0], band: entry.band,
+      hints: hintsFor(entry).map(({ kind, text }) => ({ kind, text })),
       display: resolved ? entry.display : undefined,
       reference: resolved ? entry.references[0] : undefined,
     } : null,
@@ -185,7 +191,7 @@ export async function roomAction(room: RoomRow, playerId: string, token: string,
     nextPlayers = players.map((item) => ({ ...item, score: 0 }));
     status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; currentIndex = 0; resolution = null; hints = {};
   } else if (action === 'hint' && status === 'PUZZLE_OPEN') {
-    hints[player.id] = Math.min(2, (hints[player.id] || 0) + 1);
+    hints[player.id] = Math.min(3, (hints[player.id] || 0) + 1);
   } else if (action === 'check' && status === 'PUZZLE_OPEN' && match) {
     const entry = getPuzzleEntry(match, currentIndex);
     if (!entry) throw new Error('The current puzzle could not be found.');

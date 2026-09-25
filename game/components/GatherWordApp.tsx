@@ -6,6 +6,7 @@ import { duckMusic, playCorrect, playWrong, startMusic, stopMusic } from '@/lib/
 import { showToast, subscribeToasts, type Toast } from '@/lib/toast';
 import type { Category, GameSettings, Level, MatchRecipe, PlayMode, PuzzleRecipe, Team } from '@/lib/types';
 import { LEVEL_NAMES } from '@/lib/types';
+import { applyLetterHint, HINT_LABELS, hintsFor, type HintKind } from '@/lib/hints';
 import { scoreSolve } from '@/lib/scoring';
 import { saveProgress, recordMatch, masteredCount, subscribeProgress, getProgressSnapshot, getProgressServerSnapshot } from '@/lib/progress';
 import { highestUnlocked } from '@/lib/levels';
@@ -38,7 +39,7 @@ type RoomPlayer = { id: string; name: string; isHost: boolean; ready: boolean; s
 type RoomSnapshot = {
   code: string; status: 'LOBBY' | 'PUZZLE_OPEN' | 'PUZZLE_RESOLVED' | 'RESULTS'; mode: 'individuals' | 'teams' | 'cooperative';
   settings: GameSettings; players: RoomPlayer[]; currentIndex: number; puzzleCount: number; version: number; viewerId: string; viewerHints: number;
-  puzzle: null | { id: string; scramble: string; category: Category; band: number; hints: [string, string]; display?: string; reference?: string };
+  puzzle: null | { id: string; scramble: string; category: Category; band: number; hints: { kind: HintKind; text: string }[]; display?: string; reference?: string };
   resolution: null | { solverId: string | null; solverName: string | null; award: number; revealed: boolean };
 };
 type Credentials = { code: string; token: string; playerId: string };
@@ -279,6 +280,16 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
     </div>
   </section></main>;
   const currentValue = scoreSolve({ letterCount: puzzle.scramble.length, level: entry.band, combo, hintsUsed: hints });
+  const ladder = hintsFor(entry);
+  const nextHint = ladder[hints];
+  // The first rung is spent on the board rather than in the hint box: a
+  // letter the player can see in its slot is worth more than a sentence
+  // telling them which letter it is.
+  const takeHint = () => {
+    if (!nextHint) return;
+    if (nextHint.kind === 'letter') setPlaced(applyLetterHint(entry, placed, puzzle.scramble));
+    setHints(hints + 1);
+  };
   const check = () => {
     if (mode === 'teams' && !claimedBy) { showToast('A team needs to claim this puzzle first.'); return; }
     if (placed.length !== puzzle.scramble.length) { showToast('Place every letter before checking.'); return; }
@@ -316,9 +327,9 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
     {mode === 'teams' && !resolved && <div className="claim-panel"><p>{claimedBy ? <><strong>{scores.find((team) => team.id === claimedBy)?.name}</strong> is building</> : 'Who knows it? Claim the puzzle.'}</p><div>{scores.map((team) => <button type="button" key={team.id} disabled={Boolean(claimedBy)} style={{ '--team-color': team.color } as React.CSSProperties} onClick={() => setClaimedBy(team.id)}>{claimedBy === team.id ? 'Building…' : `Claim · ${team.name}`}</button>)}{claimedBy && <button type="button" className="release" onClick={() => { setClaimedBy(null); setPlaced([]); }}>Release</button>}</div></div>}
     <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{entry.categories[0]} · {LEVEL_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Unscramble the answer'}</h1></div><span className="points-pill">{currentValue} pts</span></div>
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} locked={Boolean(resolved) || (mode === 'teams' && !claimedBy)} />
-      {hints > 0 && !resolved && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{entry.hints.slice(0, hints).map((hint) => <p key={hint}>{hint}</p>)}</div></div>}
+      {hints > 0 && !resolved && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{ladder.slice(0, hints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
       {resolved ? <div className="resolution"><span>{resolved.revealed ? 'The answer was' : 'Beautiful work!'}</span><strong>{entry.display}</strong><p>{entry.references[0]} · {resolved.award ? `+${resolved.award} points` : 'No points this time'}</p><button type="button" className="primary-button" onClick={next}>{index === recipe.puzzles.length - 1 ? 'See results' : 'Next puzzle'}</button></div>
-      : <div className="game-actions"><button type="button" className="soft-button" onClick={() => setPlaced([])}>↻ Reset</button><button type="button" className="soft-button" disabled={hints >= 2} onClick={() => setHints(Math.min(2, hints + 1))}>✦ Hint {hints}/2</button><button type="button" className="check-button" onClick={check}>Check answer</button><button type="button" className="text-button" onClick={reveal}>Reveal & continue</button></div>}
+      : <div className="game-actions"><button type="button" className="soft-button" onClick={() => setPlaced([])}>↻ Reset</button><button type="button" className="soft-button" disabled={!nextHint} onClick={takeHint}>{nextHint ? `✦ Hint · ${HINT_LABELS[nextHint.kind]}` : '✦ Hints used'}</button><button type="button" className="check-button" onClick={check}>Check answer</button><button type="button" className="text-button" onClick={reveal}>Reveal & continue</button></div>}
       <button type="button" className="quit-button" onClick={onHome}>End match</button>
     </section></main>;
 }
@@ -604,9 +615,9 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
   return <main className="game-shell"><div className="room-banner"><span>Room <strong>{snapshot.code}</strong></span><span>{error || '● Connected'}</span></div><div className="game-topbar"><div><span>Puzzle {snapshot.currentIndex + 1} of {snapshot.puzzleCount}</span><div className="progress"><i style={{ width: `${((snapshot.currentIndex + 1) / snapshot.puzzleCount) * 100}%` }} /></div></div><div className="score-strip">{onlineScores.map((side) => <span key={side.id}>{side.name} <strong key={side.score}>{side.score}</strong></span>)}</div></div>
     <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{puzzle.category} · {LEVEL_NAMES[puzzle.band - 1]}</p><h1>{snapshot.status === 'PUZZLE_RESOLVED' ? puzzle.display : 'Everyone is solving…'}</h1></div><span className="points-pill">{scoreSolve({ letterCount: puzzle.scramble.length, level: puzzle.band, combo: 0, hintsUsed: snapshot.viewerHints })} pts</span></div>
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} locked={snapshot.status !== 'PUZZLE_OPEN' || busy} />
-      {snapshot.viewerHints > 0 && snapshot.status === 'PUZZLE_OPEN' && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{puzzle.hints.slice(0, snapshot.viewerHints).map((hint) => <p key={hint}>{hint}</p>)}</div></div>}
+      {snapshot.viewerHints > 0 && snapshot.status === 'PUZZLE_OPEN' && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{puzzle.hints.slice(0, snapshot.viewerHints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
       {snapshot.status === 'PUZZLE_RESOLVED' ? <div className="resolution">{Boolean(snapshot.resolution?.award) && <Confetti key={snapshot.currentIndex} />}<span>{snapshot.resolution?.revealed ? 'The answer was' : `${snapshot.resolution?.solverName} solved it!`}</span><strong>{puzzle.display}</strong><p>{puzzle.reference} · {snapshot.resolution?.award ? `+${snapshot.resolution.award} points` : 'No points this time'}</p>{isHost ? <button type="button" className="primary-button" onClick={() => action({ action: 'next' })}>Next puzzle</button> : <p>Waiting for the host…</p>}</div>
-      : <div className="game-actions"><button className="soft-button" type="button" onClick={() => setPlaced([])}>↻ Reset</button><button className="soft-button" type="button" disabled={snapshot.viewerHints >= 2 || busy} onClick={() => action({ action: 'hint' })}>✦ Hint {snapshot.viewerHints}/2</button><button className="check-button" type="button" disabled={placed.length !== puzzle.scramble.length || busy} onClick={() => action({ action: 'check', answer })}>Check answer</button>{isHost && <button className="text-button" type="button" onClick={() => action({ action: 'reveal' })}>Host reveal</button>}</div>}
+      : <div className="game-actions"><button className="soft-button" type="button" onClick={() => setPlaced([])}>↻ Reset</button><button className="soft-button" type="button" disabled={snapshot.viewerHints >= puzzle.hints.length || busy} onClick={() => action({ action: 'hint' })}>{puzzle.hints[snapshot.viewerHints] ? `✦ Hint · ${HINT_LABELS[puzzle.hints[snapshot.viewerHints].kind]}` : '✦ Hints used'}</button><button className="check-button" type="button" disabled={placed.length !== puzzle.scramble.length || busy} onClick={() => action({ action: 'check', answer })}>Check answer</button>{isHost && <button className="text-button" type="button" onClick={() => action({ action: 'reveal' })}>Host reveal</button>}</div>}
       <button type="button" className="quit-button" onClick={leave}>Leave room</button>
     </section></main>;
 }

@@ -1,4 +1,5 @@
 import type { Category, Familiarity, Level, SourceRow, WordEntry } from '@/lib/types';
+import { hintsFor } from '@/lib/hints';
 import { draftPeopleRows, peopleRows } from '@/data/words/people';
 import { draftPlaceRows, placeRows } from '@/data/words/places';
 import { draftNationRows, nationRows, tribeRows } from '@/data/words/peoples';
@@ -42,14 +43,13 @@ export function difficultyScore(playable: string, familiarity: Familiarity): num
  * bear more replay; the hardest levels stay small and special. */
 export const LEVEL_TARGETS = [90, 90, 85, 80, 75, 70, 65, 55, 50] as const;
 
-const CATEGORY_LABEL: Record<Category, string> = {
-  book: 'Bible book', person: 'Bible person', place: 'Bible place',
-  tribe: 'tribe of Israel', nation: 'people or nation',
-};
-
 function makeEntries(category: Category, rows: SourceRow[], status: 'draft' | 'approved'): WordEntry[] {
   return rows.map(([display, reference, familiarity]) => {
     const playable = playableOf(display);
+    // The stored pair is the last two rungs of the shared ladder. The first
+    // rung places a letter on the board, so it is derived at play time from
+    // whatever the player has already built rather than baked in here.
+    const ladder = hintsFor({ categories: [category], references: [reference], playable });
     return {
       id: `${category}.${slug(display)}`,
       answer: playable,
@@ -59,10 +59,7 @@ function makeEntries(category: Category, rows: SourceRow[], status: 'draft' | 'a
       level: 1 as Level,
       familiarity,
       band: 1 as Level,
-      hints: [
-        `This answer is a ${CATEGORY_LABEL[category]}.`,
-        `It begins with ${playable[0]} and has ${playable.length} characters.`,
-      ],
+      hints: [ladder[1].text, ladder[2].text],
       references: [reference],
       verification: 'English NWT naming standard',
       status,
