@@ -1,4 +1,5 @@
 import { WORD_BANK } from '@/data/word-bank';
+import { LEVEL_NAMES } from '@/lib/types';
 import type { Category, DifficultyBand, GameSettings, Level, MatchRecipe, PuzzleRecipe, WordEntry } from '@/lib/types';
 
 const HISTORY_KEY = 'gatherword-match-history-v1';
@@ -52,6 +53,58 @@ export function eligibleWords(settings: GameSettings) {
   return wordsForLevel(settings.maxBand, settings.categories);
 }
 
+const CATEGORY_LABELS: Record<Category, string> = {
+  book: 'Bible Books', person: 'People', place: 'Places', tribe: 'Tribes', nation: 'Nations',
+};
+
+/** Why this combination cannot start a match, or null when it can. Since a
+ * match draws from exactly one level, a category set can run out: there is
+ * no approved Bible book at Eternity, for instance. An empty pool used to
+ * produce a match with no puzzles and a blank screen, so every entry point
+ * asks here first. */
+export function unplayableReason(settings: GameSettings): string | null {
+  if (settings.categories.length === 0) return 'Choose at least one word set.';
+  if (eligibleWords(settings).length > 0) return null;
+  const sets = settings.categories.map((category) => CATEGORY_LABELS[category]).join(' + ');
+  return `No words yet for ${sets} at ${LEVEL_NAMES[settings.maxBand - 1]}. Pick another level, or add a word set.`;
+}
+
+/** The next level above `band` that actually has words, or null when the
+ * chosen categories run out. Time Attack steps up through the levels and
+ * must not step into an empty one. */
+export function nextPlayableLevelAbove(band: Level, categories: Category[]): Level | null {
+  for (let level = band + 1; level <= 9; level += 1) {
+    if (wordsForLevel(level as Level, categories).length > 0) return level as Level;
+  }
+  return null;
+}
+
+/** The level a run should actually start at: `from` if it has words, else
+ * the nearest level above it, else the nearest below. Null only when the
+ * categories have no approved words at any level at all. */
+export function playableLevelFrom(from: Level, categories: Category[]): Level | null {
+  if (wordsForLevel(from, categories).length > 0) return from;
+  const above = nextPlayableLevelAbove(from, categories);
+  if (above) return above;
+  for (let level = from - 1; level >= 1; level -= 1) {
+    if (wordsForLevel(level as Level, categories).length > 0) return level as Level;
+  }
+  return null;
+}
+
+export type MatchStep = { index: number; finished: boolean; record: boolean };
+
+/** One step of a match's puzzle flow. `finished` is passed in rather than
+ * read from a closure because the auto-advance timer fires a callback
+ * captured before the match ended -- reading a stale `finished` there is
+ * what let the last puzzle record the same match twice. `record` is true
+ * exactly once per match. */
+export function advanceMatch(state: { index: number; total: number; finished: boolean }): MatchStep {
+  if (state.finished) return { index: state.index, finished: true, record: false };
+  if (state.index >= state.total - 1) return { index: state.index, finished: true, record: true };
+  return { index: state.index + 1, finished: false, record: false };
+}
+
 /** A shuffled, freshly-scrambled queue of every word at one band, for a
  * level that should never repeat a word within a run. */
 export function buildLevelQueue(band: DifficultyBand, categories: Category[]): PuzzleRecipe[] {
@@ -99,16 +152,38 @@ function secureSeed() {
   return Array.from(values, (value) => value.toString(36)).join('-');
 }
 
+/** Both sides of the history round-trip are guarded. Reaching
+ * `globalThis.localStorage` can itself throw (older Safari private mode,
+ * an embedded frame with storage access blocked), and `setItem` throws on
+ * a full quota. Not repeating a recent match is a nicety; creating one
+ * must never fail, so a blocked store just means no history. */
+function readHistory(): string[] {
+  try {
+    const raw = (globalThis as { localStorage?: Storage }).localStorage?.getItem(HISTORY_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed as string[] : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeHistory(signatures: string[]): void {
+  try {
+    (globalThis as { localStorage?: Storage }).localStorage?.setItem(HISTORY_KEY, JSON.stringify(signatures));
+  } catch {
+    /* blocked or full -- the match is already made, so there is nothing to recover */
+  }
+}
+
 export function createFreshRecipe(settings: GameSettings) {
-  let history: string[] = [];
-  try { history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { history = []; }
+  const history = readHistory();
   let recipe = createRecipe(settings, secureSeed());
   let attempts = 0;
   while (history.includes(recipe.signature) && attempts < 40) {
     recipe = createRecipe(settings, secureSeed());
     attempts += 1;
   }
-  localStorage.setItem(HISTORY_KEY, JSON.stringify([recipe.signature, ...history.filter((value) => value !== recipe.signature)].slice(0, 1000)));
+  writeHistory([recipe.signature, ...history.filter((value) => value !== recipe.signature)].slice(0, 1000));
   return recipe;
 }
 
