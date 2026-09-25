@@ -1,5 +1,6 @@
 import type { Category, Familiarity, Level, SourceRow, WordEntry } from '@/lib/types';
 import { draftPeopleRows, peopleRows } from '@/data/words/people';
+import { draftPlaceRows, placeRows } from '@/data/words/places';
 
 export type { SourceRow };
 
@@ -23,20 +24,6 @@ const books: SourceRow[] = [
   ['Jude', 'Jude 1:1', 1], ['Revelation', 'Revelation 1:1', 0],
 ];
 
-
-const places: SourceRow[] = [
-  ['Eden', 'Genesis 2:8', 0], ['Ararat', 'Genesis 8:4', 1], ['Babel', 'Genesis 11:9', 1], ['Ur', 'Genesis 11:31', 2],
-  ['Canaan', 'Genesis 12:5', 0], ['Egypt', 'Genesis 12:10', 0], ['Goshen', 'Genesis 47:1', 2], ['Sinai', 'Exodus 19:1', 0],
-  ['Midian', 'Exodus 2:15', 3], ['Jericho', 'Joshua 2:1', 0], ['Hebron', 'Joshua 10:36', 1], ['Shechem', 'Joshua 17:7', 2],
-  ['Bethel', 'Genesis 28:19', 1], ['Ai', 'Joshua 7:2', 2], ['Jerusalem', '2 Samuel 5:5', 0], ['Bethlehem', 'Micah 5:2', 0],
-  ['Nazareth', 'Matthew 2:23', 0], ['Galilee', 'Matthew 2:22', 0], ['Samaria', 'John 4:4', 1], ['Judea', 'Matthew 2:1', 1],
-  ['Jordan', 'Matthew 3:5', 0], ['Gethsemane', 'Matthew 26:36', 1], ['Golgotha', 'Matthew 27:33', 1], ['Bethany', 'John 11:1', 1],
-  ['Carmel', '1 Kings 18:19', 1], ['Nineveh', 'Jonah 1:2', 1], ['Babylon', '2 Kings 24:1', 0], ['Shushan', 'Esther 1:2', 3],
-  ['Moab', 'Ruth 1:1', 1], ['Edom', 'Genesis 36:1', 1], ['Damascus', 'Acts 9:2', 0], ['Antioch', 'Acts 11:26', 1],
-  ['Corinth', 'Acts 18:1', 1], ['Ephesus', 'Acts 18:19', 1], ['Philippi', 'Acts 16:12', 1], ['Rome', 'Acts 28:14', 0],
-  ['Malta', 'Acts 28:1', 1], ['Patmos', 'Revelation 1:9', 1], ['Tarsus', 'Acts 9:11', 2], ['Joppa', 'Acts 9:36', 2],
-  ['Caesarea', 'Acts 10:1', 1],
-];
 
 const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
@@ -108,7 +95,8 @@ export const WORD_BANK: WordEntry[] = assignLevels([
   ...makeEntries('book', books, 'approved'),
   ...makeEntries('person', peopleRows, 'approved'),
   ...makeEntries('person', draftPeopleRows, 'draft'),
-  ...makeEntries('place', places, 'approved'),
+  ...makeEntries('place', placeRows, 'approved'),
+  ...makeEntries('place', draftPlaceRows, 'draft'),
 ]);
 
 export const WORD_BANK_VERSION = '2026.09.17-1';
