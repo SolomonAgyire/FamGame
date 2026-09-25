@@ -573,3 +573,113 @@ footer {
 .unlock-key { font-size: 26px; }
 .unlock-banner strong { font-family: var(--font-display); font-size: 19px; }
 .unlock-banner small { opacity: .9; font-size: 12px; font-weight: 600; }
+
+/* ============================================================
+   Phase B — the habit loop: streak header, week strip, the
+   Daily Word tile and its result card. Same vocabulary as the
+   rest of the app: 999px pills, a hard offset shadow that
+   flattens on :active, Fredoka for anything that shouts.
+   ============================================================ */
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+/* The first thing on the home screen: what the player stands to lose. */
+.streak-header {
+  display: flex; width: 100%; flex-direction: column; align-items: center; gap: 12px;
+  padding: 14px 16px; border-radius: 24px;
+  background: var(--surface); border: 1px solid var(--line);
+  box-shadow: 0 4px 0 #e8dcbc;
+}
+.streak-row { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.streak-flame { font-size: 26px; line-height: 1; }
+.streak-flame.live { filter: none; animation: flame-breathe 2.4s ease-in-out infinite; }
+/* A cold flame is not a scolding -- it is just waiting. */
+.streak-flame.cold { filter: grayscale(1); opacity: .45; }
+@keyframes flame-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+.streak-count { display: flex; align-items: baseline; gap: 6px; }
+.streak-count strong { font-family: var(--font-display); font-weight: 600; font-size: 28px; line-height: 1; color: var(--ink); }
+.streak-count small { color: var(--muted); font-size: 12px; font-weight: 700; }
+.freeze-pill, .best-pill {
+  border-radius: 999px; padding: 5px 11px; font-size: 12px; font-weight: 700; white-space: nowrap;
+}
+.freeze-pill { background: linear-gradient(180deg, #d5eefc, #b6e0f7); color: var(--sky-deep); box-shadow: 0 3px 0 var(--sky-deep); }
+.best-pill { background: var(--surface2); color: var(--muted); border: 1px solid var(--line); }
+
+.week-strip { display: flex; width: 100%; justify-content: space-between; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.week-dot { display: flex; flex: 1; flex-direction: column; align-items: center; gap: 4px; }
+.week-dot i {
+  display: block; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--surface2); border: 1px solid var(--line);
+}
+.week-dot.played i { background: linear-gradient(180deg, #7be0a0, var(--grass)); border-color: var(--grass-deep); box-shadow: 0 2px 0 var(--grass-deep); }
+.week-dot.today i { outline: 2px solid var(--sun-deep); outline-offset: 2px; }
+.week-dot small { color: var(--muted); font-size: 10px; font-weight: 700; }
+
+/* A broken streak is winnable back, so it gets a button, not a sad note. */
+.repair-banner {
+  display: flex; width: 100%; flex-direction: column; align-items: center; gap: 3px;
+  padding: 12px 16px; border: none; border-radius: 20px; text-align: center;
+  background: linear-gradient(180deg, #ff97a8, var(--berry)); color: #fff;
+  box-shadow: 0 4px 0 var(--berry-deep);
+  transition: transform .08s ease, box-shadow .08s ease;
+}
+.repair-banner:active { transform: translateY(4px); box-shadow: 0 0 0 var(--berry-deep); }
+.repair-banner strong { font-family: var(--font-display); font-weight: 600; font-size: 15px; }
+.repair-banner small { font-size: 11px; font-weight: 700; opacity: .92; }
+.repair-meter { display: block; width: 100%; height: 6px; margin-top: 5px; border-radius: 999px; background: rgba(255,255,255,.4); overflow: hidden; }
+.repair-meter i { display: block; height: 100%; background: #fff; transition: width .25s ease; }
+
+/* The Daily Word tile spans the grid -- it is the reason to open the app,
+   not one option among five. */
+.daily-tile { grid-column: 1 / -1; }
+.daily-tile .mode-tile-main { min-height: 0; padding: 16px 52px 16px 16px; flex-direction: row; justify-content: flex-start; text-align: left; gap: 12px; }
+.daily-tile .mode-tile-main > span { flex: none; }
+.daily-tile strong { display: block; }
+.mode-sub { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 600; line-height: 1.4; }
+.mode-tile.active .mode-sub { color: var(--sun-ink); opacity: .85; }
+.mode-tint-sun .mode-icon { background: #fff0cf; }
+.mode-badge {
+  position: absolute; top: 10px; right: 10px; border-radius: 999px;
+  background: var(--surface2); border: 1px solid var(--line); color: var(--muted);
+  padding: 3px 9px; font-size: 11px; font-weight: 700;
+}
+.mode-tile.active .mode-badge { background: rgba(255,255,255,.55); border-color: transparent; color: var(--sun-ink); }
+.mode-dot {
+  position: absolute; top: 6px; right: 6px; width: 11px; height: 11px; border-radius: 50%;
+  background: var(--berry); border: 2px solid var(--surface);
+  animation: flame-breathe 2s ease-in-out infinite;
+}
+
+/* The result card, shown once the day is spent. */
+.daily-done { padding: 24px 20px; max-width: 460px; margin: auto; }
+.daily-done .streak-header { margin: 18px 0 10px; }
+.daily-scoreline { display: grid; margin: 18px 0 10px; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.daily-scoreline div { border-radius: 18px; background: var(--surface2); border: 1px solid var(--line); padding: 12px 8px; text-align: center; }
+.daily-scoreline strong { display: block; font-family: var(--font-display); font-weight: 600; font-size: 22px; color: var(--ink); }
+.daily-scoreline span { display: block; color: var(--muted); font-size: 11px; font-weight: 700; }
+.daily-note { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; text-align: center; }
+.daily-note strong { color: var(--ink); font-family: var(--font-display); font-weight: 600; }
+.daily-tomorrow { margin: 10px 0 18px; color: var(--muted); font-size: 12px; font-weight: 700; text-align: center; }
+
+/* Milestones are rare enough to earn the same treatment as unlocking a
+   level: a full-width banner, not a line of text. */
+.milestone-banner {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  margin: 0 0 18px; padding: 16px; border-radius: 22px;
+  background: linear-gradient(180deg, #ffd876, var(--sun)); color: var(--sun-ink);
+  box-shadow: 0 4px 0 var(--sun-deep);
+  animation: celebration-pop .4s cubic-bezier(.34,1.56,.64,1);
+}
+.milestone-spark { font-size: 26px; }
+.milestone-banner strong { font-family: var(--font-display); font-size: 19px; }
+.milestone-banner small { opacity: .85; font-size: 12px; font-weight: 600; }
+
+@media (max-width: 400px) {
+  .streak-header { padding: 12px; gap: 10px; }
+  .week-dot i { width: 19px; height: 19px; }
+  .daily-tile .mode-tile-main { padding: 14px 46px 14px 12px; gap: 10px; }
+  .daily-scoreline strong { font-size: 19px; }
+}

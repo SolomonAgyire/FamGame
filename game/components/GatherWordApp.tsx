@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { advanceMatch, buildLevelQueue, createFreshRecipe, eligibleWords, getEntryById, getPuzzleEntry, nextPlayableLevelAbove, normalizeAnswer, playableLevelFrom, unplayableReason } from '@/lib/game-engine';
-import { duckMusic, playCorrect, playTap, playWrong, startMusic, stopMusic } from '@/lib/audio';
+import { duckMusic, playCorrect, playWrong, startMusic, stopMusic } from '@/lib/audio';
 import { showToast, subscribeToasts, type Toast } from '@/lib/toast';
 import type { Category, GameSettings, Level, MatchRecipe, PlayMode, PuzzleRecipe, Team } from '@/lib/types';
 import { LEVEL_NAMES } from '@/lib/types';
@@ -10,6 +10,9 @@ import { scoreSolve } from '@/lib/scoring';
 import { saveProgress, recordMatch, masteredCount, subscribeProgress, getProgressSnapshot, getProgressServerSnapshot } from '@/lib/progress';
 import { highestUnlocked } from '@/lib/levels';
 import { LevelPath } from '@/components/LevelPath';
+import { TileBoard } from '@/components/TileBoard';
+import { DailyWord, StreakHeader, useHydrated } from '@/components/DailyWord';
+import { dailyPuzzleFor } from '@/lib/daily';
 
 function ToastHost() {
   const [toasts, setToasts] = useState<(Toast & { leaving?: boolean })[]>([]);
@@ -29,7 +32,7 @@ function ToastHost() {
   </div>;
 }
 
-type EntryMode = 'solo' | 'together' | 'online' | 'timeattack';
+type EntryMode = 'solo' | 'together' | 'online' | 'timeattack' | 'daily';
 type Screen = 'home' | 'setup' | 'online-entry' | 'online-lobby';
 type RoomPlayer = { id: string; name: string; isHost: boolean; ready: boolean; score: number; joinedAt: number; teamId?: 'sun' | 'olive' };
 type RoomSnapshot = {
@@ -50,7 +53,7 @@ function Header({ onHome, sound, setSound }: { onHome: () => void; sound: boolea
   </header>;
 }
 
-function HomeScreen({ mode, setMode, start, level, setLevel, blocked }: { mode: EntryMode; setMode: (mode: EntryMode) => void; start: () => void; level: Level; setLevel: (level: Level) => void; blocked: string | null }) {
+function HomeScreen({ mode, setMode, start, level, setLevel, blocked, dailyNumber, dailyDone }: { mode: EntryMode; setMode: (mode: EntryMode) => void; start: () => void; level: Level; setLevel: (level: Level) => void; blocked: string | null; dailyNumber: number | null; dailyDone: boolean }) {
   const [expanded, setExpanded] = useState<EntryMode | null>(null);
   const modes = [
     { id: 'solo' as const, title: 'Solo Journey', icon: '🧩', tint: 'sky', detail: 'Play by yourself, at your own pace. No timer, no pressure.' },
@@ -65,10 +68,22 @@ function HomeScreen({ mode, setMode, start, level, setLevel, blocked }: { mode: 
   const stopped = Boolean(blocked) && (mode === 'solo' || mode === 'together');
   return <main className="home-shell">
     <section className="home-grid">
+      <StreakHeader />
       <h1 className="hero-title">Unscramble the word</h1>
       <p className="hero-copy">Bible books, people, and places. Play solo, pass the phone around, or invite a room.</p>
       <SamplePuzzle />
       <div className="mode-grid" role="radiogroup" aria-label="Choose how to play">
+        {/* The Daily Word is the habit, so it sits across the top and is
+            never gated by a level -- there is nothing to unlock. */}
+        <div className={`mode-tile mode-tint-sun daily-tile ${mode === 'daily' ? 'active' : ''}`}>
+          <button type="button" role="radio" aria-checked={mode === 'daily'} onClick={() => setMode('daily')} className="mode-tile-main">
+            <span className="mode-icon" aria-hidden="true">☀️</span>
+            <strong>Daily Word</strong>
+            <small className="mode-sub">One word a day, the same one for everyone.</small>
+          </button>
+          {dailyNumber !== null && <span className="mode-badge">#{dailyNumber}</span>}
+          {dailyNumber !== null && !dailyDone && <i className="mode-dot" aria-label="Not played yet" />}
+        </div>
         {modes.map((item) => <div key={item.id} className={`mode-tile mode-tint-${item.tint} ${mode === item.id ? 'active' : ''} ${expanded === item.id ? 'expanded' : ''}`}>
           <button type="button" role="radio" aria-checked={mode === item.id} onClick={() => setMode(item.id)} className="mode-tile-main">
             <span className="mode-icon" aria-hidden="true">{item.icon}</span><strong>{item.title}</strong>
@@ -79,7 +94,7 @@ function HomeScreen({ mode, setMode, start, level, setLevel, blocked }: { mode: 
       </div>
       <LevelPath selected={level} onSelect={setLevel} />
       {stopped && <p className="field-help warn" role="status">{blocked}</p>}
-      <button type="button" className="primary-button hero-button" disabled={stopped} onClick={start}>Start {modeTitle} · {LEVEL_NAMES[level - 1]}</button>
+      <button type="button" className="primary-button hero-button" disabled={stopped} onClick={start}>{mode === 'daily' ? (dailyDone ? "See today's result" : 'Play the Daily Word') : `Start ${modeTitle} · ${LEVEL_NAMES[level - 1]}`}</button>
       <p className="free-note">No account needed. No timer. Free to play.</p>
     </section>
   </main>;
@@ -137,19 +152,6 @@ function SetupScreen({ entryMode, settings, setSettings, togetherMode, setTogeth
     <SettingsPanel settings={settings} setSettings={setSettings} />
     <button className="primary-button full-button" type="button" disabled={Boolean(unplayableReason(settings))} onClick={start}>Create fresh match</button>
   </section></main>;
-}
-
-function TileBoard({ scramble, placed, setPlaced, locked }: { scramble: string; placed: number[]; setPlaced: (placed: number[]) => void; locked?: boolean }) {
-  // Numbered-book prefixes (e.g. "1 John") are never shown as a tile while
-  // solving -- the puzzle is just the base word. The full name still shows
-  // on the resolution/results screen from `entry.display`.
-  const available = scramble.split('').map((letter, index) => ({ letter, index })).filter((item) => !placed.includes(item.index));
-  return <div className="board"><div className="answer-area" aria-label="Your answer">
-    {scramble.split('').map((_, slot) => {
-      const sourceIndex = placed[slot];
-      return sourceIndex === undefined ? <span className="answer-slot" key={slot} /> : <button type="button" disabled={locked} className="letter-tile placed" key={slot} onClick={() => { playTap(); setPlaced(placed.filter((__, index) => index !== slot)); }}>{scramble[sourceIndex]}</button>;
-    })}
-  </div><div className="scramble-area" aria-label="Available letters">{available.map((item) => <button type="button" disabled={locked} className="letter-tile" key={item.index} onClick={() => { playTap(); setPlaced([...placed, item.index]); }}>{item.letter}</button>)}</div></div>;
 }
 
 const CONFETTI_COLORS = ['var(--sun)', 'var(--grass)', 'var(--sky)', 'var(--berry)', 'var(--violet)'];
@@ -664,15 +666,24 @@ export default function GatherWordApp() {
   }, [sound]);
   useEffect(() => { if (!sound) stopMusic(); }, [sound]);
   const [timeAttackActive, setTimeAttackActive] = useState(false);
-  const home = () => { setLocalMode(null); setTimeAttackActive(false); setScreen('home'); };
-  const startEntry = () => { if (entryMode === 'online') setScreen('online-entry'); else if (entryMode === 'timeattack') setTimeAttackActive(true); else setScreen('setup'); };
+  const [dailyActive, setDailyActive] = useState(false);
+  // Today's number and whether it is done drive the badge on the home tile.
+  // Both are date-dependent, so they stay hidden until hydration rather
+  // than rendering a server guess the client then contradicts.
+  const hydrated = useHydrated();
+  const [today] = useState(() => new Date());
+  const dailyKey = useMemo(() => dailyPuzzleFor(today), [today]);
+  const dailyDone = progress.daily?.day === dailyKey.dayKey;
+  const home = () => { setLocalMode(null); setTimeAttackActive(false); setDailyActive(false); setScreen('home'); };
+  const startEntry = () => { if (entryMode === 'online') setScreen('online-entry'); else if (entryMode === 'timeattack') setTimeAttackActive(true); else if (entryMode === 'daily') setDailyActive(true); else setScreen('setup'); };
   const startLocal = () => { setLocalGameKey((value) => value + 1); setLocalMode(entryMode === 'solo' ? 'solo' : togetherMode); };
   const connect = (value: Credentials) => { setCredentials(value); sessionStorage.setItem('gatherword-room', JSON.stringify(value)); setScreen('online-lobby'); };
   const leave = () => { setCredentials(null); sessionStorage.removeItem('gatherword-room'); history.replaceState({}, '', window.location.pathname); setScreen('online-entry'); };
   return <div className="app"><Header onHome={home} sound={sound} setSound={setSound} />
-    {timeAttackActive ? <TimeAttackGame key={localGameKey} categories={settings.categories} sound={sound} onHome={home} />
+    {dailyActive ? <DailyWord sound={sound} onHome={home} />
+    : timeAttackActive ? <TimeAttackGame key={localGameKey} categories={settings.categories} sound={sound} onHome={home} />
     : localMode ? <LocalGame key={localGameKey} mode={localMode} settings={settings} teams={teams} sound={sound} onHome={home} onChangeSet={() => { setLocalMode(null); setScreen('setup'); }} />
-    : screen === 'home' ? <HomeScreen mode={entryMode} setMode={setEntryMode} start={startEntry} level={level} setLevel={setLevel} blocked={unplayableReason(settings)} />
+    : screen === 'home' ? <HomeScreen mode={entryMode} setMode={setEntryMode} start={startEntry} level={level} setLevel={setLevel} blocked={unplayableReason(settings)} dailyNumber={hydrated ? dailyKey.number : null} dailyDone={dailyDone} />
     : screen === 'setup' ? <SetupScreen entryMode={entryMode} settings={settings} setSettings={setSettings} togetherMode={togetherMode} setTogetherMode={setTogetherMode} teams={teams} setTeams={setTeams} start={startLocal} back={home} />
     : screen === 'online-entry' ? <OnlineEntry onBack={home} onConnected={connect} initialCode={initialCode} />
     : credentials ? <OnlineRoom credentials={credentials} leave={leave} sound={sound} /> : null}

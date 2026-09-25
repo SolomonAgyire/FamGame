@@ -11,6 +11,11 @@ export type LevelProgress = {
   attempts: number;
 };
 
+/** What the player did on one Daily Word. Stored so the day cannot be
+ * replayed for a second streak day, and so the share card survives a
+ * reload. It never holds the answer. */
+export type DailyResult = { day: string; solved: boolean; guesses: number; hintsUsed: number; points: number };
+
 export type ProgressRecord = {
   version: 1;
   lifetimePoints: number;
@@ -27,6 +32,8 @@ export type ProgressRecord = {
   streak: { current: number; best: number; lastPlayedDay: string | null; freezes: number };
   /** Day keys played, newest first, capped at 60. */
   daysPlayed: string[];
+  /** The most recent Daily Word result, or null before the first one. */
+  daily: DailyResult | null;
 };
 
 export function emptyProgress(): ProgressRecord {
@@ -40,6 +47,7 @@ export function emptyProgress(): ProgressRecord {
     levelProgress: {},
     streak: { current: 0, best: 0, lastPlayedDay: null, freezes: 0 },
     daysPlayed: [],
+    daily: null,
   };
 }
 
@@ -89,6 +97,10 @@ function migrate(parsed: Record<string, unknown>): ProgressRecord {
     };
   }
   const streak = plainRecord<unknown>(parsed.streak);
+  // Fields are listed one by one rather than spread, so a stored record
+  // cannot smuggle in a key this build does not understand. The cost is
+  // that a field added here and forgotten below is dropped on every load.
+  const daily = plainRecord<unknown>(parsed.daily);
   return {
     version: 1,
     lifetimePoints: numberOr(parsed.lifetimePoints, 0),
@@ -104,6 +116,13 @@ function migrate(parsed: Record<string, unknown>): ProgressRecord {
       freezes: numberOr(streak.freezes, base.streak.freezes),
     },
     daysPlayed: Array.isArray(parsed.daysPlayed) ? parsed.daysPlayed.filter((day): day is string => typeof day === 'string') : [],
+    daily: typeof daily.day === 'string' ? {
+      day: daily.day,
+      solved: daily.solved === true,
+      guesses: numberOr(daily.guesses, 0),
+      hintsUsed: numberOr(daily.hintsUsed, 0),
+      points: numberOr(daily.points, 0),
+    } : null,
   };
 }
 
