@@ -92,7 +92,6 @@ export const placeRows: SourceRow[] = [
   ['Cappadocia', '1 Peter 1:1', 3], ['Smyrna', 'Revelation 2:8', 2], ['Pergamum', 'Revelation 2:12', 3], ['Thyatira', 'Revelation 2:18', 3],
   ['Sardis', 'Revelation 3:1', 3], ['Philadelphia', 'Revelation 3:7', 2], ['Laodicea', 'Revelation 3:14', 2],
   ['Asshur', 'Ezekiel 27:23', 4], ['Tigris', 'Daniel 10:4', 2], ['Memphis', 'Hosea 9:6', 3],
-  ['Phoenicia', 'Acts 11:19', 3],
 ];
 
 /** No place rows are awaiting review: the three that were held back
