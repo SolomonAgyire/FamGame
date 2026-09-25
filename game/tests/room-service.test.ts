@@ -11,7 +11,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   activePlayers, applyCorrectSolve, applyWrongSolve, EMPTY_PROGRESS, eligiblePlayers,
-  MAX_PLAYERS, MAX_SPECTATORS, roleForJoin, shouldCloseWindow,
+  MAX_PLAYERS, MAX_SPECTATORS, pauseProgress, refundSolvers, resumeProgress, roleForJoin, shouldCloseWindow,
   type PuzzleProgress, type RoomPlayer,
 } from '../lib/room-rules';
 import { SOLVE_WINDOW_MS } from '../lib/room-scoring';
@@ -151,4 +151,48 @@ test('reconnecting mid-round does not disturb any other player\'s score', () => 
     if (item.id === 'p0') continue;
     assert.equal(item.score, before.get(item.id), `${item.id}'s score must be untouched by someone else's solve`);
   }
+});
+
+test('a kicked player is excluded from every seat and eligibility count', () => {
+  const kicked = [makePlayer({ id: 'p0' }), makePlayer({ id: 'p1', left: true })];
+  assert.deepEqual(activePlayers(kicked).map((item) => item.id), ['p0']);
+  assert.deepEqual(eligiblePlayers(kicked).map((item) => item.id), ['p0']);
+  assert.equal(roleForJoin(makeRoom(MAX_PLAYERS).map((player, index) => index === 0 ? { ...player, left: true } : player)), 'player');
+});
+
+test('a late joiner sits out the puzzle already in progress', () => {
+  // room-service.ts marks a joiner sitOutCurrent when the room is not in
+  // LOBBY -- once that is set, they must not count toward the puzzle
+  // that was already live when they arrived.
+  const lateJoiner = makePlayer({ id: 'late', sitOutCurrent: true });
+  const players = [...makeRoom(2), lateJoiner];
+  assert.equal(eligiblePlayers(players).length, 2, 'the late joiner does not shrink or grow this round\'s denominator');
+  const outcome = applyCorrectSolve({ players, progress: { ...EMPTY_PROGRESS }, mode: 'individuals', playerId: 'p0', playerName: 'p0', base: 10, now: 0 });
+  const secondSolve = applyCorrectSolve({ players: outcome.players, progress: outcome.progress, mode: 'individuals', playerId: 'p1', playerName: 'p1', base: 10, now: 100 });
+  assert.equal(secondSolve.resolved, true, 'the puzzle resolves once both real players have gone, without waiting on the late joiner');
+});
+
+test('pausing freezes the window and resuming shifts it forward by the pause duration', () => {
+  const open: PuzzleProgress = { ...EMPTY_PROGRESS, firstSolveAt: 1000 };
+  const paused = pauseProgress(open, 2000);
+  assert.equal(paused.paused, true);
+  assert.equal(pauseProgress(paused, 5000).pausedAt, 2000, 'pausing an already-paused puzzle is a no-op');
+  const resumed = resumeProgress(paused, 6000);
+  assert.equal(resumed.paused, false);
+  assert.equal(resumed.firstSolveAt, 1000 + (6000 - 2000), 'the four seconds spent paused must not count against the window');
+  assert.equal(resumeProgress(resumed, 9000), resumed, 'resuming a puzzle that is not paused is a no-op');
+});
+
+test('skipping a puzzle refunds anyone it already paid, and leaves everyone else untouched', () => {
+  const players = [makePlayer({ id: 'p0', score: 15 }), makePlayer({ id: 'p1', score: 3 })];
+  const progress: PuzzleProgress = { ...EMPTY_PROGRESS, solvers: [{ solverId: 'p0', solverName: 'p0', award: 10, position: 1 }] };
+  const refunded = refundSolvers(players, progress);
+  assert.equal(refunded.find((item) => item.id === 'p0')?.score, 5, 'the 10 points this puzzle paid must come back out');
+  assert.equal(refunded.find((item) => item.id === 'p1')?.score, 3, 'a player who did not solve this puzzle is untouched');
+});
+
+test('refunding never sends a score below zero', () => {
+  const players = [makePlayer({ id: 'p0', score: 4 })];
+  const progress: PuzzleProgress = { ...EMPTY_PROGRESS, solvers: [{ solverId: 'p0', solverName: 'p0', award: 10, position: 1 }] };
+  assert.equal(refundSolvers(players, progress)[0].score, 0);
 });

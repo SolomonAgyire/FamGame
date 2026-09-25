@@ -564,6 +564,8 @@ legend { margin-bottom: 4px; font-size: 15px; font-weight: 700; color: var(--ink
 .leave-button { display: block; margin: 22px auto 0; }
 .room-banner { display: flex; margin: 0 auto 10px; justify-content: space-between; color: var(--muted); font-size: 12px; }
 .room-banner strong { letter-spacing: .1em; color: var(--sun-deep); }
+.host-controls { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 auto 10px; }
+.host-controls .soft-button { min-height: 36px; padding: 0 12px; font-size: 12px; }
 
 footer {
   display: flex; max-width: 720px; margin: auto; padding: 16px 20px 26px;

@@ -4,7 +4,7 @@ import { hintsFor } from '@/lib/hints';
 import { scoreSolve } from '@/lib/scoring';
 import {
   activePlayers, applyCorrectSolve, applyWrongSolve, EMPTY_PROGRESS, eligiblePlayers,
-  roleForJoin, shouldCloseWindow,
+  pauseProgress, refundSolvers, resumeProgress, roleForJoin, shouldCloseWindow,
   type PuzzleProgress, type RoomMode, type RoomPlayer,
 } from '@/lib/room-rules';
 import type { GameSettings, Level, MatchRecipe } from '@/lib/types';
@@ -134,7 +134,6 @@ export async function joinRoom(codeInput: string, nameInput: string) {
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const room = await getRoom(code);
     if (!room || room.expires_at < Date.now()) throw new Error('That room was not found or has expired.');
-    if (room.status !== 'LOBBY') throw new Error('That match has already started.');
     const players = JSON.parse(room.players_json) as RoomPlayer[];
     // Past the player cap, a joiner is not refused outright -- they come in
     // as a spectator instead, watching and getting live snapshots but not
@@ -145,9 +144,13 @@ export async function joinRoom(codeInput: string, nameInput: string) {
     const token = randomString(42);
     const sunCount = players.filter((item) => item.teamId === 'sun').length;
     const oliveCount = players.filter((item) => item.teamId === 'olive').length;
+    // Ungated online rooms stay ungated even mid-match: joining is allowed
+    // any time, not just in the lobby. A joiner who lands while a puzzle is
+    // already open just sits that one out and plays from the next.
+    const sitOutCurrent = role === 'player' && room.status !== 'LOBBY';
     const player: RoomPlayer = {
       id: crypto.randomUUID(), name, tokenHash: await digest(token), isHost: false, ready: role === 'spectator', score: 0,
-      role, joinedAt: now, lastSeen: now, left: false, sitOutCurrent: false,
+      role, joinedAt: now, lastSeen: now, left: false, sitOutCurrent,
       ...(role === 'player' && room.mode === 'teams' ? { teamId: sunCount <= oliveCount ? 'sun' as const : 'olive' as const } : {}),
     };
     const result = await database().prepare('UPDATE rooms SET players_json = ?, version = version + 1, last_activity = ?, expires_at = ? WHERE code = ? AND version = ?')
@@ -268,6 +271,25 @@ export async function roomAction(room: RoomRow, playerId: string, token: string,
     progress.revealed = true;
     status = 'PUZZLE_RESOLVED'; puzzleStatus = 'RESOLVED';
     resolution = JSON.stringify(progress);
+  } else if (action === 'skip' && player.isHost && status === 'PUZZLE_OPEN' && match) {
+    // Abandon the current puzzle: anyone who already solved it this round
+    // is refunded, since "nobody scores" is the whole point of skipping.
+    const progress = parseProgress(resolution);
+    nextPlayers = refundSolvers(players, progress);
+    if (currentIndex >= match.puzzles.length - 1) { status = 'RESULTS'; resolution = null; }
+    else { currentIndex += 1; status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; resolution = JSON.stringify(EMPTY_PROGRESS); }
+    hints = {};
+  } else if (action === 'pause' && player.isHost && status === 'PUZZLE_OPEN') {
+    resolution = JSON.stringify(pauseProgress(parseProgress(resolution), now));
+  } else if (action === 'resume' && player.isHost && status === 'PUZZLE_OPEN') {
+    resolution = JSON.stringify(resumeProgress(parseProgress(resolution), now));
+  } else if (action === 'kick' && player.isHost) {
+    const targetId = String(input.targetId || '');
+    if (targetId === player.id) throw new Error('You cannot kick yourself.');
+    if (!players.some((item) => item.id === targetId)) throw new Error('That player is not in this room.');
+    nextPlayers = players.map((item) => item.id === targetId ? { ...item, left: true, ready: false } : item);
+  } else if (action === 'end' && player.isHost && (status === 'PUZZLE_OPEN' || status === 'PUZZLE_RESOLVED')) {
+    status = 'RESULTS'; resolution = null;
   } else if (action === 'next' && player.isHost && status === 'PUZZLE_RESOLVED' && match) {
     if (currentIndex >= match.puzzles.length - 1) status = 'RESULTS';
     else { currentIndex += 1; status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; resolution = JSON.stringify(EMPTY_PROGRESS); hints = {}; }

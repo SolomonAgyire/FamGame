@@ -768,12 +768,21 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
   // only this player's own solve, tracked here, locks their board while the
   // room keeps taking answers from whoever else is still typing.
   const viewerSolve = solvers.find((solver) => solver.solverId === snapshot.viewerId);
-  const boardLocked = snapshot.status !== 'PUZZLE_OPEN' || busy || spectating || sittingOut || Boolean(viewerSolve);
+  const paused = Boolean(snapshot.resolution?.paused);
+  const boardLocked = snapshot.status !== 'PUZZLE_OPEN' || busy || spectating || sittingOut || paused || Boolean(viewerSolve);
   const lead = solvers.length === 0 ? 'The answer was'
     : solvers.length === 1 ? `${solvers[0].solverName} solved it!`
     : `${solvers[0].solverName} and ${solvers.length - 1} other${solvers.length > 2 ? 's' : ''} solved it!`;
-  return <main className="game-shell"><div className="room-banner"><span>Room <strong>{snapshot.code}</strong></span><span>{error || '● Connected'}</span></div><div className="game-topbar"><div><span>Puzzle {snapshot.currentIndex + 1} of {snapshot.puzzleCount}</span><div className="progress"><i style={{ width: `${((snapshot.currentIndex + 1) / snapshot.puzzleCount) * 100}%` }} /></div></div>{snapshot.mode === 'teams' && <div className="score-strip">{teamScores.map((side) => <span key={side.id}>{side.name} <strong key={side.score}>{side.score}</strong></span>)}</div>}</div>
-    <Standings players={snapshot.players} viewerId={snapshot.viewerId} answeredIds={snapshot.resolution?.answeredIds ?? []} phase="play" />
+  const kick = (targetId: string) => { if (window.confirm('Remove this player from the room?')) void action({ action: 'kick', targetId }); };
+  return <main className="game-shell"><div className="room-banner"><span>Room <strong>{snapshot.code}</strong></span><span>{error || '● Connected'}</span></div>
+    {isHost && <div className="host-controls">
+      {snapshot.status === 'PUZZLE_OPEN' && <button type="button" className="soft-button" disabled={busy} onClick={() => action({ action: paused ? 'resume' : 'pause' })}>{paused ? '▶ Resume' : '⏸ Pause'}</button>}
+      {snapshot.status === 'PUZZLE_OPEN' && <button type="button" className="soft-button" disabled={busy} onClick={() => action({ action: 'skip' })}>⏭ Skip puzzle</button>}
+      <button type="button" className="soft-button" disabled={busy} onClick={() => action({ action: 'end' })}>◼ End match</button>
+    </div>}
+    {paused && <p className="notice">The host paused this puzzle.</p>}
+    <div className="game-topbar"><div><span>Puzzle {snapshot.currentIndex + 1} of {snapshot.puzzleCount}</span><div className="progress"><i style={{ width: `${((snapshot.currentIndex + 1) / snapshot.puzzleCount) * 100}%` }} /></div></div>{snapshot.mode === 'teams' && <div className="score-strip">{teamScores.map((side) => <span key={side.id}>{side.name} <strong key={side.score}>{side.score}</strong></span>)}</div>}</div>
+    <Standings players={snapshot.players} viewerId={snapshot.viewerId} answeredIds={snapshot.resolution?.answeredIds ?? []} phase="play" isHost={isHost} onKick={kick} />
     <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{puzzle.category} · {LEVEL_NAMES[puzzle.band - 1]}</p><h1>{snapshot.status === 'PUZZLE_RESOLVED' ? puzzle.display : 'Everyone is solving…'}</h1></div><span className="points-pill">{scoreSolve({ letterCount: puzzle.scramble.length, level: puzzle.band, combo: 0, hintsUsed: snapshot.viewerHints })} pts</span></div>
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} locked={boardLocked} />
       {snapshot.viewerHints > 0 && snapshot.status === 'PUZZLE_OPEN' && !spectating && !sittingOut && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{puzzle.hints.slice(0, snapshot.viewerHints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
@@ -781,6 +790,7 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
       : spectating ? <p className="notice">You&rsquo;re watching this room.</p>
       : sittingOut ? <p className="notice">You&rsquo;ll join in on the next puzzle.</p>
       : viewerSolve ? <p className="notice">Nice! +{viewerSolve.award} points — waiting for the round to finish…</p>
+      : paused ? null
       : <div className="game-actions"><button className="soft-button" type="button" onClick={() => { playTap(); setOrder(shuffledOrder(puzzle.scramble.length)); }}>↻ Shuffle</button><button className="soft-button" type="button" disabled={placed.length === 0} onClick={() => { playTap(); setPlaced(placed.slice(0, -1)); }}>↩ Undo</button><button className="soft-button" type="button" disabled={placed.length === 0} onClick={() => setPlaced([])}>✕ Clear</button><button className="soft-button" type="button" disabled={snapshot.viewerHints >= puzzle.hints.length || busy} onClick={() => action({ action: 'hint' })}>{puzzle.hints[snapshot.viewerHints] ? `✦ Hint · ${HINT_LABELS[puzzle.hints[snapshot.viewerHints].kind]}` : '✦ Hints used'}</button>{isHost && <button className="text-button" type="button" onClick={() => action({ action: 'reveal' })}>Host reveal</button>}</div>}
       <button type="button" className="quit-button" onClick={leave}>Leave room</button>
     </section></main>;
