@@ -1,17 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { loadProgress, type ProgressRecord } from '@/lib/progress';
+import { useSyncExternalStore } from 'react';
+import { getProgressServerSnapshot, getProgressSnapshot, subscribeProgress } from '@/lib/progress';
 import { levelStatus } from '@/lib/levels';
-import { emptyProgress } from '@/lib/progress';
 import type { Level } from '@/lib/types';
 
 const LEVELS: Level[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 export function LevelPath({ selected, onSelect }: { selected: Level; onSelect: (level: Level) => void }) {
-  // Read storage after mount so the server and first client render agree.
-  const [record, setRecord] = useState<ProgressRecord>(() => emptyProgress());
-  useEffect(() => { setRecord(loadProgress()); }, []);
+  // The server snapshot is an empty record, so the server render and the
+  // first client render agree; React swaps in the stored record straight
+  // after hydration, and a finished match re-renders the path in place.
+  const record = useSyncExternalStore(subscribeProgress, getProgressSnapshot, getProgressServerSnapshot);
 
   return <ol className="level-path" aria-label="Your journey">
     {LEVELS.map((level) => {

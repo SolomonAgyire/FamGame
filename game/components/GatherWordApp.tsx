@@ -1,13 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { buildLevelQueue, createFreshRecipe, eligibleWords, getEntryById, getPuzzleEntry, normalizeAnswer } from '@/lib/game-engine';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { advanceMatch, buildLevelQueue, createFreshRecipe, eligibleWords, getEntryById, getPuzzleEntry, nextPlayableLevelAbove, normalizeAnswer, playableLevelFrom, unplayableReason } from '@/lib/game-engine';
 import { duckMusic, playCorrect, playTap, playWrong, startMusic, stopMusic } from '@/lib/audio';
 import { showToast, subscribeToasts, type Toast } from '@/lib/toast';
 import type { Category, GameSettings, Level, MatchRecipe, PlayMode, PuzzleRecipe, Team } from '@/lib/types';
 import { LEVEL_NAMES } from '@/lib/types';
 import { scoreSolve } from '@/lib/scoring';
-import { loadProgress, saveProgress, recordMatch, masteredCount } from '@/lib/progress';
+import { loadProgress, saveProgress, recordMatch, masteredCount, subscribeProgress, getProgressSnapshot, getProgressServerSnapshot } from '@/lib/progress';
 import { highestUnlocked } from '@/lib/levels';
 import { LevelPath } from '@/components/LevelPath';
 
@@ -50,7 +50,7 @@ function Header({ onHome, sound, setSound }: { onHome: () => void; sound: boolea
   </header>;
 }
 
-function HomeScreen({ mode, setMode, start, level, setLevel }: { mode: EntryMode; setMode: (mode: EntryMode) => void; start: () => void; level: Level; setLevel: (level: Level) => void }) {
+function HomeScreen({ mode, setMode, start, level, setLevel, blocked }: { mode: EntryMode; setMode: (mode: EntryMode) => void; start: () => void; level: Level; setLevel: (level: Level) => void; blocked: string | null }) {
   const [expanded, setExpanded] = useState<EntryMode | null>(null);
   const modes = [
     { id: 'solo' as const, title: 'Solo Journey', icon: '🧩', tint: 'sky', detail: 'Play by yourself, at your own pace. No timer, no pressure.' },
@@ -59,6 +59,10 @@ function HomeScreen({ mode, setMode, start, level, setLevel }: { mode: EntryMode
     { id: 'timeattack' as const, title: 'Time Attack', icon: '⚡', tint: 'berry', detail: 'A solo race against the clock. Each level is faster and harder -- chase your high score.' },
   ];
   const modeTitle = modes.find((item) => item.id === mode)?.title;
+  // Only solo and together play the level chosen here. An online room picks
+  // its level in the lobby, and Time Attack starts from the player's
+  // progress, so neither is held up by an empty pool on this screen.
+  const stopped = Boolean(blocked) && (mode === 'solo' || mode === 'together');
   return <main className="home-shell">
     <section className="home-grid">
       <h1 className="hero-title">Unscramble the word</h1>
@@ -74,7 +78,8 @@ function HomeScreen({ mode, setMode, start, level, setLevel }: { mode: EntryMode
         </div>)}
       </div>
       <LevelPath selected={level} onSelect={setLevel} />
-      <button type="button" className="primary-button hero-button" onClick={start}>Start {modeTitle} · {LEVEL_NAMES[level - 1]}</button>
+      {stopped && <p className="field-help warn" role="status">{blocked}</p>}
+      <button type="button" className="primary-button hero-button" disabled={stopped} onClick={start}>Start {modeTitle} · {LEVEL_NAMES[level - 1]}</button>
       <p className="free-note">No account needed. No timer. Free to play.</p>
     </section>
   </main>;
@@ -96,6 +101,11 @@ function SettingsPanel({ settings, setSettings }: { settings: GameSettings; setS
     setSettings({ ...settings, categories: active ? settings.categories.filter((item) => item !== category) : [...settings.categories, category] });
   };
   const pool = eligibleWords(settings).length;
+  const blocked = unplayableReason(settings);
+  // With an empty pool the length controls would clamp to zero and offer a
+  // match with no puzzles; hold them at the minimum instead and let the
+  // Start button carry the explanation.
+  const cap = Math.max(3, pool);
   return <div className="settings-stack">
     <fieldset><legend>Choose your word set</legend><p className="field-help">Select one or blend several categories.</p><div className="choice-grid three">
       {(['book', 'person', 'place'] as Category[]).map((category) => { const isSelected = settings.categories.includes(category); return <button type="button" key={category} className={`choice-card ${isSelected ? 'selected' : ''}`} onClick={() => toggleCategory(category)} aria-pressed={isSelected}>
@@ -103,9 +113,9 @@ function SettingsPanel({ settings, setSettings }: { settings: GameSettings; setS
       </button>; })}
     </div></fieldset>
     <fieldset><legend>How many puzzles?</legend><div className="length-row">
-      {[10, 15].map((value) => <button type="button" key={value} onClick={() => setSettings({ ...settings, length: Math.min(value, pool) })} className={`length-button ${settings.length === value ? 'selected' : ''}`}>{value}</button>)}
-      <label className="custom-length"><span>Custom</span><input aria-label="Custom puzzle count" type="number" min="3" max={pool} value={settings.length} onChange={(event) => setSettings({ ...settings, length: Math.min(pool, Math.max(3, Number(event.target.value) || 3)) })} /></label>
-    </div><p className="field-help">{pool} approved answers at {LEVEL_NAMES[settings.maxBand - 1]} · no repeats inside a match</p></fieldset>
+      {[10, 15].map((value) => <button type="button" key={value} onClick={() => setSettings({ ...settings, length: Math.min(value, cap) })} className={`length-button ${settings.length === value ? 'selected' : ''}`}>{value}</button>)}
+      <label className="custom-length"><span>Custom</span><input aria-label="Custom puzzle count" type="number" min="3" max={cap} value={settings.length} onChange={(event) => setSettings({ ...settings, length: Math.min(cap, Math.max(3, Number(event.target.value) || 3)) })} /></label>
+    </div><p className={`field-help${blocked ? ' warn' : ''}`}>{blocked ?? `${pool} approved answers at ${LEVEL_NAMES[settings.maxBand - 1]} · no repeats inside a match`}</p></fieldset>
   </div>;
 }
 
@@ -125,7 +135,7 @@ function SetupScreen({ entryMode, settings, setSettings, togetherMode, setTogeth
       <div className="mini-actions">{teams.length < 4 && <button type="button" onClick={() => setTeams([...teams, { id: `team-${teams.length + 1}`, name: `Team ${teams.length + 1}`, color: TEAM_COLORS[teams.length], score: 0 }])}>+ Add team</button>}{teams.length > 2 && <button type="button" onClick={() => setTeams(teams.slice(0, -1))}>− Remove</button>}</div>
     </div></fieldset>}
     <SettingsPanel settings={settings} setSettings={setSettings} />
-    <button className="primary-button full-button" type="button" onClick={start}>Create fresh match</button>
+    <button className="primary-button full-button" type="button" disabled={Boolean(unplayableReason(settings))} onClick={start}>Create fresh match</button>
   </section></main>;
 }
 
@@ -167,7 +177,11 @@ function Confetti({ count = 20 }: { count?: number }) {
   </div>;
 }
 
-function LocalGame({ mode, settings, teams: initialTeams, sound, onHome, onChangeSet }: { mode: PlayMode; settings: GameSettings; teams: Team[]; sound: boolean; onHome: () => void; onChangeSet: () => void }) {
+function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound, onHome, onChangeSet }: { mode: PlayMode; settings: GameSettings; teams: Team[]; sound: boolean; onHome: () => void; onChangeSet: () => void }) {
+  // Frozen for the life of the match. Finishing one can unlock the next
+  // level, which moves the home screen's selection -- but "Play again"
+  // has to replay the level that was actually just played.
+  const [settings] = useState(chosenSettings);
   const [recipe, setRecipe] = useState<MatchRecipe>(() => createFreshRecipe(settings));
   const [index, setIndex] = useState(0); const [placed, setPlaced] = useState<number[]>([]); const [hints, setHints] = useState(0);
   const [scores, setScores] = useState<Team[]>(() => mode === 'teams' ? initialTeams.map((team) => ({ ...team, score: 0 })) : [{ id: 'group', name: mode === 'solo' ? 'You' : 'Everyone', color: '#2e7d68', score: 0 }]);
@@ -178,6 +192,7 @@ function LocalGame({ mode, settings, teams: initialTeams, sound, onHome, onChang
   const [missPop, setMissPop] = useState<number | null>(null);
   const [wrongStreak, setWrongStreak] = useState(0);
   const [solvedIds, setSolvedIds] = useState<string[]>([]);
+  const [revealCount, setRevealCount] = useState(0);
   const [combo, setCombo] = useState(0);
   const [summary, setSummary] = useState<{ points: number; isBest: boolean; previousBest: number; lifetime: number; mastered: number } | null>(null);
   const [unlocked, setUnlocked] = useState<{ level: Level; name: string } | null>(null);
@@ -186,33 +201,48 @@ function LocalGame({ mode, settings, teams: initialTeams, sound, onHome, onChang
   // Declared before the effects below since the auto-advance effect needs
   // to reference `next` -- React's compiler requires that ordering.
   const resetPuzzle = () => { setPlaced([]); setHints(0); setResolved(null); setWrongStreak(0); setClaimedBy(mode === 'teams' ? null : 'group'); };
+  // Read live rather than from `finished`: the auto-advance timer below
+  // runs the `next` it captured when the puzzle resolved, where `finished`
+  // is still false. Tapping "See results" on the last puzzle leaves that
+  // timer armed, and a stale read would record the whole match a second
+  // time -- doubling lifetime points and every solved word's count.
+  const finishedRef = useRef(false);
   const next = () => {
-    if (index >= recipe.puzzles.length - 1) {
-      const total = scores.reduce((sum, team) => sum + team.score, 0);
+    const step = advanceMatch({ index, total: recipe.puzzles.length, finished: finishedRef.current });
+    if (step.record) {
+      // The results screen prints the winning side's score, so that is the
+      // number that gets recorded. Summing every team would store a
+      // different quantity from the one shown directly above it.
+      const headline = scores.reduce((best, team) => Math.max(best, team.score), 0);
       const before = loadProgress();
       const wasUnlocked = highestUnlocked(before);
       const outcome = recordMatch(before, {
         mode: mode === 'solo' ? 'solo' : mode,
         level: settings.maxBand,
-        points: total,
+        points: headline,
         solvedIds,
-        wrong: wrongCount,
+        // A revealed word is an attempt that was not solved. Leaving it out
+        // made the accuracy half of the clear condition impossible to fail.
+        wrong: wrongCount + revealCount,
       });
       saveProgress(outcome.record);
       const nowUnlocked = highestUnlocked(outcome.record);
       setUnlocked(nowUnlocked > wasUnlocked ? { level: nowUnlocked, name: LEVEL_NAMES[nowUnlocked - 1] } : null);
       setSummary({
-        points: total,
+        points: headline,
         isBest: outcome.isBest,
         previousBest: outcome.previousBest,
         lifetime: outcome.record.lifetimePoints,
         mastered: masteredCount(outcome.record),
       });
-      setFinished(true);
-    } else {
-      setIndex(index + 1);
-      resetPuzzle();
     }
+    if (step.finished) {
+      finishedRef.current = true;
+      setFinished(true);
+      return;
+    }
+    setIndex(step.index);
+    resetPuzzle();
   };
   useEffect(() => { duckMusic(true); return () => duckMusic(false); }, []);
   useEffect(() => {
@@ -233,7 +263,19 @@ function LocalGame({ mode, settings, teams: initialTeams, sound, onHome, onChang
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolved]);
-  if (!entry || !puzzle) return null;
+  // A level with no approved words in the chosen categories builds a match
+  // with no puzzles. Rendering nothing left only the header on screen, with
+  // no way back.
+  if (!entry || !puzzle) return <main className="page-shell"><section className="panel results-panel">
+    <div className="celebration">🔒</div>
+    <p className="section-kicker">Nothing to play here</p>
+    <h1 className="page-title">This level is empty</h1>
+    <p className="page-subtitle">{unplayableReason(settings) ?? 'That match could not be built. Choose a different level or word set.'}</p>
+    <div className="result-actions">
+      <button className="primary-button" type="button" onClick={onChangeSet}>Change set</button>
+      <button className="text-button" type="button" onClick={onHome}>Home</button>
+    </div>
+  </section></main>;
   const currentValue = scoreSolve({ letterCount: puzzle.scramble.length, level: entry.band, combo, hintsUsed: hints });
   const check = () => {
     if (mode === 'teams' && !claimedBy) { showToast('A team needs to claim this puzzle first.'); return; }
@@ -262,8 +304,8 @@ function LocalGame({ mode, settings, teams: initialTeams, sound, onHome, onChang
       if (mode === 'teams') { setClaimedBy(null); setPlaced([]); }
     }
   };
-  const reveal = () => setResolved({ correct: false, revealed: true, award: 0 });
-  const rematch = () => { setRecipe(createFreshRecipe(settings)); setIndex(0); setScores(scores.map((team) => ({ ...team, score: 0 }))); setCorrectCount(0); setWrongCount(0); setFinished(false); resetPuzzle(); setSolvedIds([]); setCombo(0); setSummary(null); setUnlocked(null); };
+  const reveal = () => { setRevealCount(revealCount + 1); setCombo(0); setResolved({ correct: false, revealed: true, award: 0 }); };
+  const rematch = () => { finishedRef.current = false; setRecipe(createFreshRecipe(settings)); setIndex(0); setScores(scores.map((team) => ({ ...team, score: 0 }))); setCorrectCount(0); setWrongCount(0); setRevealCount(0); setFinished(false); resetPuzzle(); setSolvedIds([]); setCombo(0); setSummary(null); setUnlocked(null); };
   if (finished) return <Results mode={mode} scores={scores} correct={correctCount} wrong={wrongCount} total={recipe.puzzles.length} summary={summary} unlocked={unlocked} rematch={rematch} changeSet={onChangeSet} home={onHome} />;
   return <main className="game-shell">
     {celebration && <BigCelebration key={celebration.id} title={celebration.title} subtitle={celebration.subtitle} />}
@@ -306,7 +348,10 @@ function MissPopup() {
 }
 
 function TimeAttackGame({ categories, sound, onHome }: { categories: Category[]; sound: boolean; onHome: () => void }) {
-  const startLevel = useMemo(() => highestUnlocked(loadProgress()), []);
+  // Start where the player is -- but a level with no approved words in the
+  // chosen categories would open on an empty board, so slide to the nearest
+  // level that has some.
+  const startLevel = useMemo(() => playableLevelFrom(highestUnlocked(loadProgress()), categories) ?? 1, [categories]);
   const [band, setBand] = useState<Level>(startLevel);
   const [queue, setQueue] = useState<PuzzleRecipe[]>(() => buildLevelQueue(startLevel, categories));
   const [placed, setPlaced] = useState<number[]>([]);
@@ -315,6 +360,7 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
   const [strikes, setStrikes] = useState(0);
   const [timeLeft, setTimeLeft] = useState(() => BAND_TIME_LIMITS[startLevel]);
   const [resolved, setResolved] = useState<{ correct: boolean; gained: number } | null>(null);
+  const [combo, setCombo] = useState(0);
   const [finished, setFinished] = useState<'strikes' | 'cleared' | null>(null);
   const [celebration, setCelebration] = useState<{ id: number; title: string; subtitle: string } | null>(null);
   const bestRef = useRef(getHighScore());
@@ -357,7 +403,13 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
     }
   }, [finished, score]);
 
-  if (!entry || !puzzle) return null;
+  if (!entry || !puzzle) return <main className="page-shell"><section className="panel results-panel">
+    <div className="celebration">🔒</div>
+    <p className="section-kicker">Time Attack</p>
+    <h1 className="page-title">No words to race</h1>
+    <p className="page-subtitle">{unplayableReason({ categories, maxBand: band, length: 1 }) ?? 'Choose a different word set to start a run.'}</p>
+    <div className="result-actions"><button className="primary-button" type="button" onClick={onHome}>Home</button></div>
+  </section></main>;
 
   function checkMilestones(newScore: number) {
     if (newScore > bestRef.current && !beatBestRef.current) {
@@ -374,18 +426,29 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
 
   function resolveWord(correct: boolean) {
     if (correct) {
-      const timeFraction = timeLeft / BAND_TIME_LIMITS[band];
-      const gained = 5 + Math.round(timeFraction * 3);
+      // The same award solo and online use, with the clock supplying the
+      // speed bonus. A flat 5 ignored both word length and the level
+      // multiplier -- in the one mode where the level matters most.
+      const gained = scoreSolve({
+        letterCount: puzzle.scramble.length,
+        level: band,
+        combo,
+        hintsUsed: 0,
+        secondsLeft: timeLeft,
+        secondsTotal: BAND_TIME_LIMITS[band],
+      });
       const newScore = score + gained;
       setScore(newScore);
       setSolved((value) => value + 1);
       setStrikes(0);
+      setCombo(combo + 1);
       setResolved({ correct: true, gained });
       if (sound) playCorrect();
       checkMilestones(newScore);
     } else {
       const nextStrikes = strikes + 1;
       setStrikes(nextStrikes);
+      setCombo(0);
       setResolved({ correct: false, gained: 0 });
       if (sound) playWrong();
       if (nextStrikes >= 3) setFinished('strikes');
@@ -402,8 +465,10 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
       setTimeLeft(BAND_TIME_LIMITS[band]);
       return;
     }
-    if (band < 9) {
-      const nextBand = (band + 1) as Level;
+    // Skip past any level the chosen categories have no words at -- there
+    // is no Bible book at Eternity, and stepping into it blanked the run.
+    const nextBand = nextPlayableLevelAbove(band, categories);
+    if (nextBand) {
       setBand(nextBand);
       setQueue(buildLevelQueue(nextBand, categories));
       setPlaced([]);
@@ -517,11 +582,25 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
   const viewer = snapshot.players.find((player) => player.id === credentials.playerId); const isHost = Boolean(viewer?.isHost);
   if (snapshot.status === 'LOBBY') return <OnlineLobby key={snapshot.version} snapshot={snapshot} viewer={viewer} isHost={isHost} busy={busy} action={action} leave={leave} />;
   if (snapshot.status === 'RESULTS') return <OnlineResults snapshot={snapshot} isHost={isHost} action={action} leave={leave} />;
-  const puzzle = snapshot.puzzle; if (!puzzle) return null;
+  const puzzle = snapshot.puzzle;
+  // Every host control -- Next puzzle, Host reveal, Leave room -- lives
+  // inside the board below, so rendering nothing wedged the whole room
+  // until its two-hour TTL. The server refuses to start an empty match
+  // now; this is the way out if one ever exists.
+  if (!puzzle) return <main className="page-shell"><section className="panel results-panel">
+    <div className="celebration">🔒</div>
+    <p className="section-kicker">Room {snapshot.code}</p>
+    <h1 className="page-title">This match has no puzzles</h1>
+    <p className="page-subtitle">{unplayableReason(snapshot.settings) ?? 'The match could not be built. Head back to the lobby and pick another level or word set.'}</p>
+    <div className="result-actions">
+      {isHost && <button className="primary-button" type="button" disabled={busy} onClick={() => action({ action: 'lobby' })}>Back to lobby</button>}
+      <button className="text-button" type="button" onClick={leave}>Leave room</button>
+    </div>
+  </section></main>;
   const answer = placed.map((index) => puzzle.scramble[index]).join('');
   const onlineScores = snapshot.mode === 'teams' ? ([['sun', 'Sun Team'], ['olive', 'Olive Team']] as const).map(([id, name]) => ({ id, name, score: snapshot.players.filter((player) => player.teamId === id).reduce((sum, player) => sum + player.score, 0) })) : snapshot.players.map((player) => ({ id: player.id, name: player.name, score: player.score }));
   return <main className="game-shell"><div className="room-banner"><span>Room <strong>{snapshot.code}</strong></span><span>{error || '● Connected'}</span></div><div className="game-topbar"><div><span>Puzzle {snapshot.currentIndex + 1} of {snapshot.puzzleCount}</span><div className="progress"><i style={{ width: `${((snapshot.currentIndex + 1) / snapshot.puzzleCount) * 100}%` }} /></div></div><div className="score-strip">{onlineScores.map((side) => <span key={side.id}>{side.name} <strong key={side.score}>{side.score}</strong></span>)}</div></div>
-    <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{puzzle.category} · {LEVEL_NAMES[puzzle.band - 1]}</p><h1>{snapshot.status === 'PUZZLE_RESOLVED' ? puzzle.display : 'Everyone is solving…'}</h1></div><span className="points-pill">{Math.max(1, 5 - snapshot.viewerHints)} pts</span></div>
+    <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{puzzle.category} · {LEVEL_NAMES[puzzle.band - 1]}</p><h1>{snapshot.status === 'PUZZLE_RESOLVED' ? puzzle.display : 'Everyone is solving…'}</h1></div><span className="points-pill">{scoreSolve({ letterCount: puzzle.scramble.length, level: puzzle.band, combo: 0, hintsUsed: snapshot.viewerHints })} pts</span></div>
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} locked={snapshot.status !== 'PUZZLE_OPEN' || busy} />
       {snapshot.viewerHints > 0 && snapshot.status === 'PUZZLE_OPEN' && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{puzzle.hints.slice(0, snapshot.viewerHints).map((hint) => <p key={hint}>{hint}</p>)}</div></div>}
       {snapshot.status === 'PUZZLE_RESOLVED' ? <div className="resolution">{Boolean(snapshot.resolution?.award) && <Confetti key={snapshot.currentIndex} />}<span>{snapshot.resolution?.revealed ? 'The answer was' : `${snapshot.resolution?.solverName} solved it!`}</span><strong>{puzzle.display}</strong><p>{puzzle.reference} · {snapshot.resolution?.award ? `+${snapshot.resolution.award} points` : 'No points this time'}</p>{isHost ? <button type="button" className="primary-button" onClick={() => action({ action: 'next' })}>Next puzzle</button> : <p>Waiting for the host…</p>}</div>
@@ -532,6 +611,10 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
 
 function OnlineLobby({ snapshot, viewer, isHost, busy, action, leave }: { snapshot: RoomSnapshot; viewer?: RoomPlayer; isHost: boolean; busy: boolean; action: (input: Record<string, unknown>) => void; leave: () => void }) {
   const [settings, setSettings] = useState(snapshot.settings); const [mode, setMode] = useState(snapshot.mode); const joinUrl = typeof window !== 'undefined' ? `${window.location.origin}?room=${snapshot.code}` : '';
+  // The level picker is deliberately ungated, so a host can land on a
+  // level their categories have no words at. Say so here rather than
+  // letting them start a match nobody can play.
+  const blocked = unplayableReason(settings);
   const copy = async () => { try { await navigator.clipboard.writeText(joinUrl); } catch { /* clipboard can be blocked */ } };
   return <main className="page-shell"><section className="panel lobby-panel"><div className="lobby-heading"><div><p className="section-kicker">Private room</p><h1 className="room-code">{snapshot.code}</h1><p>Share this code with up to 11 more players.</p></div><button type="button" className="secondary-button" onClick={copy}>Copy invite link</button></div>
     <div className="lobby-grid"><div><h2>Players <span>{snapshot.players.length}/12</span></h2><div className="player-list">{snapshot.players.map((player) => <div key={player.id}><span className="avatar">{player.name[0]?.toUpperCase()}</span><strong>{player.name}{player.id === viewer?.id ? ' (you)' : ''}</strong>{player.isHost && <small>Host</small>}<em className={player.ready ? 'ready' : ''}>{player.ready ? 'Ready' : 'Not ready'}</em></div>)}</div>{!isHost && <button type="button" className="primary-button full-button" onClick={() => action({ action: 'ready', ready: !viewer?.ready })}>{viewer?.ready ? 'I’m not ready' : 'I’m ready'}</button>}</div>
@@ -543,7 +626,7 @@ function OnlineLobby({ snapshot, viewer, isHost, busy, action, leave }: { snapsh
             <small>Level {index + 1}</small><strong>{name}</strong>
           </button>)}
         </div></fieldset>
-        <SettingsPanel settings={settings} setSettings={setSettings} /><button type="button" className="secondary-button full-button" onClick={() => action({ action: 'configure', settings, mode })}>Save settings</button><button type="button" disabled={busy} className="primary-button full-button" onClick={() => action({ action: 'start' })}>Start match</button></> : <div className="setting-summary"><p><strong>{snapshot.mode === 'individuals' ? 'Individuals' : snapshot.mode === 'teams' ? 'Teams' : 'Cooperative'}</strong></p><p>{snapshot.settings.categories.join(' + ')}</p><p>{LEVEL_NAMES[snapshot.settings.maxBand - 1]} · {snapshot.settings.length} puzzles</p></div>}</div></div>
+        <SettingsPanel settings={settings} setSettings={setSettings} /><button type="button" className="secondary-button full-button" onClick={() => action({ action: 'configure', settings, mode })}>Save settings</button><button type="button" disabled={busy || Boolean(blocked)} className="primary-button full-button" onClick={() => action({ action: 'start' })}>Start match</button></> : <div className="setting-summary"><p><strong>{snapshot.mode === 'individuals' ? 'Individuals' : snapshot.mode === 'teams' ? 'Teams' : 'Cooperative'}</strong></p><p>{snapshot.settings.categories.join(' + ')}</p><p>{LEVEL_NAMES[snapshot.settings.maxBand - 1]} · {snapshot.settings.length} puzzles</p></div>}</div></div>
     <button type="button" className="text-button leave-button" onClick={leave}>Leave room</button>
   </section></main>;
 }
@@ -554,13 +637,20 @@ function OnlineResults({ snapshot, isHost, action, leave }: { snapshot: RoomSnap
 }
 
 export default function GatherWordApp() {
-  const [screen, setScreen] = useState<Screen>('home'); const [entryMode, setEntryMode] = useState<EntryMode>('solo'); const [settings, setSettings] = useState<GameSettings>(DEFAULT_SETTINGS); const [togetherMode, setTogetherMode] = useState<PlayMode>('cooperative');
-  const [level, setLevelState] = useState<Level>(1);
+  const [screen, setScreen] = useState<Screen>('home'); const [entryMode, setEntryMode] = useState<EntryMode>('solo'); const [chosenSettings, setSettings] = useState<GameSettings>(DEFAULT_SETTINGS); const [togetherMode, setTogetherMode] = useState<PlayMode>('cooperative');
+  // Home opens where the player actually is, the way Time Attack already
+  // does. `useSyncExternalStore` keeps this hydration-safe: the server
+  // snapshot is an empty record, so both first renders say level 1, and
+  // the stored record arrives immediately after.
+  const progress = useSyncExternalStore(subscribeProgress, getProgressSnapshot, getProgressServerSnapshot);
+  const [pickedLevel, setPickedLevel] = useState<Level | null>(null);
+  const level: Level = pickedLevel ?? highestUnlocked(progress);
   // Picking a level on the journey path is what a solo/together match
   // actually plays at -- the band picker used to live in SettingsPanel,
-  // but the journey path replaced it, so selecting a level here has to
-  // keep `settings.maxBand` in step.
-  const setLevel = (value: Level) => { setLevelState(value); setSettings((current) => ({ ...current, maxBand: value })); };
+  // but the journey path replaced it. Deriving `maxBand` rather than
+  // copying it means the two can never disagree.
+  const settings = useMemo<GameSettings>(() => ({ ...chosenSettings, maxBand: level }), [chosenSettings, level]);
+  const setLevel = (value: Level) => setPickedLevel(value);
   const [teams, setTeams] = useState<Team[]>([{ id: 'team-1', name: 'Sun Team', color: TEAM_COLORS[0], score: 0 }, { id: 'team-2', name: 'Olive Team', color: TEAM_COLORS[1], score: 0 }]); const [localGameKey, setLocalGameKey] = useState(0); const [localMode, setLocalMode] = useState<PlayMode | null>(null); const [credentials, setCredentials] = useState<Credentials | null>(null); const [sound, setSound] = useState(true);
   const initialCode = useMemo(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('room')?.toUpperCase() || '', []);
   useEffect(() => { const timer = window.setTimeout(() => { const saved = sessionStorage.getItem('gatherword-room'); if (saved) { try { const value = JSON.parse(saved) as Credentials; setCredentials(value); setScreen('online-lobby'); } catch { sessionStorage.removeItem('gatherword-room'); } } else if (initialCode) { setEntryMode('online'); setScreen('online-entry'); } }, 0); return () => window.clearTimeout(timer); }, [initialCode]);
@@ -582,7 +672,7 @@ export default function GatherWordApp() {
   return <div className="app"><Header onHome={home} sound={sound} setSound={setSound} />
     {timeAttackActive ? <TimeAttackGame key={localGameKey} categories={settings.categories} sound={sound} onHome={home} />
     : localMode ? <LocalGame key={localGameKey} mode={localMode} settings={settings} teams={teams} sound={sound} onHome={home} onChangeSet={() => { setLocalMode(null); setScreen('setup'); }} />
-    : screen === 'home' ? <HomeScreen mode={entryMode} setMode={setEntryMode} start={startEntry} level={level} setLevel={setLevel} />
+    : screen === 'home' ? <HomeScreen mode={entryMode} setMode={setEntryMode} start={startEntry} level={level} setLevel={setLevel} blocked={unplayableReason(settings)} />
     : screen === 'setup' ? <SetupScreen entryMode={entryMode} settings={settings} setSettings={setSettings} togetherMode={togetherMode} setTogetherMode={setTogetherMode} teams={teams} setTeams={setTeams} start={startLocal} back={home} />
     : screen === 'online-entry' ? <OnlineEntry onBack={home} onConnected={connect} initialCode={initialCode} />
     : credentials ? <OnlineRoom credentials={credentials} leave={leave} sound={sound} /> : null}

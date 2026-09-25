@@ -271,6 +271,7 @@ button.letter-tile:active { transform: translateY(3px); box-shadow: 0 0 0 #d9bf8
 fieldset { margin: 0 0 26px; padding: 0; border: 0; }
 legend { margin-bottom: 4px; font-size: 15px; font-weight: 700; color: var(--ink); }
 .field-help { margin: 2px 0 11px; color: var(--muted); font-size: 12px; }
+.field-help.warn { color: var(--danger); font-weight: 700; }
 
 .choice-grid { display: grid; gap: 8px; min-width: 0; }
 .choice-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
