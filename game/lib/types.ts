@@ -40,6 +40,21 @@ export type GameSettings = {
   length: number;
 };
 
+/** A room is mixed-ability by nature -- a grandparent and a child on one
+ * screen -- so a single pinned level is wrong for both at once. `'mixed'`
+ * spreads the match across all nine levels on a rising curve instead;
+ * a `Level` pins the room to exactly that one, the same as solo. */
+export type RoomDifficulty = 'mixed' | Level;
+
+/** What an online room's host actually configures. Carries `difficulty`
+ * rather than `GameSettings`'s `maxBand`, because "Mixed" is not a level
+ * at all -- see `RoomDifficulty`. */
+export type RoomSettings = {
+  categories: Category[];
+  difficulty: RoomDifficulty;
+  length: number;
+};
+
 export type PuzzleRecipe = {
   entryId: string;
   scramble: string;

@@ -10,11 +10,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  activePlayers, applyCorrectSolve, applyWrongSolve, EMPTY_PROGRESS, eligiblePlayers,
-  MAX_PLAYERS, MAX_SPECTATORS, pauseProgress, refundSolvers, resumeProgress, roleForJoin, shouldCloseWindow,
+  activePlayers, applyCorrectSolve, applyWrongSolve, buildRoomRecipe, EMPTY_PROGRESS, eligiblePlayers,
+  MAX_PLAYERS, MAX_SPECTATORS, pauseProgress, refundSolvers, resumeProgress, roleForJoin, roomUnplayableReason,
+  roomWordPool, shouldCloseWindow, validateDifficulty, validateSettings,
   type PuzzleProgress, type RoomPlayer,
 } from '../lib/room-rules';
 import { SOLVE_WINDOW_MS } from '../lib/room-scoring';
+import { PLAYABLE_BANK } from '../lib/game-engine';
+import type { Category } from '../lib/types';
+
+function entryLevel(entryId: string): number {
+  const entry = PLAYABLE_BANK.find((item) => item.id === entryId);
+  if (!entry) throw new Error(`no bank entry for ${entryId}`);
+  return entry.level;
+}
 
 function makePlayer(overrides: Partial<RoomPlayer> & { id: string }): RoomPlayer {
   return {
@@ -195,4 +204,85 @@ test('refunding never sends a score below zero', () => {
   const players = [makePlayer({ id: 'p0', score: 4 })];
   const progress: PuzzleProgress = { ...EMPTY_PROGRESS, solvers: [{ solverId: 'p0', solverName: 'p0', award: 10, position: 1 }] };
   assert.equal(refundSolvers(players, progress)[0].score, 0);
+});
+
+// --- Room difficulty (Phase G, Task 4) -----------------------------------
+
+const ROOM_CATEGORIES: Category[] = ['book', 'person', 'place'];
+
+test('a mixed room rises in difficulty across the match', () => {
+  const recipe = buildRoomRecipe('mixed', ROOM_CATEGORIES, 12, 'mixed-seed');
+  const levels = recipe.puzzles.map((puzzle) => entryLevel(puzzle.entryId));
+  const firstThird = levels.slice(0, 4).reduce((a, b) => a + b, 0) / 4;
+  const lastThird = levels.slice(-4).reduce((a, b) => a + b, 0) / 4;
+  assert.ok(lastThird > firstThird, `expected a rise, got ${firstThird} then ${lastThird}`);
+});
+
+test('a mixed room starts somewhere a newcomer can score', () => {
+  const recipe = buildRoomRecipe('mixed', ROOM_CATEGORIES, 12, 'mixed-seed-2');
+  assert.ok(entryLevel(recipe.puzzles[0].entryId) <= 3);
+});
+
+test('a pinned difficulty draws only from that level', () => {
+  const recipe = buildRoomRecipe(6, ROOM_CATEGORIES, 10, 'pinned-seed');
+  for (const puzzle of recipe.puzzles) assert.equal(entryLevel(puzzle.entryId), 6);
+});
+
+test('a room recipe never repeats a word', () => {
+  const recipe = buildRoomRecipe('mixed', ROOM_CATEGORIES, 20, 'norepeat');
+  assert.equal(new Set(recipe.puzzles.map((p) => p.entryId)).size, 20);
+});
+
+test('a pinned-difficulty recipe never repeats a word either', () => {
+  const recipe = buildRoomRecipe(3, ROOM_CATEGORIES, 20, 'norepeat-pinned');
+  assert.equal(new Set(recipe.puzzles.map((p) => p.entryId)).size, 20);
+});
+
+test('a mixed room reaches the hardest content by the end of a long match', () => {
+  const recipe = buildRoomRecipe('mixed', ROOM_CATEGORIES, 25, 'top-end');
+  const last = entryLevel(recipe.puzzles[recipe.puzzles.length - 1].entryId);
+  assert.equal(last, 9, 'the last puzzle of a full-length mixed match should be Eternity-level');
+});
+
+test('a room recipe is reproducible from the same seed', () => {
+  const first = buildRoomRecipe('mixed', ROOM_CATEGORIES, 10, 'reproduce-me');
+  const second = buildRoomRecipe('mixed', ROOM_CATEGORIES, 10, 'reproduce-me');
+  assert.deepEqual(first, second);
+});
+
+test('difficulty validates to mixed or an integer 1-9, and rejects anything else back to mixed', () => {
+  assert.equal(validateDifficulty('mixed'), 'mixed');
+  for (let level = 1; level <= 9; level += 1) assert.equal(validateDifficulty(level), level);
+  assert.equal(validateDifficulty(String(5)), 5, 'a numeric string from a request body still validates');
+  for (const bad of [0, 10, -1, 'hard', null, undefined, NaN, {}]) {
+    assert.equal(validateDifficulty(bad), 'mixed', `${JSON.stringify(bad)} must be rejected back to mixed`);
+  }
+});
+
+test('validateSettings never trusts a request body directly, and defaults to mixed', () => {
+  assert.deepEqual(validateSettings({}), { categories: ['book'], difficulty: 'mixed', length: 10 });
+  assert.deepEqual(
+    validateSettings({ categories: ['person', 'place'], difficulty: 4, length: 18 }),
+    { categories: ['person', 'place'], difficulty: 4, length: 18 },
+  );
+  assert.equal(validateSettings({ difficulty: 'nonsense' as never }).difficulty, 'mixed');
+  assert.equal(validateSettings({ length: 999 }).length, 30, 'length is clamped, same as GameSettings');
+  assert.equal(validateSettings({ length: 1 }).length, 3);
+});
+
+test('a room is unplayable only when every level (mixed) or the pinned one (fixed) has no words for the chosen categories', () => {
+  assert.equal(roomUnplayableReason('mixed', ROOM_CATEGORIES), null);
+  assert.equal(roomUnplayableReason(1, ROOM_CATEGORIES), null);
+  assert.ok(roomUnplayableReason(9, ['tribe']), 'no approved tribe at Eternity, same regression Phase G found for solo');
+  // A mixed room only needs ONE rung of the ladder to still be playable --
+  // tribes run dry above level 7, but plenty are left lower down.
+  assert.equal(roomUnplayableReason('mixed', ['tribe']), null);
+  assert.equal(roomUnplayableReason('mixed', []), 'Choose at least one word set.');
+});
+
+test('a mixed room\'s word pool sums every level; a pinned one is exactly that level\'s pool', () => {
+  const perLevel = Array.from({ length: 9 }, (_, index) => index + 1)
+    .reduce((total, level) => total + PLAYABLE_BANK.filter((entry) => entry.level === level && entry.categories.some((c) => ROOM_CATEGORIES.includes(c))).length, 0);
+  assert.equal(roomWordPool('mixed', ROOM_CATEGORIES), perLevel);
+  assert.equal(roomWordPool(5, ROOM_CATEGORIES), PLAYABLE_BANK.filter((entry) => entry.level === 5 && entry.categories.some((c) => ROOM_CATEGORIES.includes(c))).length);
 });

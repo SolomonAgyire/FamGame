@@ -5,14 +5,16 @@ import { advanceMatch, buildLevelQueue, createFreshRecipe, eligibleWords, getEnt
 import { duckMusic, playCorrect, playTap, playWrong, startMusic, stopMusic } from '@/lib/audio';
 import { showToast, subscribeToasts, type Toast } from '@/lib/toast';
 import { InstallPrompt } from '@/components/InstallPrompt';
-import type { Category, GameSettings, Level, MatchRecipe, PlayMode, PuzzleRecipe, Team } from '@/lib/types';
+import type { Category, GameSettings, Level, MatchRecipe, PlayMode, PuzzleRecipe, RoomSettings, Team } from '@/lib/types';
 import { LEVEL_NAMES } from '@/lib/types';
 import { applyLetterHint, HINT_LABELS, hintsFor, type HintKind } from '@/lib/hints';
 import { scoreSolve } from '@/lib/scoring';
 import { secondsFor, timerModeFor } from '@/lib/timing';
 import { saveProgress, recordMatch, masteredCount, subscribeProgress, getProgressSnapshot, getProgressServerSnapshot } from '@/lib/progress';
 import { highestUnlocked, runLengthFor } from '@/lib/levels';
+import { roomUnplayableReason, roomWordPool } from '@/lib/room-rules';
 import { LevelBar } from '@/components/LevelBar';
+import { DifficultyBar, roomDifficultyLabel } from '@/components/DifficultyBar';
 import { Standings } from '@/components/Standings';
 import { shuffledOrder, TileBoard } from '@/components/TileBoard';
 import { DailyWord, StreakHeader, useHydrated } from '@/components/DailyWord';
@@ -45,13 +47,17 @@ type RoomPlayer = {
 type SolveRecord = { solverId: string; solverName: string; award: number; position: number };
 type RoomSnapshot = {
   code: string; status: 'LOBBY' | 'PUZZLE_OPEN' | 'PUZZLE_RESOLVED' | 'RESULTS'; mode: 'individuals' | 'teams' | 'cooperative';
-  settings: GameSettings; players: RoomPlayer[]; currentIndex: number; puzzleCount: number; version: number; viewerId: string; viewerHints: number;
+  settings: RoomSettings; players: RoomPlayer[]; currentIndex: number; puzzleCount: number; version: number; viewerId: string; viewerHints: number;
   puzzle: null | { id: string; scramble: string; category: Category; band: number; hints: { kind: HintKind; text: string }[]; display?: string; reference?: string };
   resolution: null | { solvers: SolveRecord[]; answeredIds: string[]; revealed: boolean; paused: boolean };
 };
 type Credentials = { code: string; token: string; playerId: string };
 
 const DEFAULT_SETTINGS: GameSettings = { categories: ['book', 'person', 'place'], maxBand: 1, length: 10 };
+// Mixed is the room default -- a room is mixed-ability by nature (a
+// grandparent and a child on one screen), so a single pinned level would
+// be wrong for both at once.
+const DEFAULT_ROOM_SETTINGS: RoomSettings = { categories: ['book', 'person', 'place'], difficulty: 'mixed', length: 10 };
 const TEAM_COLORS = ['#dd6f57', '#2e7d68', '#bc861a', '#6c6faa'];
 // Mirrors `MAX_PLAYERS` in lib/room-service.ts -- kept as a plain constant
 // here rather than imported, since that module pulls in Workers-only APIs
@@ -124,12 +130,24 @@ function SamplePuzzle() {
   </div></div>;
 }
 
-function SettingsPanel({ settings, setSettings, showLength = true }: { settings: GameSettings; setSettings: (settings: GameSettings) => void; showLength?: boolean }) {
+/** The category toggle grid, shared by solo/together's `SettingsPanel` and
+ * the room lobby's `RoomSettingsPanel` -- the only piece of "choose your
+ * word set" that means the same thing regardless of how the level or
+ * difficulty is picked. */
+function CategoryPicker({ categories, setCategories }: { categories: Category[]; setCategories: (categories: Category[]) => void }) {
   const toggleCategory = (category: Category) => {
-    const active = settings.categories.includes(category);
-    if (active && settings.categories.length === 1) return;
-    setSettings({ ...settings, categories: active ? settings.categories.filter((item) => item !== category) : [...settings.categories, category] });
+    const active = categories.includes(category);
+    if (active && categories.length === 1) return;
+    setCategories(active ? categories.filter((item) => item !== category) : [...categories, category]);
   };
+  return <fieldset><legend>Choose your word set</legend><p className="field-help">Select one or blend several categories.</p><div className="choice-grid three">
+    {(['book', 'person', 'place'] as Category[]).map((category) => { const isSelected = categories.includes(category); return <button type="button" key={category} className={`choice-card ${isSelected ? 'selected' : ''}`} onClick={() => toggleCategory(category)} aria-pressed={isSelected}>
+      <span>{category === 'book' ? '📖' : category === 'person' ? '👤' : '📍'}</span><strong>{category === 'book' ? 'Bible Books' : category === 'person' ? 'People' : 'Places'}</strong>
+    </button>; })}
+  </div></fieldset>;
+}
+
+function SettingsPanel({ settings, setSettings, showLength = true }: { settings: GameSettings; setSettings: (settings: GameSettings) => void; showLength?: boolean }) {
   const pool = eligibleWords(settings).length;
   const blocked = unplayableReason(settings);
   // With an empty pool the length controls would clamp to zero and offer a
@@ -137,11 +155,7 @@ function SettingsPanel({ settings, setSettings, showLength = true }: { settings:
   // Start button carry the explanation.
   const cap = Math.max(3, pool);
   return <div className="settings-stack">
-    <fieldset><legend>Choose your word set</legend><p className="field-help">Select one or blend several categories.</p><div className="choice-grid three">
-      {(['book', 'person', 'place'] as Category[]).map((category) => { const isSelected = settings.categories.includes(category); return <button type="button" key={category} className={`choice-card ${isSelected ? 'selected' : ''}`} onClick={() => toggleCategory(category)} aria-pressed={isSelected}>
-        <span>{category === 'book' ? '📖' : category === 'person' ? '👤' : '📍'}</span><strong>{category === 'book' ? 'Bible Books' : category === 'person' ? 'People' : 'Places'}</strong>
-      </button>; })}
-    </div></fieldset>
+    <CategoryPicker categories={settings.categories} setCategories={(categories) => setSettings({ ...settings, categories })} />
     {/* A host setting the length for a group (Play Together, an online
         room) is a real decision, so this control stays. Solo derives its
         length from the level instead -- see `SoloLengthSummary` below --
@@ -150,6 +164,25 @@ function SettingsPanel({ settings, setSettings, showLength = true }: { settings:
       {[10, 15].map((value) => <button type="button" key={value} onClick={() => setSettings({ ...settings, length: Math.min(value, cap) })} className={`length-button ${settings.length === value ? 'selected' : ''}`}>{value}</button>)}
       <label className="custom-length"><span>Custom</span><input aria-label="Custom puzzle count" type="number" min="3" max={cap} value={settings.length} onChange={(event) => setSettings({ ...settings, length: Math.min(cap, Math.max(3, Number(event.target.value) || 3)) })} /></label>
     </div><p className={`field-help${blocked ? ' warn' : ''}`}>{blocked ?? `${pool} approved answers at ${LEVEL_NAMES[settings.maxBand - 1]} · no repeats inside a match`}</p></fieldset>}
+  </div>;
+}
+
+/** The room lobby's word-set and puzzle-count controls. A near-twin of
+ * `SettingsPanel`, but keyed to `RoomSettings.difficulty` rather than
+ * `GameSettings.maxBand` -- `roomWordPool`/`roomUnplayableReason` are the
+ * room equivalents of `eligibleWords`/`unplayableReason` for that reason.
+ * The puzzle-count control stays here unconditionally: a host choosing
+ * length for a group is a real decision, unlike solo choosing for itself. */
+function RoomSettingsPanel({ settings, setSettings }: { settings: RoomSettings; setSettings: (settings: RoomSettings) => void }) {
+  const pool = roomWordPool(settings.difficulty, settings.categories);
+  const blocked = roomUnplayableReason(settings.difficulty, settings.categories);
+  const cap = Math.max(3, pool);
+  return <div className="settings-stack">
+    <CategoryPicker categories={settings.categories} setCategories={(categories) => setSettings({ ...settings, categories })} />
+    <fieldset><legend>How many puzzles?</legend><div className="length-row">
+      {[10, 15].map((value) => <button type="button" key={value} onClick={() => setSettings({ ...settings, length: Math.min(value, cap) })} className={`length-button ${settings.length === value ? 'selected' : ''}`}>{value}</button>)}
+      <label className="custom-length"><span>Custom</span><input aria-label="Custom puzzle count" type="number" min="3" max={cap} value={settings.length} onChange={(event) => setSettings({ ...settings, length: Math.min(cap, Math.max(3, Number(event.target.value) || 3)) })} /></label>
+    </div><p className={`field-help${blocked ? ' warn' : ''}`}>{blocked ?? `${pool} approved answers · no repeats inside a match`}</p></fieldset>
   </div>;
 }
 
@@ -724,7 +757,7 @@ function Results({ mode, scores, correct, wrong, total, summary, unlocked, remat
 
 function OnlineEntry({ onBack, onConnected, initialCode }: { onBack: () => void; onConnected: (credentials: Credentials) => void; initialCode: string }) {
   const [kind, setKind] = useState<'create' | 'join'>(initialCode ? 'join' : 'create'); const [name, setName] = useState(''); const [code, setCode] = useState(initialCode); const [busy, setBusy] = useState(false);
-  const submit = async () => { setBusy(true); try { const response = await fetch(kind === 'create' ? '/api/rooms' : `/api/rooms/${code}/join`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(kind === 'create' ? { name, settings: DEFAULT_SETTINGS, mode: 'individuals' } : { name }) }); const data = await response.json() as Credentials & { error?: string }; if (!response.ok) throw new Error(data.error || 'Could not connect.'); onConnected(data); } catch (caught) { showToast(caught instanceof Error ? caught.message : 'Could not connect.', 'error'); } finally { setBusy(false); } };
+  const submit = async () => { setBusy(true); try { const response = await fetch(kind === 'create' ? '/api/rooms' : `/api/rooms/${code}/join`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(kind === 'create' ? { name, settings: DEFAULT_ROOM_SETTINGS, mode: 'individuals' } : { name }) }); const data = await response.json() as Credentials & { error?: string }; if (!response.ok) throw new Error(data.error || 'Could not connect.'); onConnected(data); } catch (caught) { showToast(caught instanceof Error ? caught.message : 'Could not connect.', 'error'); } finally { setBusy(false); } };
   return <main className="page-shell"><section className="panel online-entry"><button className="back-button" type="button" onClick={onBack}>← Back</button><p className="section-kicker">Different devices, one game</p><h1 className="page-title">Online room</h1><p className="page-subtitle">The host creates a private six-character code. Everyone else joins from their own device.</p>
     <div className="tabs"><button type="button" className={kind === 'create' ? 'active' : ''} onClick={() => setKind('create')}>Create room</button><button type="button" className={kind === 'join' ? 'active' : ''} onClick={() => setKind('join')}>Join room</button></div>
     <div className="form-stack"><label>Display name<input value={name} maxLength={24} autoComplete="name" placeholder="Your name" onChange={(event) => setName(event.target.value)} /></label>{kind === 'join' && <label>Room code<input className="code-input" value={code} maxLength={6} placeholder="A7K4PQ" autoCapitalize="characters" onChange={(event) => setCode(event.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ''))} /></label>}<button type="button" disabled={busy} className="primary-button full-button" onClick={submit}>{busy ? 'Connecting…' : kind === 'create' ? 'Create private room' : 'Join room'}</button></div>
@@ -895,7 +928,7 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
     <div className="celebration">🔒</div>
     <p className="section-kicker">Room {snapshot.code}</p>
     <h1 className="page-title">This match has no puzzles</h1>
-    <p className="page-subtitle">{unplayableReason(snapshot.settings) ?? 'The match could not be built. Head back to the lobby and pick another level or word set.'}</p>
+    <p className="page-subtitle">{roomUnplayableReason(snapshot.settings.difficulty, snapshot.settings.categories) ?? 'The match could not be built. Head back to the lobby and pick another difficulty or word set.'}</p>
     <div className="result-actions">
       {isHost && <button className="primary-button" type="button" disabled={busy} onClick={() => action({ action: 'lobby' })}>Back to lobby</button>}
       <button className="text-button" type="button" onClick={leave}>Leave room</button>
@@ -946,24 +979,18 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
 
 function OnlineLobby({ snapshot, viewer, isHost, busy, action, leave }: { snapshot: RoomSnapshot; viewer?: RoomPlayer; isHost: boolean; busy: boolean; action: (input: Record<string, unknown>) => void; leave: () => void }) {
   const [settings, setSettings] = useState(snapshot.settings); const [mode, setMode] = useState(snapshot.mode); const joinUrl = typeof window !== 'undefined' ? `${window.location.origin}?room=${snapshot.code}` : '';
-  // The level picker is deliberately ungated, so a host can land on a
-  // level their categories have no words at. Say so here rather than
+  // The difficulty picker is deliberately ungated, so a host can land on
+  // one their categories have no words at. Say so here rather than
   // letting them start a match nobody can play.
-  const blocked = unplayableReason(settings);
+  const blocked = roomUnplayableReason(settings.difficulty, settings.categories);
   const copy = async () => { try { await navigator.clipboard.writeText(joinUrl); } catch { /* clipboard can be blocked */ } };
   const seatedCount = snapshot.players.filter((player) => player.role === 'player' && !player.left).length;
   const spectatorCount = snapshot.players.filter((player) => player.role === 'spectator' && !player.left).length;
   return <main className="page-shell"><section className="panel lobby-panel"><div className="lobby-heading"><div><p className="section-kicker">Private room</p><h1 className="room-code">{snapshot.code}</h1><p>Share this code with up to {MAX_ROOM_PLAYERS - 1} more players.</p></div><button type="button" className="secondary-button" onClick={copy}>Copy invite link</button></div>
     <div className="lobby-grid"><div><h2>Players <span>{seatedCount}/{MAX_ROOM_PLAYERS}{spectatorCount > 0 ? ` · ${spectatorCount} watching` : ''}</span></h2><div className="player-list">{snapshot.players.filter((player) => !player.left).map((player) => <div key={player.id}><span className="avatar">{player.name[0]?.toUpperCase()}</span><strong>{player.name}{player.id === viewer?.id ? ' (you)' : ''}</strong>{player.isHost && <small>Host</small>}{player.role === 'spectator' ? <em>Watching</em> : <em className={player.ready ? 'ready' : ''}>{player.ready ? 'Ready' : 'Not ready'}</em>}</div>)}</div>{!isHost && viewer?.role === 'player' && <button type="button" className="primary-button full-button" onClick={() => action({ action: 'ready', ready: !viewer?.ready })}>{viewer?.ready ? 'I’m not ready' : 'I’m ready'}</button>}</div>
       <div className="lobby-settings"><h2>Match setup</h2>{isHost ? <><div className="tabs compact three-tabs"><button className={mode === 'individuals' ? 'active' : ''} onClick={() => setMode('individuals')}>Individuals</button><button className={mode === 'teams' ? 'active' : ''} onClick={() => setMode('teams')}>Teams</button><button className={mode === 'cooperative' ? 'active' : ''} onClick={() => setMode('cooperative')}>Co-op</button></div>
-        <fieldset><legend>Which level?</legend><div className="band-grid">
-          {LEVEL_NAMES.map((name, index) => <button type="button" key={name}
-            onClick={() => setSettings({ ...settings, maxBand: (index + 1) as Level })}
-            className={`band-button ${settings.maxBand === index + 1 ? 'selected' : ''}`}>
-            <small>Level {index + 1}</small><strong>{name}</strong>
-          </button>)}
-        </div></fieldset>
-        <SettingsPanel settings={settings} setSettings={setSettings} /><button type="button" className="secondary-button full-button" onClick={() => action({ action: 'configure', settings, mode })}>Save settings</button><button type="button" disabled={busy || Boolean(blocked)} className="primary-button full-button" onClick={() => action({ action: 'start' })}>Start match</button></> : <div className="setting-summary"><p><strong>{snapshot.mode === 'individuals' ? 'Individuals' : snapshot.mode === 'teams' ? 'Teams' : 'Cooperative'}</strong></p><p>{snapshot.settings.categories.join(' + ')}</p><p>{LEVEL_NAMES[snapshot.settings.maxBand - 1]} · {snapshot.settings.length} puzzles</p></div>}</div></div>
+        <fieldset><legend>Difficulty</legend><DifficultyBar selected={settings.difficulty} onSelect={(difficulty) => setSettings({ ...settings, difficulty })} /></fieldset>
+        <RoomSettingsPanel settings={settings} setSettings={setSettings} /><button type="button" className="secondary-button full-button" onClick={() => action({ action: 'configure', settings, mode })}>Save settings</button><button type="button" disabled={busy || Boolean(blocked)} className="primary-button full-button" onClick={() => action({ action: 'start' })}>Start match</button></> : <div className="setting-summary"><p><strong>{snapshot.mode === 'individuals' ? 'Individuals' : snapshot.mode === 'teams' ? 'Teams' : 'Cooperative'}</strong></p><p>{snapshot.settings.categories.join(' + ')}</p><p>{roomDifficultyLabel(snapshot.settings.difficulty)} · {snapshot.settings.length} puzzles</p></div>}</div></div>
     <button type="button" className="text-button leave-button" onClick={leave}>Leave room</button>
   </section></main>;
 }

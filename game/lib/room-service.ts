@@ -11,7 +11,7 @@
  * of the actual game rules live here any more -- `RoomDO` calls into
  * `lib/room-rules.ts` for those, same as this file used to. */
 import { env } from 'cloudflare:workers';
-import type { GameSettings } from '@/lib/types';
+import type { RoomSettings } from '@/lib/types';
 
 export type { RoomMode, RoomPlayer, RoomRole } from '@/lib/room-rules';
 export { MAX_PLAYERS, MAX_SPECTATORS } from '@/lib/room-rules';
@@ -96,7 +96,7 @@ function messageFrom(data: unknown, fallback: string) {
     : fallback;
 }
 
-export async function createRoom(nameInput: string, settingsInput: Partial<GameSettings>, modeInput: string) {
+export async function createRoom(nameInput: string, settingsInput: Partial<RoomSettings>, modeInput: string) {
   const name = cleanName(nameInput);
   if (name.length < 2) throw new Error('Enter a name with at least 2 characters.');
   const now = Date.now();

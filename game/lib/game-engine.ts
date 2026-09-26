@@ -8,7 +8,7 @@ const HISTORY_KEY = 'gatherword-match-history-v1';
  * spelling and reference against the NWT. */
 export const PLAYABLE_BANK = WORD_BANK.filter((entry) => entry.status === 'approved');
 
-function hash32(value: string) {
+export function hash32(value: string) {
   let hash = 2166136261;
   for (let i = 0; i < value.length; i += 1) {
     hash ^= value.charCodeAt(i);
@@ -55,7 +55,7 @@ export function eligibleWords(settings: GameSettings) {
   return wordsForLevel(settings.maxBand, settings.categories);
 }
 
-const CATEGORY_LABELS: Record<Category, string> = {
+export const CATEGORY_LABELS: Record<Category, string> = {
   book: 'Bible Books', person: 'People', place: 'Places', tribe: 'Tribes', nation: 'Nations',
 };
 

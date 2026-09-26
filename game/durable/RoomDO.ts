@@ -30,15 +30,15 @@
  * touch `this.room` at all (parsing a request body, hashing a token) --
  * see `commit` for the synchronous reassignment that makes this hold. */
 import { DurableObject } from 'cloudflare:workers';
-import { createRecipe, getPuzzleEntry, normalizeAnswer, unplayableReason } from '@/lib/game-engine';
+import { getPuzzleEntry, normalizeAnswer } from '@/lib/game-engine';
 import {
-  activePlayers, applyCorrectSolve, applyWrongSolve, EMPTY_PROGRESS, eligiblePlayers,
-  pauseProgress, publicSnapshot, refundSolvers, resumeProgress, roleForJoin, shouldCloseWindow, validateSettings,
+  activePlayers, applyCorrectSolve, applyWrongSolve, buildRoomRecipe, EMPTY_PROGRESS, eligiblePlayers,
+  pauseProgress, publicSnapshot, refundSolvers, resumeProgress, roleForJoin, roomUnplayableReason, shouldCloseWindow, validateSettings,
   type PuzzleProgress, type RoomMode, type RoomPlayer, type RoomState,
 } from '@/lib/room-rules';
 import { SOLVE_WINDOW_MS } from '@/lib/room-scoring';
 import { scoreSolve } from '@/lib/scoring';
-import type { GameSettings } from '@/lib/types';
+import type { RoomSettings } from '@/lib/types';
 
 /** What a hibernating socket remembers about itself across an eviction --
  * `deserializeAttachment()` is the only thing that survives one, so the
@@ -203,7 +203,7 @@ export class RoomDO extends DurableObject<Cloudflare.Env> {
     if (action === 'ready' && status === 'LOBBY' && player.role === 'player') {
       nextPlayers = players.map((item) => item.id === player.id ? { ...item, ready: Boolean(input.ready) } : item);
     } else if (action === 'configure' && player.isHost && status === 'LOBBY') {
-      settings = validateSettings(input.settings as Partial<GameSettings>);
+      settings = validateSettings(input.settings as Partial<RoomSettings>);
       mode = input.mode === 'cooperative' ? 'cooperative' : input.mode === 'teams' ? 'teams' : 'individuals';
       if (mode === 'teams') nextPlayers = players.map((item, index) => item.role === 'player' ? ({ ...item, teamId: index % 2 === 0 ? 'sun' : 'olive' } as RoomPlayer) : item);
       else nextPlayers = players.map((item) => ({ ...item, teamId: undefined }));
@@ -211,9 +211,9 @@ export class RoomDO extends DurableObject<Cloudflare.Env> {
       const seated = activePlayers(players);
       if (mode !== 'cooperative' && seated.length < 2) throw new Error('Invite at least one more player, or choose Cooperative.');
       if (seated.some((item) => !item.isHost && !item.ready)) throw new Error('Everyone needs to be ready first.');
-      const blocked = unplayableReason(settings);
+      const blocked = roomUnplayableReason(settings.difficulty, settings.categories);
       if (blocked) throw new Error(blocked);
-      match = createRecipe(settings, randomString(32));
+      match = buildRoomRecipe(settings.difficulty, settings.categories, settings.length, randomString(32));
       nextPlayers = players.map((item) => ({ ...item, score: 0, sitOutCurrent: false }));
       status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; currentIndex = 0; resolution = { ...EMPTY_PROGRESS }; hints = {};
     } else if (action === 'hint' && status === 'PUZZLE_OPEN') {
@@ -264,9 +264,9 @@ export class RoomDO extends DurableObject<Cloudflare.Env> {
       if (currentIndex >= match.puzzles.length - 1) status = 'RESULTS';
       else { currentIndex += 1; status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; resolution = { ...EMPTY_PROGRESS }; hints = {}; }
     } else if (action === 'rematch' && player.isHost && status === 'RESULTS') {
-      const blocked = unplayableReason(settings);
+      const blocked = roomUnplayableReason(settings.difficulty, settings.categories);
       if (blocked) throw new Error(blocked);
-      match = createRecipe(settings, randomString(32)); currentIndex = 0; status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; resolution = { ...EMPTY_PROGRESS }; hints = {};
+      match = buildRoomRecipe(settings.difficulty, settings.categories, settings.length, randomString(32)); currentIndex = 0; status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; resolution = { ...EMPTY_PROGRESS }; hints = {};
       nextPlayers = players.map((item) => ({ ...item, score: 0, sitOutCurrent: false }));
     } else if (action === 'lobby' && player.isHost) {
       status = 'LOBBY'; puzzleStatus = 'WAITING'; match = null; currentIndex = 0; resolution = null; hints = {};
@@ -287,7 +287,7 @@ export class RoomDO extends DurableObject<Cloudflare.Env> {
       // a brand-new code in D1 -- there is no pre-existing `this.room` to
       // race against here the way `handleJoin` and `handleAction` do.
       if (this.room) throw new Error('This room has already been created.');
-      const body = await request.json() as { code: string; name: string; settings?: Partial<GameSettings>; mode?: string };
+      const body = await request.json() as { code: string; name: string; settings?: Partial<RoomSettings>; mode?: string };
       const name = cleanName(body.name || '');
       if (name.length < 2) throw new Error('Enter a name with at least 2 characters.');
       const now = Date.now();

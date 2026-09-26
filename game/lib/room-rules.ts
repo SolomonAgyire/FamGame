@@ -6,10 +6,10 @@
  * it unit-testable at all: `room-service.ts` imports `cloudflare:workers`
  * at the top of the file, which only resolves inside the Workers runtime,
  * so nothing in that file can be imported by a plain Node test. */
-import { getPuzzleEntry } from '@/lib/game-engine';
+import { CATEGORY_LABELS, getPuzzleEntry, hash32, makeScramble, seededRandom, unplayableReason, wordsForLevel } from '@/lib/game-engine';
 import { hintsFor } from '@/lib/hints';
 import { awardForFinishOrder, isWindowOpen } from '@/lib/room-scoring';
-import type { Category, GameSettings, Level, MatchRecipe } from '@/lib/types';
+import type { Category, Level, MatchRecipe, PuzzleRecipe, RoomDifficulty, RoomSettings } from '@/lib/types';
 
 export type RoomMode = 'individuals' | 'teams' | 'cooperative';
 export type RoomRole = 'player' | 'spectator';
@@ -171,17 +171,115 @@ export function resumeProgress(progress: PuzzleProgress, now: number): PuzzlePro
   return { ...progress, paused: false, pausedAt: null, firstSolveAt: progress.firstSolveAt !== null ? progress.firstSolveAt + pausedFor : null };
 }
 
-/** Clamps whatever a client sends into a legal `GameSettings` -- never
- * trusts categories, band or length from a request body directly. Moved
- * here from the D1-era `room-service.ts` (Stage 1) so `RoomDO` (Stage 2)
- * can run the exact same clamp when a host saves settings, starts a match
- * or asks for a rematch, without either side reimplementing it. */
-export function validateSettings(input: Partial<GameSettings>): GameSettings {
+/** `'mixed'` or an integer 1-9, exactly as advertised -- anything else
+ * (a stray string, `NaN`, `0`, `10`, `null`) is rejected back to
+ * `'mixed'`, the same default a brand-new lobby opens on. Never trusts a
+ * request body's `difficulty` directly. */
+export function validateDifficulty(input: unknown): RoomDifficulty {
+  if (input === 'mixed') return 'mixed';
+  const level = Math.floor(Number(input));
+  return Number.isFinite(level) && level >= 1 && level <= 9 ? (level as Level) : 'mixed';
+}
+
+/** Clamps whatever a client sends into a legal `RoomSettings` -- never
+ * trusts categories, difficulty or length from a request body directly.
+ * Moved here from the D1-era `room-service.ts` (Stage 1) so `RoomDO`
+ * (Stage 2) can run the exact same clamp when a host saves settings,
+ * starts a match or asks for a rematch, without either side
+ * reimplementing it. */
+export function validateSettings(input: Partial<RoomSettings>): RoomSettings {
   const allowed = ['book', 'person', 'place'] as const;
   const categories = allowed.filter((category) => input.categories?.includes(category));
-  const maxBand = Math.min(9, Math.max(1, Math.floor(Number(input.maxBand) || 1))) as Level;
+  const difficulty = validateDifficulty(input.difficulty);
   const length = Math.min(30, Math.max(3, Math.floor(Number(input.length) || 10)));
-  return { categories: categories.length ? categories : ['book'], maxBand, length };
+  return { categories: categories.length ? categories : ['book'], difficulty, length };
+}
+
+/** Why this room cannot start a match, or null when it can -- the room
+ * equivalent of `unplayableReason`. A pinned difficulty is exactly that
+ * check at that one level; `'mixed'` instead asks whether the chosen
+ * categories have approved words at ANY of the nine levels, since a
+ * mixed room only ever needs one rung of the ladder to still have
+ * something to draw from. */
+export function roomUnplayableReason(difficulty: RoomDifficulty, categories: Category[]): string | null {
+  if (categories.length === 0) return 'Choose at least one word set.';
+  if (difficulty !== 'mixed') return unplayableReason({ categories, maxBand: difficulty, length: 1 });
+  for (let level = 1; level <= 9; level += 1) {
+    if (wordsForLevel(level as Level, categories).length > 0) return null;
+  }
+  const sets = categories.map((category) => CATEGORY_LABELS[category]).join(' + ');
+  return `No words yet for ${sets} at any level. Pick another word set.`;
+}
+
+/** How many distinct approved words this room's difficulty and category
+ * choice can actually draw from -- the room equivalent of `eligibleWords`,
+ * and what the lobby's puzzle-count ceiling is clamped against. A pinned
+ * difficulty is exactly that level's pool; `'mixed'` sums every level's,
+ * since a Mixed match draws from all nine across the run. */
+export function roomWordPool(difficulty: RoomDifficulty, categories: Category[]): number {
+  if (difficulty !== 'mixed') return wordsForLevel(difficulty, categories).length;
+  let total = 0;
+  for (let level = 1; level <= 9; level += 1) total += wordsForLevel(level as Level, categories).length;
+  return total;
+}
+
+/** Where a Mixed room's puzzle at position `index` of `total` draws from:
+ * level 1 right at the start, level 9 right at the end, climbing steadily
+ * between the two. A newcomer therefore always has an easy opening to
+ * score on, and the match still finishes at the hardest content in the
+ * game -- the "starts easy, gets harder" the lobby's Mixed option
+ * promises. */
+function risingLevel(index: number, total: number): Level {
+  if (total <= 1) return 1;
+  const level = 1 + Math.round((index / (total - 1)) * 8);
+  return Math.min(9, Math.max(1, level)) as Level;
+}
+
+/** Picks one not-yet-used word for a puzzle at `level`, preferring
+ * `preferred` category to keep the same round-robin category balance
+ * `createRecipe` gives solo matches. If that level has run dry for these
+ * categories -- a thin level, or a category like tribes that stops partway
+ * up the ladder -- the search widens outward by level rather than
+ * repeating a word or abandoning the puzzle count outright. Returns
+ * undefined only once every level has been exhausted for these
+ * categories, in which case the match is simply shorter than asked. */
+function pickUnusedWord(level: Level, categories: Category[], preferred: Category, used: Set<string>, random: () => number) {
+  const atLevel = wordsForLevel(level, categories).filter((entry) => !used.has(entry.id));
+  const inPreferred = atLevel.filter((entry) => entry.categories.includes(preferred));
+  const pool = inPreferred.length > 0 ? inPreferred : atLevel;
+  if (pool.length > 0) return pool[Math.floor(random() * pool.length)];
+  for (let offset = 1; offset <= 8; offset += 1) {
+    for (const candidate of [level - offset, level + offset]) {
+      if (candidate < 1 || candidate > 9) continue;
+      const options = wordsForLevel(candidate as Level, categories).filter((entry) => !used.has(entry.id));
+      if (options.length > 0) return options[Math.floor(random() * options.length)];
+    }
+  }
+  return undefined;
+}
+
+/** Builds one room's match. A pinned `Level` draws every puzzle from that
+ * single level, exactly like a solo or Play Together match at that level.
+ * `'mixed'` instead spreads the same puzzle count across all nine levels
+ * on `risingLevel`'s curve, so the room opens somewhere everyone can
+ * score and finishes at the hardest content in the game -- meant for a
+ * table of mixed ability, where one pinned level is wrong for everyone at
+ * once. Both keep the same per-category round-robin and no-repeat
+ * guarantee `createRecipe` gives a solo match. */
+export function buildRoomRecipe(difficulty: RoomDifficulty, categories: Category[], length: number, seed: string): MatchRecipe {
+  const random = seededRandom(seed);
+  const used = new Set<string>();
+  const puzzles: PuzzleRecipe[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const level = difficulty === 'mixed' ? risingLevel(index, length) : difficulty;
+    const preferred = categories[index % categories.length];
+    const entry = pickUnusedWord(level, categories, preferred, used, random);
+    if (!entry) continue;
+    used.add(entry.id);
+    puzzles.push({ entryId: entry.id, scramble: makeScramble(entry.playable, random) });
+  }
+  const signature = hash32(puzzles.map((puzzle) => `${puzzle.entryId}:${puzzle.scramble}`).join('|')).toString(36);
+  return { seed, signature, puzzles };
 }
 
 export type RoomStatus = 'LOBBY' | 'PUZZLE_OPEN' | 'PUZZLE_RESOLVED' | 'RESULTS';
@@ -197,7 +295,7 @@ export type RoomState = {
   code: string;
   status: RoomStatus;
   mode: RoomMode;
-  settings: GameSettings;
+  settings: RoomSettings;
   players: RoomPlayer[];
   match: MatchRecipe | null;
   currentIndex: number;
@@ -212,7 +310,7 @@ export type RoomState = {
 export type PublicPlayer = Omit<RoomPlayer, 'tokenHash'>;
 
 export type RoomSnapshotDTO = {
-  code: string; status: RoomStatus; mode: RoomMode; settings: GameSettings; players: PublicPlayer[];
+  code: string; status: RoomStatus; mode: RoomMode; settings: RoomSettings; players: PublicPlayer[];
   currentIndex: number; puzzleCount: number; version: number; viewerId: string; viewerHints: number;
   puzzle: null | { id: string; scramble: string; category: Category; band: Level; hints: { kind: string; text: string }[]; display?: string; reference?: string };
   resolution: null | { solvers: SolveRecord[]; answeredIds: string[]; revealed: boolean; paused: boolean };
