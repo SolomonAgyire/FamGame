@@ -11,7 +11,7 @@ import { applyLetterHint, HINT_LABELS, hintsFor, type HintKind } from '@/lib/hin
 import { scoreSolve } from '@/lib/scoring';
 import { secondsFor, timerModeFor } from '@/lib/timing';
 import { saveProgress, recordMatch, masteredCount, subscribeProgress, getProgressSnapshot, getProgressServerSnapshot } from '@/lib/progress';
-import { highestUnlocked } from '@/lib/levels';
+import { highestUnlocked, runLengthFor } from '@/lib/levels';
 import { LevelBar } from '@/components/LevelBar';
 import { Standings } from '@/components/Standings';
 import { shuffledOrder, TileBoard } from '@/components/TileBoard';
@@ -124,7 +124,7 @@ function SamplePuzzle() {
   </div></div>;
 }
 
-function SettingsPanel({ settings, setSettings }: { settings: GameSettings; setSettings: (settings: GameSettings) => void }) {
+function SettingsPanel({ settings, setSettings, showLength = true }: { settings: GameSettings; setSettings: (settings: GameSettings) => void; showLength?: boolean }) {
   const toggleCategory = (category: Category) => {
     const active = settings.categories.includes(category);
     if (active && settings.categories.length === 1) return;
@@ -142,16 +142,42 @@ function SettingsPanel({ settings, setSettings }: { settings: GameSettings; setS
         <span>{category === 'book' ? '📖' : category === 'person' ? '👤' : '📍'}</span><strong>{category === 'book' ? 'Bible Books' : category === 'person' ? 'People' : 'Places'}</strong>
       </button>; })}
     </div></fieldset>
-    <fieldset><legend>How many puzzles?</legend><div className="length-row">
+    {/* A host setting the length for a group (Play Together, an online
+        room) is a real decision, so this control stays. Solo derives its
+        length from the level instead -- see `SoloLengthSummary` below --
+        which is why this fieldset is skippable. */}
+    {showLength && <fieldset><legend>How many puzzles?</legend><div className="length-row">
       {[10, 15].map((value) => <button type="button" key={value} onClick={() => setSettings({ ...settings, length: Math.min(value, cap) })} className={`length-button ${settings.length === value ? 'selected' : ''}`}>{value}</button>)}
       <label className="custom-length"><span>Custom</span><input aria-label="Custom puzzle count" type="number" min="3" max={cap} value={settings.length} onChange={(event) => setSettings({ ...settings, length: Math.min(cap, Math.max(3, Number(event.target.value) || 3)) })} /></label>
-    </div><p className={`field-help${blocked ? ' warn' : ''}`}>{blocked ?? `${pool} approved answers at ${LEVEL_NAMES[settings.maxBand - 1]} · no repeats inside a match`}</p></fieldset>
+    </div><p className={`field-help${blocked ? ' warn' : ''}`}>{blocked ?? `${pool} approved answers at ${LEVEL_NAMES[settings.maxBand - 1]} · no repeats inside a match`}</p></fieldset>}
   </div>;
 }
 
-function SetupScreen({ entryMode, settings, setSettings, togetherMode, setTogetherMode, teams, setTeams, start, back }: {
+/** Solo no longer asks how many puzzles -- the run's length is derived
+ * from the level (`runLengthFor`), and says so in plain words instead of
+ * offering a choice. Anyone who still wants a different length can reveal
+ * the same clamped number input a "Change length" tap away; the value
+ * they pick is held in `override` by the caller, not in `settings` itself,
+ * so it survives a level change without ever losing track of which one is
+ * the level's default and which one was chosen on purpose. */
+function SoloLengthSummary({ settings, override, setOverride }: { settings: GameSettings; override: number | null; setOverride: (value: number | null) => void }) {
+  const [changing, setChanging] = useState(false);
+  const pool = eligibleWords(settings).length;
+  const cap = Math.max(3, pool);
+  const blocked = unplayableReason(settings);
+  return <fieldset className="solo-length-panel"><legend>Your run</legend>
+    <p className="solo-length-line">{settings.length} puzzles at {LEVEL_NAMES[settings.maxBand - 1]}</p>
+    {changing
+      ? <label className="custom-length"><span>Puzzles</span><input aria-label="Custom puzzle count" type="number" min="3" max={cap} value={override ?? settings.length} onChange={(event) => setOverride(Math.min(cap, Math.max(3, Number(event.target.value) || 3)))} /></label>
+      : <button type="button" className="text-button" onClick={() => setChanging(true)}>Change length</button>}
+    <p className={`field-help${blocked ? ' warn' : ''}`}>{blocked ?? `${pool} approved answers at ${LEVEL_NAMES[settings.maxBand - 1]} · no repeats inside a match`}</p>
+  </fieldset>;
+}
+
+function SetupScreen({ entryMode, settings, setSettings, togetherMode, setTogetherMode, teams, setTeams, start, back, soloLengthOverride, setSoloLengthOverride }: {
   entryMode: EntryMode; settings: GameSettings; setSettings: (settings: GameSettings) => void; togetherMode: PlayMode; setTogetherMode: (mode: PlayMode) => void;
   teams: Team[]; setTeams: (teams: Team[]) => void; start: () => void; back: () => void;
+  soloLengthOverride: number | null; setSoloLengthOverride: (value: number | null) => void;
 }) {
   const updateTeam = (index: number, name: string) => setTeams(teams.map((team, position) => position === index ? { ...team, name: name.slice(0, 18) } : team));
   return <main className="page-shell"><section className="panel setup-panel"><button className="back-button" type="button" onClick={back}>← Back</button>
@@ -164,7 +190,8 @@ function SetupScreen({ entryMode, settings, setSettings, togetherMode, setTogeth
       {teams.map((team, index) => <label key={team.id}><span style={{ background: team.color }} /><input value={team.name} aria-label={`Team ${index + 1} name`} onChange={(event) => updateTeam(index, event.target.value)} /></label>)}
       <div className="mini-actions">{teams.length < 4 && <button type="button" onClick={() => setTeams([...teams, { id: `team-${teams.length + 1}`, name: `Team ${teams.length + 1}`, color: TEAM_COLORS[teams.length], score: 0 }])}>+ Add team</button>}{teams.length > 2 && <button type="button" onClick={() => setTeams(teams.slice(0, -1))}>− Remove</button>}</div>
     </div></fieldset>}
-    <SettingsPanel settings={settings} setSettings={setSettings} />
+    <SettingsPanel settings={settings} setSettings={setSettings} showLength={entryMode !== 'solo'} />
+    {entryMode === 'solo' && <SoloLengthSummary settings={settings} override={soloLengthOverride} setOverride={setSoloLengthOverride} />}
     <button className="primary-button full-button" type="button" disabled={Boolean(unplayableReason(settings))} onClick={start}>Create fresh match</button>
   </section></main>;
 }
@@ -960,11 +987,25 @@ export default function GatherWordApp() {
   const progress = useSyncExternalStore(subscribeProgress, getProgressSnapshot, getProgressServerSnapshot);
   const [pickedLevel, setPickedLevel] = useState<Level | null>(null);
   const level: Level = pickedLevel ?? highestUnlocked(progress);
+  // Solo no longer asks how many puzzles: its length is derived from the
+  // level (`runLengthFor`) unless this holds an explicit override from
+  // "Change length". `null` means "use the level's default" -- which is
+  // what keeps the default in step when the level changes on the home
+  // screen, since nothing here needs to react to that change on purpose.
+  const [soloLengthOverride, setSoloLengthOverride] = useState<number | null>(null);
   // Picking a level on the journey path is what a solo/together match
   // actually plays at -- the band picker used to live in SettingsPanel,
   // but the journey path replaced it. Deriving `maxBand` rather than
   // copying it means the two can never disagree.
-  const settings = useMemo<GameSettings>(() => ({ ...chosenSettings, maxBand: level }), [chosenSettings, level]);
+  const settings = useMemo<GameSettings>(() => {
+    const merged: GameSettings = { ...chosenSettings, maxBand: level };
+    if (entryMode !== 'solo') return merged;
+    // A run never asks for more words than the level holds, so the
+    // default -- and any override -- is clamped to the level's own pool.
+    const cap = Math.max(3, eligibleWords(merged).length);
+    const length = soloLengthOverride !== null ? Math.min(cap, Math.max(3, soloLengthOverride)) : Math.min(runLengthFor(level), cap);
+    return { ...merged, length };
+  }, [chosenSettings, level, entryMode, soloLengthOverride]);
   const setLevel = (value: Level) => setPickedLevel(value);
   const [teams, setTeams] = useState<Team[]>([{ id: 'team-1', name: 'Sun Team', color: TEAM_COLORS[0], score: 0 }, { id: 'team-2', name: 'Olive Team', color: TEAM_COLORS[1], score: 0 }]); const [localGameKey, setLocalGameKey] = useState(0); const [localMode, setLocalMode] = useState<PlayMode | null>(null); const [credentials, setCredentials] = useState<Credentials | null>(null); const [sound, setSound] = useState(true);
   const initialCode = useMemo(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('room')?.toUpperCase() || '', []);
@@ -1013,7 +1054,7 @@ export default function GatherWordApp() {
     : timeAttackActive ? <TimeAttackGame key={localGameKey} categories={settings.categories} sound={sound} onHome={home} />
     : localMode ? <LocalGame key={localGameKey} mode={localMode} settings={settings} teams={teams} sound={sound} onHome={home} onChangeSet={() => { setLocalMode(null); setScreen('setup'); }} />
     : screen === 'home' ? <HomeScreen startAs={startEntry} level={level} setLevel={setLevel} blocked={unplayableReason(settings)} dailyNumber={hydrated ? dailyKey.number : null} dailyDone={dailyDone} />
-    : screen === 'setup' ? <SetupScreen entryMode={entryMode} settings={settings} setSettings={setSettings} togetherMode={togetherMode} setTogetherMode={setTogetherMode} teams={teams} setTeams={setTeams} start={startLocal} back={home} />
+    : screen === 'setup' ? <SetupScreen entryMode={entryMode} settings={settings} setSettings={setSettings} togetherMode={togetherMode} setTogetherMode={setTogetherMode} teams={teams} setTeams={setTeams} start={startLocal} back={home} soloLengthOverride={soloLengthOverride} setSoloLengthOverride={setSoloLengthOverride} />
     : screen === 'online-entry' ? <OnlineEntry onBack={home} onConnected={connect} initialCode={initialCode} />
     : credentials ? <OnlineRoom credentials={credentials} leave={leave} sound={sound} /> : null}
     <footer><span>WordIn</span><span>© 2026 SolomonAgyire</span></footer>
