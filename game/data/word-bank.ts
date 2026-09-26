@@ -12,16 +12,16 @@ const books: SourceRow[] = [
   ['1 Samuel', '1 Samuel 1:1', 0], ['2 Samuel', '2 Samuel 1:1', 0], ['1 Kings', '1 Kings 1:1', 0], ['2 Kings', '2 Kings 1:1', 0],
   ['1 Chronicles', '1 Chronicles 1:1', 1], ['2 Chronicles', '2 Chronicles 1:1', 1], ['Ezra', 'Ezra 1:1', 0], ['Nehemiah', 'Nehemiah 1:1', 1],
   ['Esther', 'Esther 1:1', 0], ['Job', 'Job 1:1', 0], ['Psalms', 'Psalms 1:1', 0], ['Proverbs', 'Proverbs 1:1', 0],
-  ['Ecclesiastes', 'Ecclesiastes 1:1', 1], ['Song of Solomon', 'Song of Solomon 1:1', 1], ['Isaiah', 'Isaiah 1:1', 0], ['Jeremiah', 'Jeremiah 1:1', 0],
-  ['Lamentations', 'Lamentations 1:1', 1], ['Ezekiel', 'Ezekiel 1:1', 1], ['Daniel', 'Daniel 1:1', 0], ['Hosea', 'Hosea 1:1', 1],
-  ['Joel', 'Joel 1:1', 1], ['Amos', 'Amos 1:1', 1], ['Obadiah', 'Obadiah 1:1', 2], ['Jonah', 'Jonah 1:1', 0],
-  ['Micah', 'Micah 1:1', 1], ['Nahum', 'Nahum 1:1', 2], ['Habakkuk', 'Habakkuk 1:1', 2], ['Zephaniah', 'Zephaniah 1:1', 2],
-  ['Haggai', 'Haggai 1:1', 2], ['Zechariah', 'Zechariah 1:1', 1], ['Malachi', 'Malachi 1:1', 1], ['Matthew', 'Matthew 1:1', 0],
+  ['Ecclesiastes', 'Ecclesiastes 1:1', 3], ['Song of Solomon', 'Song of Solomon 1:1', 1], ['Isaiah', 'Isaiah 1:1', 0], ['Jeremiah', 'Jeremiah 1:1', 0],
+  ['Lamentations', 'Lamentations 1:1', 3], ['Ezekiel', 'Ezekiel 1:1', 1], ['Daniel', 'Daniel 1:1', 0], ['Hosea', 'Hosea 1:1', 1],
+  ['Joel', 'Joel 1:1', 1], ['Amos', 'Amos 1:1', 1], ['Obadiah', 'Obadiah 1:1', 4], ['Jonah', 'Jonah 1:1', 0],
+  ['Micah', 'Micah 1:1', 1], ['Nahum', 'Nahum 1:1', 4], ['Habakkuk', 'Habakkuk 1:1', 4], ['Zephaniah', 'Zephaniah 1:1', 4],
+  ['Haggai', 'Haggai 1:1', 4], ['Zechariah', 'Zechariah 1:1', 1], ['Malachi', 'Malachi 1:1', 1], ['Matthew', 'Matthew 1:1', 0],
   ['Mark', 'Mark 1:1', 0], ['Luke', 'Luke 1:1', 0], ['John', 'John 1:1', 0], ['Acts', 'Acts 1:1', 0],
   ['Romans', 'Romans 1:1', 0], ['1 Corinthians', '1 Corinthians 1:1', 0], ['2 Corinthians', '2 Corinthians 1:1', 0], ['Galatians', 'Galatians 1:1', 1],
-  ['Ephesians', 'Ephesians 1:1', 1], ['Philippians', 'Philippians 1:1', 1], ['Colossians', 'Colossians 1:1', 1], ['1 Thessalonians', '1 Thessalonians 1:1', 1],
-  ['2 Thessalonians', '2 Thessalonians 1:1', 1], ['1 Timothy', '1 Timothy 1:1', 1], ['2 Timothy', '2 Timothy 1:1', 1], ['Titus', 'Titus 1:1', 1],
-  ['Philemon', 'Philemon 1:1', 2], ['Hebrews', 'Hebrews 1:1', 1], ['James', 'James 1:1', 0], ['1 Peter', '1 Peter 1:1', 0],
+  ['Ephesians', 'Ephesians 1:1', 1], ['Philippians', 'Philippians 1:1', 1], ['Colossians', 'Colossians 1:1', 3], ['1 Thessalonians', '1 Thessalonians 1:1', 3],
+  ['2 Thessalonians', '2 Thessalonians 1:1', 3], ['1 Timothy', '1 Timothy 1:1', 1], ['2 Timothy', '2 Timothy 1:1', 1], ['Titus', 'Titus 1:1', 1],
+  ['Philemon', 'Philemon 1:1', 4], ['Hebrews', 'Hebrews 1:1', 1], ['James', 'James 1:1', 0], ['1 Peter', '1 Peter 1:1', 0],
   ['2 Peter', '2 Peter 1:1', 0], ['1 John', '1 John 1:1', 0], ['2 John', '2 John 1:1', 1], ['3 John', '3 John 1:1', 1],
   ['Jude', 'Jude 1:1', 1], ['Revelation', 'Revelation 1:1', 0],
 ];
@@ -39,9 +39,13 @@ export function difficultyScore(playable: string, familiarity: Familiarity): num
   return playable.length + familiarity * 2;
 }
 
-/** How many words each level should hold. Easier levels are larger so they
- * bear more replay; the hardest levels stay small and special. */
-export const LEVEL_TARGETS = [90, 90, 85, 80, 75, 70, 65, 55, 50] as const;
+/** How many words each level should hold, as relative weights (the actual
+ * count per level scales to the size of the bank -- see `assignLevels`).
+ * Levels still shrink through the middle of the climb, but the top three
+ * hold a deliberately large, roughly equal share: Phase G grew the hard end
+ * specifically so Strong Faith, New World and Eternity replay well instead
+ * of running out of distinct words after a few sittings. */
+export const LEVEL_TARGETS = [88, 88, 83, 78, 73, 68, 80, 80, 80] as const;
 
 function makeEntries(category: Category, rows: SourceRow[], status: 'draft' | 'approved'): WordEntry[] {
   return rows.map(([display, reference, familiarity]) => {

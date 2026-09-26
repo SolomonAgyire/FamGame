@@ -126,8 +126,35 @@ export const peopleRows: SourceRow[] = [
   ['Pudens', '2 Timothy 4:21', 4], ['Artemas', 'Titus 3:12', 4], ['Zenas', 'Titus 3:13', 4], ['Philemon', 'Philemon 1:1', 2],
   ['Jude', 'Jude 1:1', 1], ['Diotrephes', '3 John 1:9', 4],
   ['Junias', 'Romans 16:7', 4],
+
+  // --- Phase G: deepening the hard end (long, obscure, or both) ---
+  ['Chedorlaomer', 'Genesis 14:1', 4], ['Amraphel', 'Genesis 14:1', 4], ['Hazarmaveth', 'Genesis 10:26', 4],
+  ['Adoni-zedek', 'Joshua 10:1', 4],
+  ['Maher-shalal-hash-baz', 'Isaiah 8:3', 3], ['Belteshazzar', 'Daniel 1:7', 2],
+  ['Esarhaddon', '2 Kings 19:37', 4], ['Merodach-baladan', 'Isaiah 39:1', 4],
+  ['Rabsaris', '2 Kings 18:17', 4], ['Rabshakeh', '2 Kings 18:17', 3],
+  ['Tiglath-pileser', '2 Kings 15:29', 3], ['Tilgath-pilneser', '1 Chronicles 5:26', 4],
+  ['Nebushazban', 'Jeremiah 39:13', 4], ['Malchijah', 'Jeremiah 38:6', 4],
+  ['Meshullam', '2 Kings 22:3', 4], ['Nethaniah', '2 Kings 25:23', 4],
+  ['Pedaiah', '1 Chronicles 3:19', 4], ['Shephatiah', '2 Samuel 3:4', 4],
+  ['Ahimaaz', '2 Samuel 15:27', 3], ['Jehozabad', '2 Kings 12:21', 4],
+  ['Shelemiah', 'Jeremiah 36:14', 4], ['Sheshbazzar', 'Ezra 1:8', 3],
+  ['Tattenai', 'Ezra 5:3', 4], ['Shethar-bozenai', 'Ezra 5:3', 4],
+  ['Harbonah', 'Esther 1:10', 4], ['Zeresh', 'Esther 5:10', 3],
+  ['Parshandatha', 'Esther 9:7', 4], ['Dalphon', 'Esther 9:7', 4], ['Aspatha', 'Esther 9:7', 4],
+  ['Poratha', 'Esther 9:8', 4], ['Adalia', 'Esther 9:8', 4], ['Aridatha', 'Esther 9:8', 4],
+  ['Parmashta', 'Esther 9:9', 4], ['Arisai', 'Esther 9:9', 4], ['Aridai', 'Esther 9:9', 4], ['Vaizatha', 'Esther 9:9', 4],
+  ['Jehoash', '2 Kings 12:1', 3], ['Hamutal', '2 Kings 23:31', 4], ['Zebidah', '2 Kings 23:36', 4],
+  ['Nehushta', '2 Kings 24:8', 4], ['Meshullemeth', '2 Kings 21:19', 4], ['Hephzibah', '2 Kings 21:1', 3],
+  ['Jecoliah', '2 Kings 15:2', 4], ['Jerusha', '2 Kings 15:33', 4], ['Azubah', '1 Kings 22:42', 4],
+  ['Maacah', '1 Kings 15:2', 3], ['Haggith', '2 Samuel 3:4', 4], ['Abital', '2 Samuel 3:4', 4],
+  ['Eglah', '2 Samuel 3:5', 4], ['Ahinoam', '1 Samuel 25:43', 4],
 ];
 
-/** No person rows are awaiting review: Junias was confirmed as the form
- * the NWT uses at Romans 16:7 and promoted. */
-export const draftPeopleRows: SourceRow[] = [];
+/** Awaiting a firmer citation before they reach play: the spelling is
+ * plausible but the exact NWT verse was not confirmed at authoring time. */
+export const draftPeopleRows: SourceRow[] = [
+  ['Osnappar', 'Ezra 4:10', 4],
+  ['Jehohanan', '2 Chronicles 17:15', 4],
+  ['Zebadiah', '1 Chronicles 12:7', 4],
+];

@@ -92,8 +92,27 @@ export const placeRows: SourceRow[] = [
   ['Cappadocia', '1 Peter 1:1', 3], ['Smyrna', 'Revelation 2:8', 2], ['Pergamum', 'Revelation 2:12', 3], ['Thyatira', 'Revelation 2:18', 3],
   ['Sardis', 'Revelation 3:1', 3], ['Philadelphia', 'Revelation 3:7', 2], ['Laodicea', 'Revelation 3:14', 2],
   ['Asshur', 'Ezekiel 27:23', 4], ['Tigris', 'Daniel 10:4', 2], ['Memphis', 'Hosea 9:6', 3],
+
+  // --- Phase G: deepening the hard end (long, obscure, or both) ---
+  ['Abel-beth-maacah', '1 Kings 15:20', 4], ['Aroer', 'Numbers 32:34', 4], ['Baal-hazor', '2 Samuel 13:23', 4],
+  ['Ephrathah', 'Micah 5:2', 3], ['Gibbethon', '1 Kings 15:27', 4], ['Hazazon-tamar', 'Genesis 14:7', 4],
+  ['En-mishpat', 'Genesis 14:7', 4], ['Jabesh-gilead', 'Judges 21:8', 4], ['Migdol', 'Exodus 14:2', 4],
+  ['Rehoboth', 'Genesis 26:22', 4], ['Shaaraim', '1 Samuel 17:52', 4], ['Taberah', 'Numbers 11:3', 4],
+  ['Timnath-serah', 'Joshua 19:50', 4], ['Casiphia', 'Ezra 8:17', 4], ['Helkath-hazzurim', '2 Samuel 2:16', 4],
+  ['Jotbathah', 'Numbers 33:33', 4], ['Almon-diblathaim', 'Numbers 33:46', 4], ['Bamoth-baal', 'Numbers 22:41', 4],
+  ['Baal-meon', 'Numbers 32:38', 4], ['Beth-nimrah', 'Numbers 32:36', 4], ['Kiriath-sepher', 'Joshua 15:15', 3],
+  ['Kiriath-arba', 'Genesis 23:2', 3], ['Baal-perazim', '2 Samuel 5:20', 4], ['Perez-uzzah', '2 Samuel 6:8', 4],
+  ['Beer-lahai-roi', 'Genesis 16:14', 3], ['Abel-shittim', 'Numbers 33:49', 4], ['Ramathaim-zophim', '1 Samuel 1:1', 4],
+  ['Kibroth-hattaavah', 'Numbers 11:34', 3],
 ];
 
-/** No place rows are awaiting review: the three that were held back
- * (Asshur, Tigris, Memphis) were confirmed against the NWT and promoted. */
-export const draftPlaceRows: SourceRow[] = [];
+/** Awaiting a firmer citation before they reach play: each spelling is
+ * plausible but the exact NWT wording or verse was not confirmed at
+ * authoring time. */
+export const draftPlaceRows: SourceRow[] = [
+  ['Gederothaim', 'Joshua 15:36', 4],
+  ['Kiriath-huzoth', 'Numbers 22:39', 4],
+  ['Beth-arabah', 'Joshua 15:6', 4],
+  ['Chesulloth', 'Joshua 19:18', 4],
+  ['Beth-millo', 'Judges 9:6', 4],
+];

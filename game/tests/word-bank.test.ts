@@ -121,3 +121,18 @@ test('draft words never reach play', () => {
     assert.ok(!PLAYABLE_BANK.some((entry) => entry.id === draft.id), `${draft.display} is a draft but reached play`);
   }
 });
+
+test('the top three levels are deep enough to replay', () => {
+  for (const level of [7, 8, 9]) {
+    const pool = PLAYABLE_BANK.filter((entry) => entry.level === level);
+    assert.ok(pool.length >= 85, `level ${level} has only ${pool.length} words`);
+  }
+});
+
+test('every level offers more than one category', () => {
+  for (let level = 1; level <= 9; level += 1) {
+    const pool = PLAYABLE_BANK.filter((entry) => entry.level === level);
+    const kinds = new Set(pool.map((entry) => entry.categories[0]));
+    assert.ok(kinds.size >= 3, `level ${level} draws from only ${[...kinds].join(', ')}`);
+  }
+});

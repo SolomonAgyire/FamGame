@@ -61,16 +61,19 @@ test('settings filter and answer normalization behave predictably', () => {
 
 test('a category and level combination with no words is refused with a reason that names it', () => {
   // A match draws from exactly one level, so a pool can be empty: there is
-  // no approved Bible book at Eternity. That used to build a match with no
-  // puzzles, which rendered as a blank page locally and wedged an online
-  // room at PUZZLE_OPEN with no Leave, Next or Reveal control.
-  const bookOnlyAtEternity: GameSettings = { categories: ['book'], maxBand: 9, length: 10 };
-  assert.equal(wordsForLevel(9, ['book']).length, 0, 'this is the combination the guard exists for');
-  assert.equal(createRecipe(bookOnlyAtEternity, 'empty-seed').puzzles.length, 0, 'which really does build an empty match');
+  // no approved tribe at Eternity (Phase G deepened the top three levels
+  // with long, obscure people/places/nations and restored books there too,
+  // so tribes -- a fixed set of 14 that never grows -- are what runs out
+  // now). An empty pool used to build a match with no puzzles, which
+  // rendered as a blank page locally and wedged an online room at
+  // PUZZLE_OPEN with no Leave, Next or Reveal control.
+  const tribeOnlyAtEternity: GameSettings = { categories: ['tribe'], maxBand: 9, length: 10 };
+  assert.equal(wordsForLevel(9, ['tribe']).length, 0, 'this is the combination the guard exists for');
+  assert.equal(createRecipe(tribeOnlyAtEternity, 'empty-seed').puzzles.length, 0, 'which really does build an empty match');
 
-  const reason = unplayableReason(bookOnlyAtEternity);
+  const reason = unplayableReason(tribeOnlyAtEternity);
   assert.ok(reason, 'starting must be refused');
-  assert.match(reason, /Bible Books/);
+  assert.match(reason, /Tribes/);
   assert.match(reason, /Eternity/);
 });
 
@@ -85,16 +88,17 @@ test('every level with words at all is playable, and no reason is given for one 
 });
 
 test('a run never steps up into a level that has no words', () => {
-  // Time Attack climbs the levels. Book-only runs out after level 8, so
-  // stepping to 9 emptied the board and lost the run mid-flight.
-  assert.equal(nextPlayableLevelAbove(8, ['book']), null, 'nothing above 8 for books, so the run ends instead');
+  // Time Attack climbs the levels. Tribe-only runs out after level 7 (the
+  // twelve tribes are a fixed set that Phase G did not grow), so stepping
+  // to 8 or 9 emptied the board and lost the run mid-flight.
+  assert.equal(nextPlayableLevelAbove(7, ['tribe']), null, 'nothing above 7 for tribes, so the run ends instead');
   assert.equal(nextPlayableLevelAbove(8, ['book', 'person', 'place']), 9);
   const skipped = nextPlayableLevelAbove(1, ['book']);
   assert.ok(skipped && wordsForLevel(skipped, ['book']).length > 0);
 });
 
 test('a run starts at a level that has words, sliding off an empty one', () => {
-  assert.equal(playableLevelFrom(9, ['book']), 8, 'level 9 is empty for books, so fall back to the nearest below');
+  assert.equal(playableLevelFrom(9, ['tribe']), 7, 'levels 8 and 9 are empty for tribes, so fall back to the nearest below');
   assert.equal(playableLevelFrom(9, ['book', 'person', 'place']), 9);
   assert.equal(playableLevelFrom(1, ['book']), 1);
   for (const categories of [['book'], ['person'], ['place'], ['book', 'person', 'place']] as Category[][]) {

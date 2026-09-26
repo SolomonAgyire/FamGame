@@ -43,6 +43,15 @@ export const nationRows: SourceRow[] = [
   // --- Peoples of the Greek Scriptures ---
   ['Samaritans', 'John 4:9', 1], ['Galileans', 'Luke 13:1', 2], ['Gadarenes', 'Matthew 8:28', 3], ['Gerasenes', 'Mark 5:1', 4],
   ['Arabians', 'Acts 2:11', 3], ['Cretans', 'Acts 2:11', 4], ['Nazarenes', 'Acts 24:5', 4],
+
+  // --- Phase G: deepening the hard end (long, obscure, or both) ---
+  ['Ludim', 'Genesis 10:13', 4], ['Anamim', 'Genesis 10:13', 4], ['Lehabim', 'Genesis 10:13', 4],
+  ['Naphtuhim', 'Genesis 10:13', 4], ['Pathrusim', 'Genesis 10:14', 4], ['Casluhim', 'Genesis 10:14', 4],
+  ['Caphtorim', 'Genesis 10:14', 4], ['Zemarites', 'Genesis 10:18', 4], ['Zuzim', 'Genesis 14:5', 4],
+  ['Emim', 'Genesis 14:5', 4], ['Zamzummim', 'Deuteronomy 2:20', 4], ['Avvim', 'Deuteronomy 2:23', 4],
+  ['Geshurites', 'Joshua 13:13', 3], ['Gibeonites', 'Joshua 9:3', 2], ['Beerothites', '2 Samuel 4:2', 4],
+  ['Jerahmeelites', '1 Samuel 27:10', 4], ['Ashdodites', 'Nehemiah 4:7', 4], ['Ishmaelites', 'Genesis 37:25', 2],
+  ['Hagrites', '1 Chronicles 5:10', 4], ['Kittim', 'Genesis 10:4', 4],
 ];
 
 /** No nation rows are awaiting review. `Phoenicians` was dropped: the NWT
