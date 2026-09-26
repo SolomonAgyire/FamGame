@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyProgress } from '../lib/progress';
-import { isLevelCleared, highestUnlocked, isUnlocked, levelStatus, WORDS_TO_CLEAR } from '../lib/levels';
+import { isLevelCleared, highestUnlocked, isUnlocked, levelStatus, WORDS_TO_CLEAR, runLengthFor, clearTargetFor, RUN_LENGTHS, CLEAR_TARGETS } from '../lib/levels';
 import type { Level } from '../lib/types';
-import { createRecipe, wordsForLevel, getPuzzleEntry } from '../lib/game-engine';
+import { createRecipe, wordsForLevel, getPuzzleEntry, PLAYABLE_BANK } from '../lib/game-engine';
 
 function withLevel(level: Level, solvedCount: number, correct: number, attempts: number) {
   const record = emptyProgress();
@@ -43,9 +43,10 @@ test('unlocks do not skip — clearing level 5 without clearing 2 does not open 
 test('unlocking stops at level 9', () => {
   const record = emptyProgress();
   for (let level = 1; level <= 9; level += 1) {
+    const target = clearTargetFor(level as Level);
     record.levelProgress[String(level)] = {
-      solvedIds: Array.from({ length: WORDS_TO_CLEAR }, (_, i) => `w${level}-${i}`),
-      correct: 20, attempts: 20,
+      solvedIds: Array.from({ length: target }, (_, i) => `w${level}-${i}`),
+      correct: target, attempts: target,
     };
   }
   assert.equal(highestUnlocked(record), 9);
@@ -86,4 +87,62 @@ test('words for a level are all at that level and all approved', () => {
     assert.equal(word.level, 2);
     assert.equal(word.status, 'approved');
   }
+});
+
+test('a run gets longer as the journey climbs', () => {
+  assert.equal(runLengthFor(1), 10);
+  assert.equal(runLengthFor(9), 25);
+  for (let level = 2; level <= 9; level += 1) {
+    assert.ok(runLengthFor(level as Level) >= runLengthFor((level - 1) as Level),
+      `level ${level} runs shorter than level ${level - 1}`);
+  }
+});
+
+test('clearing a level takes more as the journey climbs', () => {
+  assert.equal(clearTargetFor(1), 20);
+  assert.ok(clearTargetFor(9) > clearTargetFor(1) * 2);
+  for (let level = 2; level <= 9; level += 1) {
+    assert.ok(clearTargetFor(level as Level) >= clearTargetFor((level - 1) as Level));
+  }
+});
+
+test('higher levels take at least as many runs to clear, never fewer', () => {
+  let previous = 0;
+  for (let level = 1; level <= 9; level += 1) {
+    const runs = Math.ceil(clearTargetFor(level as Level) / runLengthFor(level as Level));
+    assert.ok(runs >= previous, `level ${level} clears in ${runs} runs, fewer than level ${level - 1}`);
+    previous = runs;
+  }
+});
+
+test('every level has enough approved words to meet its own clear target', () => {
+  for (let level = 1; level <= 9; level += 1) {
+    const pool = PLAYABLE_BANK.filter((entry) => entry.level === level).length;
+    assert.ok(pool >= clearTargetFor(level as Level),
+      `level ${level} needs ${clearTargetFor(level as Level)} distinct words but has ${pool}`);
+  }
+});
+
+test('a run never asks for more words than the level holds', () => {
+  for (let level = 1; level <= 9; level += 1) {
+    const pool = PLAYABLE_BANK.filter((entry) => entry.level === level).length;
+    assert.ok(pool >= runLengthFor(level as Level));
+  }
+});
+
+test('RUN_LENGTHS and CLEAR_TARGETS cover all nine levels', () => {
+  for (let level = 1; level <= 9; level += 1) {
+    assert.ok(RUN_LENGTHS[level as Level] > 0);
+    assert.ok(CLEAR_TARGETS[level as Level] > 0);
+  }
+});
+
+test('a level already cleared under the flat twenty-word rule is grandfathered', () => {
+  // Level 9's target rose from 20 to 60. A player who cleared it back when
+  // twenty was enough must not read as uncleared today just because the
+  // target moved -- their progress at the time is what earned it.
+  const record = withLevel(9, 20, 20, 22);
+  assert.equal(isLevelCleared(record, 9), false, 'twenty no longer clears level 9 on its own merits');
+  record.legacyClears['9'] = true;
+  assert.equal(isLevelCleared(record, 9), true, 'a grandfathered level stays cleared regardless of the new target');
 });

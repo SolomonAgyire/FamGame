@@ -29,6 +29,15 @@ export type ProgressRecord = {
    * derives both from `levelProgress`, so a stored flag could only ever
    * drift out of agreement with the truth. */
   levelProgress: Record<string, LevelProgress>;
+  /** Levels that already satisfied the flat twenty-word clear rule that
+   * predated Phase G's per-level clear targets. Set once, the first time a
+   * record written before that change is loaded (see `migrate()`), from
+   * whichever levels `levelProgress` already qualified at that moment --
+   * never recomputed afterward. Without this, a level cleared under the
+   * old rule could read as uncleared once its target rose past what was
+   * required when it was actually cleared, silently re-locking progress
+   * nobody lost. Read by `isLevelCleared` in `lib/levels.ts`. */
+  legacyClears: Record<string, true>;
   streak: {
     current: number;
     best: number;
@@ -58,6 +67,7 @@ export function emptyProgress(): ProgressRecord {
     bestByMode: {},
     solveCounts: {},
     levelProgress: {},
+    legacyClears: {},
     streak: { current: 0, best: 0, lastPlayedDay: null, freezes: 0, brokenStreak: null },
     daysPlayed: [],
     solvesToday: { day: '', count: 0 },
@@ -94,6 +104,14 @@ function plainRecord<T>(value: unknown): Record<string, T> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, T> : {};
 }
 
+/** The clear rule every level used before Phase G's targets scaled per
+ * level: twenty distinct words at seventy percent accuracy, flat. Kept
+ * only so `migrate()` can recognise, on first load, whether a stored
+ * record predates that change and snapshot what it had already cleared
+ * under it -- see `legacyClears` on `ProgressRecord`. */
+const LEGACY_WORDS_TO_CLEAR = 20;
+const LEGACY_ACCURACY_TO_CLEAR = 0.7;
+
 /** Copies a stored `version: 1` record field by field. Earlier builds also
  * wrote `unlockedLevel` and a per-level `cleared` flag; both were derived
  * elsewhere and are simply dropped here, so an old record still loads and
@@ -110,6 +128,23 @@ function migrate(parsed: Record<string, unknown>): ProgressRecord {
       attempts: numberOr(entry.attempts, 0),
     };
   }
+  // A record already written under the scaled targets carries this field
+  // (`emptyProgress()` sets it, even if empty) -- keep it exactly.
+  // A record from before that change has no such key at all: this is the
+  // one moment its already-cleared levels can be told apart from the
+  // targets that will judge them from now on, so snapshot them here.
+  const rawLegacy = parsed.legacyClears;
+  const legacyClears: Record<string, true> = {};
+  if (rawLegacy && typeof rawLegacy === 'object' && !Array.isArray(rawLegacy)) {
+    for (const [key, value] of Object.entries(rawLegacy as Record<string, unknown>)) {
+      if (value === true) legacyClears[key] = true;
+    }
+  } else {
+    for (const [key, progress] of Object.entries(levelProgress)) {
+      const accurate = progress.attempts > 0 && progress.correct / progress.attempts >= LEGACY_ACCURACY_TO_CLEAR;
+      if (progress.solvedIds.length >= LEGACY_WORDS_TO_CLEAR && accurate) legacyClears[key] = true;
+    }
+  }
   const streak = plainRecord<unknown>(parsed.streak);
   // Fields are listed one by one rather than spread, so a stored record
   // cannot smuggle in a key this build does not understand. The cost is
@@ -125,6 +160,7 @@ function migrate(parsed: Record<string, unknown>): ProgressRecord {
     bestByMode: plainRecord<number>(parsed.bestByMode),
     solveCounts: plainRecord<number>(parsed.solveCounts),
     levelProgress,
+    legacyClears,
     streak: {
       current: numberOr(streak.current, base.streak.current),
       best: numberOr(streak.best, base.streak.best),

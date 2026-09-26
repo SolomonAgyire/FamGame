@@ -189,6 +189,61 @@ test('a record written with the old unlockedLevel and cleared fields still loads
   delete (globalThis as Record<string, unknown>).localStorage;
 });
 
+// --- Regression: scaled clear targets must not re-lock old progress -----
+
+test('a level cleared under the old flat rule is grandfathered on first load after the upgrade', () => {
+  // Level 9 needed 20 distinct words at 70% accuracy before Phase G's
+  // per-level clear targets landed; it needs 60 now. A record saved back
+  // when 20 was enough has no `legacyClears` field at all -- that absence
+  // is what tells `migrate()` this predates the change, so it snapshots
+  // whichever levels already qualified under the old rule right now,
+  // before the new target ever gets a chance to judge them.
+  const legacy = {
+    version: 1,
+    levelProgress: {
+      '9': { solvedIds: Array.from({ length: 20 }, (_, i) => `w${i}`), correct: 20, attempts: 22 },
+    },
+  };
+  const store = new Map<string, string>([[PROGRESS_KEY, JSON.stringify(legacy)]]);
+  (globalThis as Record<string, unknown>).localStorage = {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => { store.set(k, v); },
+  };
+  const loaded = loadProgress();
+  assert.equal(loaded.legacyClears['9'], true, 'level 9 qualified under the old flat rule, so it is grandfathered');
+  assert.equal(levelStatus(loaded, 9).cleared, true, 'and therefore still reads as cleared under the new target');
+
+  // Once grandfathered, re-saving and reloading must not lose it, even
+  // though the field is now present (and empty is not the same as absent).
+  saveProgress(loaded);
+  const reloaded = loadProgress();
+  assert.equal(reloaded.legacyClears['9'], true);
+  delete (globalThis as Record<string, unknown>).localStorage;
+});
+
+test('a level that never qualified under the old rule is not grandfathered, and a brand-new player gets none for free', () => {
+  const legacy = {
+    version: 1,
+    levelProgress: {
+      // Only 12 distinct words -- short of the old rule's 20, so this
+      // level was genuinely never cleared before the upgrade either.
+      '3': { solvedIds: Array.from({ length: 12 }, (_, i) => `w${i}`), correct: 12, attempts: 14 },
+    },
+  };
+  const store = new Map<string, string>([[PROGRESS_KEY, JSON.stringify(legacy)]]);
+  (globalThis as Record<string, unknown>).localStorage = {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => { store.set(k, v); },
+  };
+  assert.deepEqual(loadProgress().legacyClears, {});
+  delete (globalThis as Record<string, unknown>).localStorage;
+
+  // A player starting fresh after the upgrade has no old save to read at
+  // all, so `emptyProgress()` -- not the legacy-snapshot branch -- is what
+  // supplies their (empty) `legacyClears`.
+  assert.deepEqual(emptyProgress().legacyClears, {});
+});
+
 test('a version 1 record with a malformed level entry loads instead of throwing', () => {
   const store = new Map<string, string>([[PROGRESS_KEY, JSON.stringify({
     version: 1, levelProgress: { '2': { solvedIds: 'not-an-array', correct: null } }, streak: 'nonsense',
