@@ -156,3 +156,42 @@ test('a garbage history entry does not stop a match being made', () => {
     delete (globalThis as Record<string, unknown>).localStorage;
   }
 });
+
+// --- No two matches open the same way (Phase G, Task 5) -----------------
+
+test('consecutive fresh matches do not open on the same word', () => {
+  const settings = { categories: ['book', 'person', 'place'] as Category[], maxBand: 1 as Level, length: 10 };
+  const store = new Map<string, string>();
+  (globalThis as Record<string, unknown>).localStorage = {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => { store.set(k, v); },
+  };
+  let previous = '';
+  for (let run = 0; run < 25; run += 1) {
+    const recipe = createFreshRecipe(settings);
+    assert.notEqual(recipe.puzzles[0].entryId, previous, `run ${run} opened on the same word as the run before`);
+    previous = recipe.puzzles[0].entryId;
+  }
+  delete (globalThis as Record<string, unknown>).localStorage;
+});
+
+test('a history written before the opener was tracked still loads, and does not falsely block a match', () => {
+  // Before this change, `gatherword-match-history-v1` held a plain array of
+  // signatures rather than `{ signatures, lastOpener }`. Reading that shape
+  // back must not crash, and with no opener remembered, nothing should
+  // ever look like a forbidden repeat.
+  const store = new Map<string, string>([['gatherword-match-history-v1', JSON.stringify(['sig-1', 'sig-2'])]]);
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => { store.set(k, v); } },
+    configurable: true,
+  });
+  try {
+    const recipe = createFreshRecipe({ categories: ['book'], maxBand: 1, length: 4 });
+    assert.equal(recipe.puzzles.length, 4);
+    const stored = JSON.parse(store.get('gatherword-match-history-v1') as string);
+    assert.equal(stored.lastOpener, recipe.puzzles[0].entryId, 'the opener is now tracked going forward');
+    assert.ok(Array.isArray(stored.signatures));
+  } finally {
+    delete (globalThis as Record<string, unknown>).localStorage;
+  }
+});

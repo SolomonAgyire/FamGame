@@ -157,24 +157,43 @@ function secureSeed() {
   return Array.from(values, (value) => value.toString(36)).join('-');
 }
 
+/** What `createFreshRecipe` remembers between matches: up to 1000 past
+ * whole-match signatures (so a whole match is never repeated), plus the
+ * very last match's OPENING entry id -- the repetition a player actually
+ * notices is two matches in a row starting on the same word, not two
+ * matches sharing a signature buried somewhere in a list of a thousand. */
+type MatchHistory = { signatures: string[]; lastOpener: string | null };
+
+const EMPTY_HISTORY: MatchHistory = { signatures: [], lastOpener: null };
+
 /** Both sides of the history round-trip are guarded. Reaching
  * `globalThis.localStorage` can itself throw (older Safari private mode,
  * an embedded frame with storage access blocked), and `setItem` throws on
  * a full quota. Not repeating a recent match is a nicety; creating one
- * must never fail, so a blocked store just means no history. */
-function readHistory(): string[] {
+ * must never fail, so a blocked store just means no history. A record
+ * written before `lastOpener` existed was a plain signature array, not an
+ * object -- read as one with no opener remembered, rather than discarded. */
+function readHistory(): MatchHistory {
   try {
     const raw = (globalThis as { localStorage?: Storage }).localStorage?.getItem(HISTORY_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed as string[] : [];
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (Array.isArray(parsed)) return { signatures: parsed as string[], lastOpener: null };
+    if (parsed && typeof parsed === 'object') {
+      const record = parsed as { signatures?: unknown; lastOpener?: unknown };
+      return {
+        signatures: Array.isArray(record.signatures) ? record.signatures as string[] : [],
+        lastOpener: typeof record.lastOpener === 'string' ? record.lastOpener : null,
+      };
+    }
+    return EMPTY_HISTORY;
   } catch {
-    return [];
+    return EMPTY_HISTORY;
   }
 }
 
-function writeHistory(signatures: string[]): void {
+function writeHistory(history: MatchHistory): void {
   try {
-    (globalThis as { localStorage?: Storage }).localStorage?.setItem(HISTORY_KEY, JSON.stringify(signatures));
+    (globalThis as { localStorage?: Storage }).localStorage?.setItem(HISTORY_KEY, JSON.stringify(history));
   } catch {
     /* blocked or full -- the match is already made, so there is nothing to recover */
   }
@@ -182,13 +201,18 @@ function writeHistory(signatures: string[]): void {
 
 export function createFreshRecipe(settings: GameSettings) {
   const history = readHistory();
+  const opensLikeLastTime = (candidate: MatchRecipe) =>
+    history.lastOpener !== null && candidate.puzzles[0]?.entryId === history.lastOpener;
   let recipe = createRecipe(settings, secureSeed());
   let attempts = 0;
-  while (history.includes(recipe.signature) && attempts < 40) {
+  while ((history.signatures.includes(recipe.signature) || opensLikeLastTime(recipe)) && attempts < 40) {
     recipe = createRecipe(settings, secureSeed());
     attempts += 1;
   }
-  writeHistory([recipe.signature, ...history.filter((value) => value !== recipe.signature)].slice(0, 1000));
+  writeHistory({
+    signatures: [recipe.signature, ...history.signatures.filter((value) => value !== recipe.signature)].slice(0, 1000),
+    lastOpener: recipe.puzzles[0]?.entryId ?? null,
+  });
   return recipe;
 }
 
