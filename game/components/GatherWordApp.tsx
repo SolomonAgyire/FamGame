@@ -64,17 +64,24 @@ const TEAM_COLORS = ['#dd6f57', '#2e7d68', '#bc861a', '#6c6faa'];
 // that a client component must not bundle.
 const MAX_ROOM_PLAYERS = 30;
 
-function CubeBackdrop() {
-  return <div className="cube-world" aria-hidden="true">
-    <span className="glow-orb glow-orb-cyan" />
-    <span className="glow-orb glow-orb-mint" />
-    <span className="glow-orb glow-orb-violet" />
-    <span className="ambient-cube cube-one"><i /><b /><em /></span>
-    <span className="ambient-cube cube-two"><i /><b /><em /></span>
-    <span className="ambient-cube cube-three"><i /><b /><em /></span>
-    <span className="ambient-cube cube-four"><i /><b /><em /></span>
-    <span className="ambient-cube cube-five"><i /><b /><em /></span>
-  </div>;
+function JourneyBackdrop() {
+  return <div className="journey-world" aria-hidden="true" />;
+}
+
+type GameIconName = EntryMode | Category;
+
+function GameIcon({ name }: { name: GameIconName }) {
+  const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  return <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+    {name === 'solo' && <><path {...common} d="M8.2 3.5h3.2v3.2a2 2 0 1 0 4 0V3.5h3.1a2 2 0 0 1 2 2v3.2h-2.7a2 2 0 1 0 0 4h2.7v5.8a2 2 0 0 1-2 2h-5.3v-2.8a2 2 0 1 0-4 0v2.8H5.5a2 2 0 0 1-2-2v-4h2.8a2 2 0 1 0 0-4H3.5v-5a2 2 0 0 1 2-2Z" /></>}
+    {name === 'together' && <><circle {...common} cx="8" cy="8" r="3" /><circle {...common} cx="17" cy="9" r="2.5" /><path {...common} d="M2.8 19c.5-3.2 2.3-5 5.2-5s4.8 1.8 5.2 5M13 15.2c1-.9 2.2-1.3 3.7-1.3 2.5 0 4 1.5 4.5 4.1" /></>}
+    {name === 'online' && <><circle {...common} cx="12" cy="12" r="9" /><path {...common} d="M3.5 12h17M12 3c2.4 2.5 3.6 5.5 3.6 9S14.4 18.5 12 21M12 3C9.6 5.5 8.4 8.5 8.4 12s1.2 6.5 3.6 9" /></>}
+    {name === 'timeattack' && <path {...common} d="M13.7 2.5 5.8 13h5.5l-1 8.5L18.5 11H13Z" />}
+    {name === 'daily' && <><circle {...common} cx="12" cy="12" r="4" /><path {...common} d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4" /></>}
+    {name === 'book' && <><path {...common} d="M3.5 5.5c3.2-.8 5.9-.2 8.5 1.8v13c-2.6-2-5.3-2.6-8.5-1.8Z" /><path {...common} d="M20.5 5.5c-3.2-.8-5.9-.2-8.5 1.8v13c2.6-2 5.3-2.6 8.5-1.8Z" /></>}
+    {name === 'person' && <><circle {...common} cx="12" cy="8" r="4" /><path {...common} d="M4.5 21c.7-4.4 3.2-6.7 7.5-6.7s6.8 2.3 7.5 6.7" /></>}
+    {name === 'place' && <><path {...common} d="M19 9.5c0 5-7 11.5-7 11.5S5 14.5 5 9.5a7 7 0 1 1 14 0Z" /><circle {...common} cx="12" cy="9.5" r="2.4" /></>}
+  </svg>;
 }
 
 function Header({ onHome, sound, setSound }: { onHome: () => void; sound: boolean; setSound: (value: boolean) => void }) {
@@ -87,10 +94,10 @@ function Header({ onHome, sound, setSound }: { onHome: () => void; sound: boolea
 function HomeScreen({ startAs, level, setLevel, blocked, dailyNumber, dailyDone }: { startAs: (mode: EntryMode) => void; level: Level; setLevel: (level: Level) => void; blocked: string | null; dailyNumber: number | null; dailyDone: boolean }) {
   const [expanded, setExpanded] = useState<EntryMode | null>(null);
   const modes = [
-    { id: 'solo' as const, title: 'Solo Journey', icon: '🧩', tint: 'sky', detail: 'Play by yourself, at your own pace. The first four levels are untimed.' },
-    { id: 'together' as const, title: 'Play Together', icon: '🤝', tint: 'grass', detail: 'Pass one phone around. Solve as a team, or split into teams that take turns claiming each puzzle.' },
-    { id: 'online' as const, title: 'Online Room', icon: '🌐', tint: 'violet', detail: 'Everyone joins from their own phone with a six-character code -- great for players in different places.' },
-    { id: 'timeattack' as const, title: 'Time Attack', icon: '⚡', tint: 'berry', detail: 'A solo race against the clock. Each level is faster and harder -- chase your high score.' },
+    { id: 'solo' as const, title: 'Solo Journey', tint: 'sky', detail: 'Play by yourself, at your own pace. The first four levels are untimed.' },
+    { id: 'together' as const, title: 'Play Together', tint: 'grass', detail: 'Pass one phone around. Solve as a team, or split into teams that take turns claiming each puzzle.' },
+    { id: 'online' as const, title: 'Online Room', tint: 'violet', detail: 'Everyone joins from their own phone with a six-character code -- great for players in different places.' },
+    { id: 'timeattack' as const, title: 'Time Attack', tint: 'berry', detail: 'A solo race against the clock. Each level is faster and harder -- chase your high score.' },
   ];
   // Only solo and together play the level chosen here. An online room picks
   // its level in the lobby, and Time Attack starts from the player's
@@ -103,7 +110,7 @@ function HomeScreen({ startAs, level, setLevel, blocked, dailyNumber, dailyDone 
           feeds, above everything else, and is never gated by a level. */}
       <div className="daily-bar">
         <button type="button" onClick={() => startAs('daily')}>
-          <span className="mode-icon" aria-hidden="true">☀️</span>
+          <span className="mode-icon"><GameIcon name="daily" /></span>
           <strong>Daily Word</strong>
           {dailyNumber !== null && <span className="daily-bar-num">#{dailyNumber}</span>}
           {dailyNumber !== null && !dailyDone && <i className="mode-dot" aria-label="Not played yet" />}
@@ -122,7 +129,7 @@ function HomeScreen({ startAs, level, setLevel, blocked, dailyNumber, dailyDone 
           const gated = Boolean(blocked) && (item.id === 'solo' || item.id === 'together');
           return <div key={item.id} className={`mode-tile mode-tint-${item.tint} ${expanded === item.id ? 'expanded' : ''}`}>
             <button type="button" disabled={gated} onClick={() => startAs(item.id)} className="mode-tile-main">
-              <span className="mode-icon" aria-hidden="true">{item.icon}</span><strong>{item.title}</strong>
+              <span className="mode-icon"><GameIcon name={item.id} /></span><strong>{item.title}</strong>
               {(item.id === 'solo' || item.id === 'together') && <small className="mode-level">{LEVEL_NAMES[level - 1]}</small>}
             </button>
             <button type="button" className="mode-info-button" aria-label={`More about ${item.title}`} aria-expanded={expanded === item.id} onClick={(event) => { event.stopPropagation(); setExpanded(expanded === item.id ? null : item.id); }}>i</button>
@@ -155,7 +162,7 @@ function CategoryPicker({ categories, setCategories }: { categories: Category[];
   };
   return <fieldset><legend>Choose your word set</legend><p className="field-help">Select one or blend several categories.</p><div className="choice-grid three">
     {(['book', 'person', 'place'] as Category[]).map((category) => { const isSelected = categories.includes(category); return <button type="button" key={category} className={`choice-card ${isSelected ? 'selected' : ''}`} onClick={() => toggleCategory(category)} aria-pressed={isSelected}>
-      <span>{category === 'book' ? '📖' : category === 'person' ? '👤' : '📍'}</span><strong>{category === 'book' ? 'Bible Books' : category === 'person' ? 'People' : 'Places'}</strong>
+      <span><GameIcon name={category} /></span><strong>{category === 'book' ? 'Bible Books' : category === 'person' ? 'People' : 'Places'}</strong>
     </button>; })}
   </div></fieldset>;
 }
@@ -1089,7 +1096,7 @@ export default function GatherWordApp() {
   const startLocal = () => { setLocalGameKey((value) => value + 1); setLocalMode(entryMode === 'solo' ? 'solo' : togetherMode); };
   const connect = (value: Credentials) => { setCredentials(value); sessionStorage.setItem('gatherword-room', JSON.stringify(value)); setScreen('online-lobby'); };
   const leave = () => { setCredentials(null); sessionStorage.removeItem('gatherword-room'); history.replaceState({}, '', window.location.pathname); setScreen('online-entry'); };
-  return <div className="app"><CubeBackdrop /><Header onHome={home} sound={sound} setSound={setSound} />
+  return <div className="app"><JourneyBackdrop /><Header onHome={home} sound={sound} setSound={setSound} />
     {dailyActive ? <DailyWord sound={sound} onHome={home} />
     : timeAttackActive ? <TimeAttackGame key={localGameKey} categories={settings.categories} sound={sound} onHome={home} />
     : localMode ? <LocalGame key={localGameKey} mode={localMode} settings={settings} teams={teams} sound={sound} onHome={home} onChangeSet={() => { setLocalMode(null); setScreen('setup'); }} />
