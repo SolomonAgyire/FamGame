@@ -1,21 +1,28 @@
 @import 'tailwindcss';
 
 /* ============================================================
-   Tokens — light, Wordscapes-inspired: a soft sky-to-cream
-   gradient stage, glossy candy-colored buttons with a real
-   highlight (not flat fill), varied shapes (pills, circles,
-   rounded tiles) instead of one rectangle radius everywhere.
+   Tokens — a bright glass-cube world. Blue and green remain the
+   visual anchor, while violet and berry carry colour through the
+   whole experience instead of fading into a neutral lower page.
    ============================================================ */
 :root {
-  --sky-top: #dff3ff;
-  --sky-bottom: #fff7e8;
-  --surface: #ffffff;
-  --surface2: #fff9ee;
-  --line: #ead9b8;
-  --ink: #2b3a34;
-  --muted: #74807a;
-  --paper: #fff3d6;
-  --paper-ink: #3a2a10;
+  --sky-top: #bdeeff;
+  --sky-bottom: #eddcff;
+  --surface: rgba(255, 255, 255, .78);
+  --surface2: rgba(239, 249, 255, .64);
+  --line: rgba(52, 116, 146, .2);
+  --ink: #173a49;
+  --muted: #547383;
+  --paper: #e8f9ff;
+  --paper-ink: #214557;
+
+  --glass-border: rgba(255, 255, 255, .82);
+  --glass-highlight: rgba(255, 255, 255, .68);
+  --glass-shadow: rgba(31, 78, 118, .18);
+  --cyan-glass: rgba(72, 201, 240, .2);
+  --mint-glass: rgba(62, 220, 174, .2);
+  --violet-glass: rgba(149, 112, 255, .19);
+  --berry-glass: rgba(255, 105, 157, .18);
 
   --grass: #4fc072;
   --grass-deep: #2f9350;
@@ -41,7 +48,12 @@ html { scroll-behavior: smooth; }
 body {
   margin: 0;
   min-height: 100vh;
-  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 55%);
+  background:
+    radial-gradient(circle at 12% 12%, rgba(255,255,255,.88) 0 4%, transparent 24%),
+    radial-gradient(circle at 88% 28%, rgba(105,234,194,.48), transparent 28%),
+    radial-gradient(circle at 8% 72%, rgba(132,119,255,.34), transparent 30%),
+    radial-gradient(circle at 86% 88%, rgba(255,117,173,.3), transparent 30%),
+    linear-gradient(160deg, var(--sky-top) 0%, #c8f9e8 32%, var(--sky-bottom) 68%, #ffddec 100%);
   background-attachment: fixed;
   color: var(--ink);
   font-family: var(--font-body);
@@ -55,7 +67,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   outline: 3px solid var(--sky);
   outline-offset: 3px;
 }
-.app { min-height: 100vh; }
+.app { position: relative; z-index: 0; min-height: 100vh; isolation: isolate; overflow: hidden; }
 
 /* ============================================================
    Glossy tactile buttons — a light gradient sheen up top, a
@@ -1016,3 +1028,246 @@ footer {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
 }
 .mode-tile-main:disabled { opacity: .45; }
+
+/* ============================================================
+   Glass cube world — a colourful layer shared by every screen.
+   The decorations are CSS-only, lightweight, and never take
+   focus or input. Large surfaces blur; small controls stay fast.
+   ============================================================ */
+.cube-world {
+  position: fixed; inset: 0; z-index: 0; overflow: hidden;
+  pointer-events: none; perspective: 900px;
+}
+.cube-world::before {
+  content: ""; position: absolute; inset: 0;
+  background-image:
+    linear-gradient(30deg, rgba(255,255,255,.17) 12%, transparent 12.5%, transparent 87%, rgba(255,255,255,.17) 87.5%),
+    linear-gradient(150deg, rgba(255,255,255,.17) 12%, transparent 12.5%, transparent 87%, rgba(255,255,255,.17) 87.5%);
+  background-size: 58px 100px; opacity: .34;
+  mask-image: linear-gradient(to bottom, transparent 5%, #000 38%, #000 92%, transparent);
+}
+.cube-world::after {
+  content: ""; position: absolute; left: -15%; right: -15%; bottom: -16%; height: 58%;
+  background:
+    linear-gradient(30deg, rgba(54,139,191,.11) 12%, transparent 12.5%, transparent 87%, rgba(54,139,191,.11) 87.5%, rgba(54,139,191,.11)),
+    linear-gradient(150deg, rgba(126,86,202,.1) 12%, transparent 12.5%, transparent 87%, rgba(126,86,202,.1) 87.5%, rgba(126,86,202,.1));
+  background-size: 72px 126px; transform: rotate(-4deg); opacity: .5;
+  mask-image: linear-gradient(to bottom, transparent, #000 35%);
+}
+.glow-orb { position: absolute; border-radius: 50%; filter: blur(12px); opacity: .5; }
+.glow-orb-cyan { width: 38vw; height: 38vw; max-width: 520px; max-height: 520px; top: 2%; left: -14%; background: #68d9ff; }
+.glow-orb-mint { width: 34vw; height: 34vw; max-width: 460px; max-height: 460px; top: 38%; right: -15%; background: #67e8bd; }
+.glow-orb-violet { width: 42vw; height: 42vw; max-width: 580px; max-height: 580px; bottom: -16%; left: -10%; background: #a487ff; }
+
+.ambient-cube {
+  --cube-top: rgba(255,255,255,.75);
+  --cube-left: rgba(58,197,229,.35);
+  --cube-right: rgba(121,95,237,.34);
+  position: absolute; display: block; width: 80px; height: 78px;
+  opacity: .62; filter: drop-shadow(0 14px 14px rgba(43,86,128,.15));
+  animation: cube-float 9s ease-in-out infinite;
+}
+.ambient-cube i, .ambient-cube b, .ambient-cube em { position: absolute; display: block; }
+.ambient-cube i {
+  width: 52px; height: 30px; left: 14px; top: 0; background: var(--cube-top);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+.ambient-cube b {
+  width: 40px; height: 52px; left: 0; top: 15px; background: var(--cube-left);
+  clip-path: polygon(0 0, 100% 29%, 100% 100%, 0 71%);
+}
+.ambient-cube em {
+  width: 40px; height: 52px; right: 0; top: 15px; background: var(--cube-right);
+  clip-path: polygon(0 29%, 100% 0, 100% 71%, 0 100%);
+}
+.cube-one { top: 17%; left: 4%; transform: scale(.72) rotate(-8deg); }
+.cube-two { top: 8%; right: 5%; transform: scale(1.1) rotate(7deg); animation-delay: -2s; }
+.cube-three { top: 48%; right: 1%; transform: scale(.65) rotate(10deg); animation-delay: -5s; --cube-left: rgba(62,220,174,.4); --cube-right: rgba(54,169,229,.34); }
+.cube-four { bottom: 12%; left: 3%; transform: scale(1.25) rotate(-7deg); animation-delay: -7s; --cube-left: rgba(255,105,157,.33); --cube-right: rgba(149,112,255,.39); }
+.cube-five { bottom: 4%; right: 12%; transform: scale(.7) rotate(12deg); animation-delay: -3.5s; --cube-left: rgba(255,190,61,.38); --cube-right: rgba(255,105,157,.32); }
+@keyframes cube-float {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -18px; }
+}
+
+.app > header, .app > main, .app > footer, .app > .toast-stack { position: relative; z-index: 1; }
+
+/* The header is now a floating pane rather than content on bare sky. */
+.app-header {
+  width: calc(100% - 24px); margin: 12px auto 4px; padding: 10px 12px;
+  border: 1px solid var(--glass-border); border-radius: 24px 24px 24px 12px;
+  background: linear-gradient(135deg, rgba(255,255,255,.72), rgba(211,247,255,.48));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 12px 30px rgba(31,95,126,.1);
+  backdrop-filter: blur(18px) saturate(1.25);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+}
+.brand-mark {
+  border-radius: 13px 13px 13px 5px;
+  background: linear-gradient(145deg, #7ceaff 0%, #3ecfae 48%, #7974ed 100%);
+  color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.65), 0 4px 0 #248fb0, 0 8px 18px rgba(43,128,174,.25);
+  transform: rotate(-5deg);
+}
+.icon-button {
+  border-color: var(--glass-border); background: linear-gradient(145deg, rgba(255,255,255,.9), rgba(213,239,255,.72));
+  box-shadow: inset 0 1px 0 #fff, 0 3px 0 rgba(53,126,164,.28), 0 8px 18px rgba(31,95,126,.12);
+}
+.icon-button:active { box-shadow: inset 0 1px 0 #fff, 0 0 0 rgba(53,126,164,.28); }
+
+/* Every main card carries colour, edge light, and a faceted corner. */
+.puzzle-card, .panel, .streak-header, .install-banner, .level-bar, .sheet {
+  border-color: var(--glass-border);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.88) 0%, rgba(216,250,255,.68) 46%, rgba(238,224,255,.66) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.98),
+    inset -1px -1px 0 rgba(88,113,214,.08),
+    0 8px 0 rgba(255,255,255,.3),
+    0 20px 48px var(--glass-shadow);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+}
+.puzzle-card, .panel { border-radius: 26px 26px 30px 12px; }
+.setup-panel { background: linear-gradient(145deg, rgba(255,255,255,.88), rgba(211,248,255,.7) 44%, rgba(226,213,255,.72)); }
+.online-entry, .lobby-panel { background: linear-gradient(145deg, rgba(255,255,255,.9), rgba(205,255,236,.7) 42%, rgba(220,226,255,.72)); }
+.play-card { background: linear-gradient(145deg, rgba(255,255,255,.9), rgba(203,245,255,.72) 48%, rgba(226,217,255,.72)); }
+.results-panel { background: linear-gradient(145deg, rgba(255,255,255,.92), rgba(213,255,232,.72) 43%, rgba(255,218,239,.68)); }
+.sheet-backdrop { background: rgba(25, 51, 76, .36); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
+.sheet { background: linear-gradient(160deg, rgba(235,253,255,.96), rgba(235,226,255,.96)); box-shadow: 0 -18px 60px rgba(31,61,101,.22); }
+
+/* Home modes are four distinct translucent worlds. */
+.mode-tile {
+  border-color: var(--glass-border); border-radius: 22px 22px 24px 9px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.85), 0 5px 0 rgba(64,115,149,.18), 0 12px 22px rgba(44,92,131,.12);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+}
+.mode-tint-sky { background: linear-gradient(145deg, rgba(255,255,255,.84), rgba(101,211,255,.55)); }
+.mode-tint-grass { background: linear-gradient(145deg, rgba(255,255,255,.84), rgba(74,224,171,.5)); }
+.mode-tint-violet { background: linear-gradient(145deg, rgba(255,255,255,.84), rgba(151,116,255,.48)); }
+.mode-tint-berry { background: linear-gradient(145deg, rgba(255,255,255,.84), rgba(255,105,157,.46)); }
+.mode-tint-sky .mode-icon { background: linear-gradient(145deg, #effcff, #8fe7ff); }
+.mode-tint-grass .mode-icon { background: linear-gradient(145deg, #f0fff8, #8aefc7); }
+.mode-tint-violet .mode-icon { background: linear-gradient(145deg, #f7f2ff, #c0a8ff); }
+.mode-tint-berry .mode-icon { background: linear-gradient(145deg, #fff2f7, #ffafcb); }
+.mode-icon { border-radius: 12px 12px 13px 5px; box-shadow: inset 0 1px 0 rgba(255,255,255,.8), 0 3px 8px rgba(47,94,135,.12); }
+.mode-tile:active { box-shadow: inset 0 1px 0 rgba(255,255,255,.8), 0 1px 0 rgba(64,115,149,.16); }
+.mode-tile.expanded { border-color: rgba(77,106,214,.44); box-shadow: inset 0 1px 0 #fff, 0 5px 0 rgba(91,87,190,.28), 0 15px 28px rgba(63,75,148,.16); }
+.mode-info-button { border-color: rgba(255,255,255,.74); background: rgba(255,255,255,.58); }
+.mode-tile.expanded .mode-info-button { background: linear-gradient(145deg, #3d7189, #6657bc); color: #fff; border-color: transparent; }
+
+.streak-header {
+  background: linear-gradient(135deg, rgba(255,255,255,.86), rgba(151,232,255,.56) 45%, rgba(165,241,208,.52));
+}
+.daily-bar button {
+  border-color: var(--glass-border); background: linear-gradient(135deg, rgba(255,255,255,.88), rgba(255,222,142,.68), rgba(255,170,196,.43));
+  box-shadow: inset 0 1px 0 #fff, 0 4px 0 rgba(211,145,35,.3), 0 12px 22px rgba(97,94,144,.11);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+}
+.daily-bar button:active { box-shadow: inset 0 1px 0 #fff, 0 0 0 rgba(211,145,35,.3); }
+.daily-bar .mode-icon { background: linear-gradient(145deg, #fff9dc, #ffd873); }
+.level-bar {
+  background: linear-gradient(135deg, rgba(255,255,255,.86), rgba(214,250,255,.62), rgba(221,215,255,.58));
+  box-shadow: inset 0 1px 0 #fff, 0 4px 0 rgba(66,128,166,.2), 0 12px 24px rgba(39,93,129,.1);
+}
+.level-bar:active { box-shadow: inset 0 1px 0 #fff, 0 0 0 rgba(66,128,166,.2); }
+.level-rail i.open { background: rgba(73,196,221,.42); }
+.level-rail i.shut { background: rgba(130,111,221,.18); }
+
+/* Settings choices behave like small glass cubes rather than grey cards. */
+.choice-card, .band-button, .length-button, .wide-choice, .custom-length,
+.team-inputs input, .form-stack input, .setting-summary {
+  border-color: var(--glass-border);
+  background: linear-gradient(145deg, rgba(255,255,255,.8), rgba(221,246,255,.62));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 3px 0 rgba(67,123,156,.18), 0 8px 16px rgba(45,92,126,.08);
+}
+.choice-card, .band-button, .wide-choice { border-radius: 18px 18px 20px 7px; }
+.choice-grid .choice-card:nth-child(1), .band-grid .band-button:nth-child(1) { background: linear-gradient(145deg, rgba(255,255,255,.86), rgba(100,215,250,.42)); }
+.choice-grid .choice-card:nth-child(2), .band-grid .band-button:nth-child(2) { background: linear-gradient(145deg, rgba(255,255,255,.86), rgba(79,224,171,.4)); }
+.choice-grid .choice-card:nth-child(3), .band-grid .band-button:nth-child(3) { background: linear-gradient(145deg, rgba(255,255,255,.86), rgba(157,117,255,.4)); }
+.band-grid .band-button:nth-child(4) { background: linear-gradient(145deg, rgba(255,255,255,.86), rgba(255,105,157,.4)); }
+.choice-card.selected, .band-button.selected, .length-button.selected, .wide-choice.selected {
+  color: var(--ink); border-color: rgba(255,255,255,.95); outline: 3px solid rgba(255,190,61,.8); outline-offset: 1px;
+  box-shadow: inset 0 1px 0 #fff, 0 4px 0 rgba(218,148,28,.4), 0 10px 20px rgba(87,91,155,.14);
+}
+.choice-card.selected strong { color: var(--ink); }
+.choice-card.selected > span { background: rgba(255,255,255,.6); }
+.wide-choice.selected small, .band-button.selected small { color: var(--muted); }
+.length-button { background: linear-gradient(145deg, rgba(255,255,255,.82), rgba(190,231,255,.65)); }
+.length-button:nth-child(2n) { background: linear-gradient(145deg, rgba(255,255,255,.82), rgba(218,201,255,.62)); }
+.choice-check { background: linear-gradient(145deg, #fff, #dfffea); color: #208966; box-shadow: 0 3px 0 rgba(45,143,107,.28); }
+
+/* The actual puzzle pieces are now bevelled cubes. */
+.letter-tile {
+  border: 1px solid rgba(255,255,255,.82); border-radius: 13px 13px 14px 5px;
+  background: linear-gradient(145deg, #fff 0%, #dff8ff 48%, #c7e9ff 100%); color: var(--paper-ink);
+  box-shadow: inset 0 1px 0 #fff, inset -2px -2px 0 rgba(69,132,170,.1), 0 4px 0 #82c5df, 0 8px 12px rgba(42,101,137,.14);
+}
+button.letter-tile:active { box-shadow: inset 0 1px 0 #fff, 0 0 0 #82c5df; }
+.letter-tile:nth-child(3n + 2) { background: linear-gradient(145deg, #fff, #e7ddff); box-shadow: inset 0 1px 0 #fff, inset -2px -2px 0 rgba(107,75,176,.09), 0 4px 0 #aa94e5, 0 8px 12px rgba(73,61,131,.13); }
+.letter-tile:nth-child(3n) { background: linear-gradient(145deg, #fff, #d9f9e9); box-shadow: inset 0 1px 0 #fff, inset -2px -2px 0 rgba(55,138,103,.08), 0 4px 0 #82d4ae, 0 8px 12px rgba(38,117,82,.12); }
+.letter-tile.placed {
+  border-color: rgba(255,255,255,.7); background: linear-gradient(145deg, #8cf2c2, #3acda6 55%, #42aee5); color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.62), 0 4px 0 #218d82, 0 8px 14px rgba(34,126,123,.22);
+}
+.answer-slot { border-color: rgba(61,136,185,.38); border-radius: 13px 13px 14px 5px; background: rgba(255,255,255,.28); }
+.fixed-tile { border-color: rgba(96,111,195,.3); background: rgba(238,230,255,.58); }
+.scramble-area {
+  border: 1px solid rgba(255,255,255,.68); border-radius: 22px 22px 24px 9px;
+  background: linear-gradient(145deg, rgba(92,210,242,.16), rgba(153,113,255,.18));
+  box-shadow: inset 0 2px 8px rgba(51,104,151,.1), inset 0 1px 0 rgba(255,255,255,.7);
+}
+
+/* Match chrome, room lists, and results keep the same colour language. */
+.score-strip > span, .standings-toggle, .standings-row, .player-list > div, .claim-panel,
+.lifetime-row span, .daily-scoreline div {
+  border-color: var(--glass-border); background: linear-gradient(145deg, rgba(255,255,255,.76), rgba(211,244,255,.56));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 3px 9px rgba(44,91,128,.08);
+}
+.score-strip > span:nth-child(2n), .standings-row:nth-child(2n), .player-list > div:nth-child(2n),
+.lifetime-row span:nth-child(2n), .daily-scoreline div:nth-child(2n) {
+  background: linear-gradient(145deg, rgba(255,255,255,.78), rgba(227,213,255,.56));
+}
+.score-strip > span:nth-child(3n), .standings-row:nth-child(3n), .player-list > div:nth-child(3n),
+.lifetime-row span:nth-child(3n), .daily-scoreline div:nth-child(3n) {
+  background: linear-gradient(145deg, rgba(255,255,255,.78), rgba(201,248,227,.58));
+}
+.progress { background: rgba(255,255,255,.42); border-color: var(--glass-border); }
+.progress i { background: linear-gradient(90deg, #3fd1aa, #4bc9ed, #9479f7); }
+.standings-row.viewer { border-color: rgba(66,171,222,.72); background: linear-gradient(145deg, rgba(255,255,255,.88), rgba(137,226,255,.48), rgba(194,180,255,.4)); box-shadow: 0 3px 0 rgba(48,142,189,.34); }
+.avatar { border-radius: 11px 11px 12px 4px; background: linear-gradient(145deg, #80e8ff, #50d7ae 52%, #8278ee); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.6), 0 3px 0 rgba(49,132,155,.32); }
+.hint-box { background: linear-gradient(135deg, rgba(255,246,198,.76), rgba(255,209,229,.6)); border-color: rgba(255,255,255,.82); box-shadow: inset 0 1px 0 #fff; }
+.resolution { background: linear-gradient(145deg, rgba(218,255,234,.88), rgba(190,244,255,.75), rgba(230,216,255,.68)); border-color: var(--glass-border); box-shadow: inset 0 1px 0 #fff, 0 12px 28px rgba(47,122,119,.13); }
+.resolution .scripture { background: linear-gradient(145deg, rgba(255,255,255,.92), rgba(255,228,151,.68), rgba(255,190,216,.5)); border-color: rgba(255,255,255,.88); box-shadow: inset 0 1px 0 #fff, 0 4px 0 rgba(205,152,57,.35); }
+.resolution-rule { background: linear-gradient(90deg, #44d2aa, #48bfe7, #9679ef); }
+.stat-grid > div, .leaderboard > div { border-color: var(--glass-border); background: linear-gradient(145deg, rgba(255,255,255,.78), rgba(210,246,255,.58)); box-shadow: inset 0 1px 0 #fff, 0 3px 9px rgba(43,92,128,.08); }
+.stat-grid > div:nth-child(2), .leaderboard > div:nth-child(2) { background: linear-gradient(145deg, rgba(255,255,255,.8), rgba(222,207,255,.58)); }
+.stat-grid > div:nth-child(3), .leaderboard > div:nth-child(3) { background: linear-gradient(145deg, rgba(255,255,255,.8), rgba(199,248,224,.6)); }
+.room-code { background: linear-gradient(145deg, rgba(255,255,255,.8), rgba(164,231,255,.55), rgba(201,183,255,.48)); border-color: var(--glass-border); }
+
+.primary-button, .check-button {
+  background: linear-gradient(145deg, #fff08d 0%, #ffc64c 54%, #ffad62 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.72), 0 4px 0 #d78325, 0 10px 20px rgba(211,112,43,.2);
+}
+.secondary-button, .soft-button {
+  border-color: var(--glass-border); background: linear-gradient(145deg, rgba(255,255,255,.9), rgba(211,242,255,.74), rgba(226,214,255,.66));
+  box-shadow: inset 0 1px 0 #fff, 0 3px 0 rgba(70,120,163,.24), 0 8px 16px rgba(45,89,127,.1);
+}
+.secondary-button:active, .soft-button:active { box-shadow: inset 0 1px 0 #fff, 0 0 0 rgba(70,120,163,.24); }
+.toast-info { border-color: var(--glass-border); background: linear-gradient(145deg, rgba(255,255,255,.94), rgba(209,247,255,.9), rgba(228,215,255,.86)); box-shadow: 0 10px 28px rgba(40,81,119,.18); }
+.best-flag.quiet { background: linear-gradient(145deg, rgba(255,255,255,.74), rgba(217,238,255,.58)); box-shadow: 0 3px 0 rgba(68,123,157,.2); }
+
+footer { border-top-color: rgba(255,255,255,.5); color: #496c7c; }
+
+@media (max-width: 700px) {
+  .ambient-cube { opacity: .34; transform: scale(.55); }
+  .cube-two { top: 13%; right: -4%; }
+  .cube-one { left: -6%; }
+  .cube-three { right: -8%; }
+  .cube-four { left: -8%; }
+  .puzzle-card, .panel, .streak-header, .install-banner, .level-bar, .sheet {
+    backdrop-filter: blur(14px) saturate(1.12); -webkit-backdrop-filter: blur(14px) saturate(1.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-cube { animation: none; }
+}

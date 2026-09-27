@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#ffbe3d',
+  themeColor: '#73d9dc',
   width: 'device-width',
   initialScale: 1,
   // The board is a tap surface -- a double-tap zoom mid-puzzle is an

@@ -64,6 +64,19 @@ const TEAM_COLORS = ['#dd6f57', '#2e7d68', '#bc861a', '#6c6faa'];
 // that a client component must not bundle.
 const MAX_ROOM_PLAYERS = 30;
 
+function CubeBackdrop() {
+  return <div className="cube-world" aria-hidden="true">
+    <span className="glow-orb glow-orb-cyan" />
+    <span className="glow-orb glow-orb-mint" />
+    <span className="glow-orb glow-orb-violet" />
+    <span className="ambient-cube cube-one"><i /><b /><em /></span>
+    <span className="ambient-cube cube-two"><i /><b /><em /></span>
+    <span className="ambient-cube cube-three"><i /><b /><em /></span>
+    <span className="ambient-cube cube-four"><i /><b /><em /></span>
+    <span className="ambient-cube cube-five"><i /><b /><em /></span>
+  </div>;
+}
+
 function Header({ onHome, sound, setSound }: { onHome: () => void; sound: boolean; setSound: (value: boolean) => void }) {
   return <header className="app-header">
     <button className="brand" type="button" onClick={onHome} aria-label="WordIn home"><span className="brand-mark">W</span><span><strong>WordIn</strong><small>Bible word game</small></span></button>
@@ -1076,7 +1089,7 @@ export default function GatherWordApp() {
   const startLocal = () => { setLocalGameKey((value) => value + 1); setLocalMode(entryMode === 'solo' ? 'solo' : togetherMode); };
   const connect = (value: Credentials) => { setCredentials(value); sessionStorage.setItem('gatherword-room', JSON.stringify(value)); setScreen('online-lobby'); };
   const leave = () => { setCredentials(null); sessionStorage.removeItem('gatherword-room'); history.replaceState({}, '', window.location.pathname); setScreen('online-entry'); };
-  return <div className="app"><Header onHome={home} sound={sound} setSound={setSound} />
+  return <div className="app"><CubeBackdrop /><Header onHome={home} sound={sound} setSound={setSound} />
     {dailyActive ? <DailyWord sound={sound} onHome={home} />
     : timeAttackActive ? <TimeAttackGame key={localGameKey} categories={settings.categories} sound={sound} onHome={home} />
     : localMode ? <LocalGame key={localGameKey} mode={localMode} settings={settings} teams={teams} sound={sound} onHome={home} onChangeSet={() => { setLocalMode(null); setScreen('setup'); }} />
