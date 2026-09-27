@@ -12,7 +12,7 @@ const LEVELS: Level[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
  * control keeps the whole path visible as a nine-segment rail instead of
  * reducing it to a number in a dropdown. Expanded, it is the same list as
  * before -- it just no longer costs most of the home screen to show. */
-export function LevelBar({ selected, onSelect }: { selected: Level; onSelect: (level: Level) => void }) {
+export function LevelBar({ selected, onSelect, variant = 'bar' }: { selected: Level; onSelect: (level: Level) => void; variant?: 'bar' | 'ground' }) {
   const record = useSyncExternalStore(subscribeProgress, getProgressSnapshot, getProgressServerSnapshot);
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -38,6 +38,49 @@ export function LevelBar({ selected, onSelect }: { selected: Level; onSelect: (l
   }, [open, close]);
 
   const pick = (level: Level) => { onSelect(level); close(); };
+
+  const windowStart = Math.max(1, Math.min(5, selected - 2));
+  const visibleLevels = LEVELS.slice(windowStart - 1, windowStart + 4);
+
+  const sheet = open && <div className="sheet-backdrop" onClick={close}>
+    <div
+      className="sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Choose your level"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <div className="sheet-grip" aria-hidden="true" />
+      <div className="sheet-head">
+        <h2>Your journey</h2>
+        <button type="button" className="sheet-close" onClick={close} aria-label="Close">×</button>
+      </div>
+      <div className="sheet-body">
+        <LevelPath selected={selected} onSelect={pick} />
+      </div>
+    </div>
+  </div>;
+
+  if (variant === 'ground') return <>
+    <nav className="ground-level-path" aria-label="Journey levels">
+      {visibleLevels.map((level, index) => {
+        const each = levelStatus(record, level);
+        return <button
+          key={level}
+          type="button"
+          className={`ground-level-node ground-level-${index} ${level === selected ? 'selected' : ''} ${each.cleared ? 'cleared' : ''}`}
+          disabled={!each.unlocked}
+          onClick={() => onSelect(level)}
+          aria-label={`${each.name}, level ${level}${level === selected ? ', selected' : ''}${each.unlocked ? '' : ', locked'}`}
+        >
+          <span>{each.cleared ? '✓' : level}</span>
+          {level === selected && <small>{each.name}</small>}
+        </button>;
+      })}
+      <button ref={triggerRef} type="button" className="ground-level-more" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(true)}>All levels</button>
+    </nav>
+    {sheet}
+  </>;
 
   return <>
     <button
@@ -68,23 +111,6 @@ export function LevelBar({ selected, onSelect }: { selected: Level; onSelect: (l
       <span className="sr-only">Change level. Currently {status.name}, level {selected} of 9.</span>
     </button>
 
-    {open && <div className="sheet-backdrop" onClick={close}>
-      <div
-        className="sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Choose your level"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="sheet-grip" aria-hidden="true" />
-        <div className="sheet-head">
-          <h2>Your journey</h2>
-          <button type="button" className="sheet-close" onClick={close} aria-label="Close">×</button>
-        </div>
-        <div className="sheet-body">
-          <LevelPath selected={selected} onSelect={pick} />
-        </div>
-      </div>
-    </div>}
+    {sheet}
   </>;
 }

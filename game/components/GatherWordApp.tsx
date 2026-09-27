@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { advanceMatch, buildLevelQueue, createFreshRecipe, eligibleWords, getEntryById, getPuzzleEntry, nextPlayableLevelAbove, normalizeAnswer, playableLevelFrom, unplayableReason } from '@/lib/game-engine';
 import { duckMusic, playCorrect, playTap, playWrong, startMusic, stopMusic } from '@/lib/audio';
 import { showToast, subscribeToasts, type Toast } from '@/lib/toast';
-import { InstallPrompt } from '@/components/InstallPrompt';
 import type { Category, GameSettings, Level, MatchRecipe, PlayMode, PuzzleRecipe, RoomSettings, Team } from '@/lib/types';
 import { LEVEL_NAMES } from '@/lib/types';
 import { applyLetterHint, HINT_LABELS, hintsFor, type HintKind } from '@/lib/hints';
@@ -17,7 +16,7 @@ import { LevelBar } from '@/components/LevelBar';
 import { DifficultyBar, roomDifficultyLabel } from '@/components/DifficultyBar';
 import { Standings } from '@/components/Standings';
 import { shuffledOrder, TileBoard } from '@/components/TileBoard';
-import { DailyWord, StreakHeader, useHydrated } from '@/components/DailyWord';
+import { DailyWord, useHydrated } from '@/components/DailyWord';
 import { dailyPuzzleFor } from '@/lib/daily';
 
 function ToastHost() {
@@ -84,14 +83,21 @@ function GameIcon({ name }: { name: GameIconName }) {
   </svg>;
 }
 
-function Header({ onHome, sound, setSound }: { onHome: () => void; sound: boolean; setSound: (value: boolean) => void }) {
-  return <header className="app-header">
-    <button className="brand" type="button" onClick={onHome} aria-label="WordIn home"><span className="brand-mark">W</span><span><strong>WordIn</strong><small>Bible word game</small></span></button>
+function Header({ onHome, sound, setSound, homeMode = false, dailyNumber, dailyDone, onDaily }: { onHome: () => void; sound: boolean; setSound: (value: boolean) => void; homeMode?: boolean; dailyNumber?: number | null; dailyDone?: boolean; onDaily?: () => void }) {
+  return <header className={`app-header ${homeMode ? 'home-header' : ''}`}>
+    <button className={`brand ${homeMode ? 'home-brand' : ''}`} type="button" onClick={onHome} aria-label="WordIn home">
+      {!homeMode && <span className="brand-mark">W</span>}
+      <span><strong>Word<span>In</span></strong>{!homeMode && <small>Bible word game</small>}</span>
+    </button>
     <div className="header-actions"><button type="button" className="icon-button" onClick={() => setSound(!sound)} aria-label={`${sound ? 'Turn off' : 'Turn on'} sound`}>{sound ? '♪' : '♪̸'}</button></div>
+    {homeMode && <button type="button" className="home-daily-button" onClick={onDaily}>
+      <span>Daily Word</span>
+      <strong>{dailyDone ? '✓' : dailyNumber === null || dailyNumber === undefined ? '…' : `#${dailyNumber}`}</strong>
+    </button>}
   </header>;
 }
 
-function HomeScreen({ startAs, level, setLevel, blocked, dailyNumber, dailyDone }: { startAs: (mode: EntryMode) => void; level: Level; setLevel: (level: Level) => void; blocked: string | null; dailyNumber: number | null; dailyDone: boolean }) {
+function HomeScreen({ startAs, level, setLevel, blocked }: { startAs: (mode: EntryMode) => void; level: Level; setLevel: (level: Level) => void; blocked: string | null }) {
   const [expanded, setExpanded] = useState<EntryMode | null>(null);
   const modes = [
     { id: 'solo' as const, title: 'Solo Journey', tint: 'sky', detail: 'Play by yourself, at your own pace. The first four levels are untimed.' },
@@ -105,21 +111,9 @@ function HomeScreen({ startAs, level, setLevel, blocked, dailyNumber, dailyDone 
   const stopped = Boolean(blocked);
   return <main className="home-shell">
     <section className="home-grid">
-      <StreakHeader />
-      {/* The Daily Word is the habit, so it sits directly under the streak it
-          feeds, above everything else, and is never gated by a level. */}
-      <div className="daily-bar">
-        <button type="button" onClick={() => startAs('daily')}>
-          <span className="mode-icon"><GameIcon name="daily" /></span>
-          <strong>Daily Word</strong>
-          {dailyNumber !== null && <span className="daily-bar-num">#{dailyNumber}</span>}
-          {dailyNumber !== null && !dailyDone && <i className="mode-dot" aria-label="Not played yet" />}
-        </button>
-      </div>
       <h1 className="hero-title">Unscramble the word</h1>
-      <InstallPrompt />
       <SamplePuzzle />
-      <LevelBar selected={level} onSelect={setLevel} />
+      <LevelBar selected={level} onSelect={setLevel} variant="ground" />
       {stopped && <p className="field-help warn" role="status">{blocked}</p>}
       {/* Each tile starts its mode on tap. A separate Start button below cost
           a row of its own and a second decision for something the tile had
@@ -142,12 +136,9 @@ function HomeScreen({ startAs, level, setLevel, blocked, dailyNumber, dailyDone 
 }
 
 function SamplePuzzle() {
-  return <div className="sample-wrap"><div className="puzzle-card sample-card">
-    <div className="card-top"><div><p className="puzzle-kicker">People</p><h2>Who is hiding here?</h2></div><span className="points-pill">9 pts</span></div>
+  return <div className="sample-wrap home-scramble">
     <div className="tile-row" aria-label="Scrambled letters H A M A B R A">{'HAMABRA'.split('').map((letter, index) => <span className="letter-tile" key={`${letter}-${index}`}>{letter}</span>)}</div>
-    <div className="tile-row answer-row" aria-label="Empty answer slots">{Array.from({ length: 7 }, (_, index) => <span className="answer-slot" key={index} />)}</div>
-    <div className="sample-footer"><span>↻ Shuffle</span><small>Tap letters to build the answer</small><span>✦ Hint</span></div>
-  </div></div>;
+  </div>;
 }
 
 /** The category toggle grid, shared by solo/together's `SettingsPanel` and
@@ -1096,15 +1087,16 @@ export default function GatherWordApp() {
   const startLocal = () => { setLocalGameKey((value) => value + 1); setLocalMode(entryMode === 'solo' ? 'solo' : togetherMode); };
   const connect = (value: Credentials) => { setCredentials(value); sessionStorage.setItem('gatherword-room', JSON.stringify(value)); setScreen('online-lobby'); };
   const leave = () => { setCredentials(null); sessionStorage.removeItem('gatherword-room'); history.replaceState({}, '', window.location.pathname); setScreen('online-entry'); };
-  return <div className="app"><JourneyBackdrop /><Header onHome={home} sound={sound} setSound={setSound} />
+  const showingHome = !dailyActive && !timeAttackActive && !localMode && screen === 'home';
+  return <div className="app"><JourneyBackdrop /><Header onHome={home} sound={sound} setSound={setSound} homeMode={showingHome} dailyNumber={hydrated ? dailyKey.number : null} dailyDone={dailyDone} onDaily={() => startEntry('daily')} />
     {dailyActive ? <DailyWord sound={sound} onHome={home} />
     : timeAttackActive ? <TimeAttackGame key={localGameKey} categories={settings.categories} sound={sound} onHome={home} />
     : localMode ? <LocalGame key={localGameKey} mode={localMode} settings={settings} teams={teams} sound={sound} onHome={home} onChangeSet={() => { setLocalMode(null); setScreen('setup'); }} />
-    : screen === 'home' ? <HomeScreen startAs={startEntry} level={level} setLevel={setLevel} blocked={unplayableReason(settings)} dailyNumber={hydrated ? dailyKey.number : null} dailyDone={dailyDone} />
+    : screen === 'home' ? <HomeScreen startAs={startEntry} level={level} setLevel={setLevel} blocked={unplayableReason(settings)} />
     : screen === 'setup' ? <SetupScreen entryMode={entryMode} settings={settings} setSettings={setSettings} togetherMode={togetherMode} setTogetherMode={setTogetherMode} teams={teams} setTeams={setTeams} start={startLocal} back={home} soloLengthOverride={soloLengthOverride} setSoloLengthOverride={setSoloLengthOverride} />
     : screen === 'online-entry' ? <OnlineEntry onBack={home} onConnected={connect} initialCode={initialCode} />
     : credentials ? <OnlineRoom credentials={credentials} leave={leave} sound={sound} /> : null}
-    <footer><span>WordIn</span><span>© 2026 SolomonAgyire</span></footer>
+    {!showingHome && <footer><span>WordIn</span><span>© 2026 SolomonAgyire</span></footer>}
     <ToastHost />
   </div>;
 }

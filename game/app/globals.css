@@ -1281,3 +1281,138 @@ footer {
 @media (prefers-reduced-motion: reduce) {
   .journey-world { background-attachment: scroll; }
 }
+
+/* ============================================================
+   Phone home screen — the world itself is the layout. There is
+   no dashboard card around the sample scramble: title, cubes,
+   level stones and mode buttons sit directly in the landscape.
+   ============================================================ */
+.app {
+  width: 100%; max-width: 520px; margin: 0 auto;
+  box-shadow: 0 0 45px rgba(13, 45, 35, .28);
+}
+.journey-world {
+  inset: 0 auto 0 50%; width: min(100vw, 520px); height: 100svh;
+  transform: translateX(-50%); background-position: center center;
+}
+
+.home-header {
+  position: relative; display: block; width: calc(100% - 16px); height: 76px;
+  max-width: 500px; margin: 8px auto 2px; padding: 0;
+  border: 0; border-radius: 0; background: transparent; box-shadow: none;
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+.home-header .header-actions { position: absolute; z-index: 2; left: 0; top: 9px; }
+.home-header .icon-button {
+  width: 45px; height: 45px; border-color: #b4c1bd; border-radius: 12px 12px 13px 5px;
+  background: #617276; color: #fff9dc; box-shadow: inset 0 2px 0 rgba(255,255,255,.32), 0 4px 0 #354b50, 0 8px 14px rgba(31,48,42,.24);
+}
+.home-brand {
+  position: absolute; z-index: 1; left: 50%; top: 0; width: 164px; min-height: 62px;
+  justify-content: center; padding: 7px 14px; transform: translateX(-50%);
+  border: 2px solid #b77e34; border-radius: 17px 17px 19px 7px;
+  background: #f7e2ac;
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.7), inset 0 -3px 0 rgba(139,86,25,.1), 0 5px 0 #8e5e29, 0 11px 20px rgba(57,50,24,.22);
+}
+.home-brand strong {
+  font-size: 30px; line-height: 1; color: #086d6b; letter-spacing: -.05em;
+  text-shadow: 0 2px 0 rgba(255,255,255,.75);
+}
+.home-brand strong span { color: #ce8b18; }
+.home-daily-button {
+  position: absolute; z-index: 2; top: 4px; right: 0; display: flex; width: 98px; height: 54px;
+  flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  border: 2px solid #b77f37; border-radius: 13px 13px 15px 5px;
+  background: #f7e2aa; color: #49371e;
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.68), 0 4px 0 #8d5e2b, 0 9px 16px rgba(56,48,24,.2);
+}
+.home-daily-button span { font-family: Georgia, 'Times New Roman', serif; font-size: 12px; font-weight: 700; line-height: 1; }
+.home-daily-button strong { color: #b96216; font-size: 12px; line-height: 1; }
+.home-daily-button:active { translate: 0 4px; box-shadow: inset 0 2px 0 rgba(255,255,255,.6); }
+
+.home-shell { min-height: calc(100svh - 86px); }
+.home-grid {
+  width: 100%; min-height: calc(100svh - 86px); max-width: 500px;
+  padding: 9px 16px max(14px, env(safe-area-inset-bottom)); gap: 12px;
+}
+.home-grid .hero-title {
+  margin: 0 auto; padding: 7px 24px; font-size: clamp(20px, 5.6vw, 25px);
+}
+
+.home-scramble {
+  position: relative; width: 100%; padding: 9px 0 19px; isolation: isolate;
+}
+.home-scramble::after {
+  content: ""; position: absolute; z-index: -1; left: 2%; right: 2%; bottom: 5px; height: 19px;
+  border: 2px solid rgba(213,255,255,.78); border-radius: 9px;
+  background: rgba(69, 218, 219, .52);
+  box-shadow: inset 0 3px 0 rgba(255,255,255,.38), 0 5px 0 rgba(7,103,108,.65), 0 10px 17px rgba(26,66,54,.2);
+  transform: perspective(120px) rotateX(12deg);
+}
+.home-scramble .tile-row { margin: 0; gap: 5px; align-items: flex-end; }
+.home-scramble .letter-tile {
+  width: clamp(38px, 11.3vw, 49px); font-size: clamp(18px, 5.2vw, 23px);
+}
+
+.ground-level-path {
+  position: relative; width: 100%; height: clamp(190px, 25svh, 225px); flex: none;
+}
+.ground-level-node {
+  position: absolute; display: grid; width: 58px; height: 43px; place-items: center;
+  border: 3px solid #ddd8c9; border-radius: 50%; padding: 0;
+  background: #777b78; color: #fffbed;
+  box-shadow: inset 0 4px 0 rgba(255,255,255,.28), inset 0 -5px 0 rgba(51,55,52,.28), 0 5px 0 #4d514e, 0 10px 15px rgba(36,51,40,.24);
+  font-family: Georgia, 'Times New Roman', serif; font-size: 20px; font-weight: 700;
+  text-shadow: 0 2px 1px rgba(38,42,39,.48);
+}
+.ground-level-node:disabled { cursor: default; opacity: .72; }
+.ground-level-node:not(:disabled):active { translate: 0 4px; box-shadow: inset 0 3px 0 rgba(255,255,255,.22), 0 1px 0 #4d514e; }
+.ground-level-node.selected {
+  border-color: #ffec8c; background: #ecb62d; color: #fff9d9;
+  box-shadow: inset 0 4px 0 rgba(255,255,255,.4), inset 0 -5px 0 rgba(153,86,11,.16), 0 5px 0 #9f641d, 0 0 18px rgba(255,212,54,.65);
+}
+.ground-level-node.cleared:not(.selected) { border-color: #c9efcd; background: #3ca779; box-shadow: inset 0 4px 0 rgba(255,255,255,.26), 0 5px 0 #226d50; }
+.ground-level-node small {
+  position: absolute; top: 45px; left: 50%; width: max-content; max-width: 100px; translate: -50% 0;
+  border: 1px solid #b88442; border-radius: 7px 7px 8px 3px; padding: 3px 7px;
+  background: #f7e5b3; color: #4b3b22; box-shadow: 0 2px 0 #8f612f;
+  font-family: var(--font-body); font-size: 9px; line-height: 1; text-shadow: none;
+}
+.ground-level-0 { left: 43%; bottom: 3%; }
+.ground-level-1 { left: 66%; bottom: 25%; }
+.ground-level-2 { left: 45%; bottom: 47%; }
+.ground-level-3 { left: 65%; bottom: 69%; }
+.ground-level-4 { left: 45%; top: 0; }
+.ground-level-more {
+  position: absolute; right: 2px; bottom: 0; min-height: 32px; padding: 0 10px;
+  border: 2px solid #b27b35; border-radius: 9px 9px 10px 3px;
+  background: #f2d797; color: #594322; box-shadow: inset 0 2px 0 rgba(255,255,255,.55), 0 3px 0 #895b29;
+  font-size: 10px; font-weight: 800;
+}
+.ground-level-more:active { translate: 0 3px; box-shadow: inset 0 2px 0 rgba(255,255,255,.5); }
+
+.home-grid .mode-grid { width: 100%; margin-top: auto; }
+
+@media (min-width: 521px) {
+  body { background: #19483b; }
+  .app { border-inline: 1px solid rgba(246,225,169,.2); }
+}
+
+@media (max-width: 390px) {
+  .home-header { height: 70px; }
+  .home-brand { width: 148px; min-height: 57px; }
+  .home-brand strong { font-size: 27px; }
+  .home-daily-button { width: 91px; height: 51px; }
+  .home-daily-button span { font-size: 11px; }
+  .home-shell, .home-grid { min-height: calc(100svh - 80px); }
+  .ground-level-node { width: 54px; height: 40px; font-size: 18px; }
+  .ground-level-node small { top: 42px; }
+}
+
+@media (max-width: 350px) {
+  .home-brand { width: 130px; }
+  .home-brand strong { font-size: 24px; }
+  .home-daily-button { width: 82px; }
+  .home-daily-button span { font-size: 10px; }
+  .ground-level-path { height: 180px; }
+}
