@@ -216,7 +216,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 /* Full-page celebration for milestones and a beaten high score. Confetti
    plus a bubble, auto-dismissed by the component after ~1.6s. */
 .big-celebration {
-  position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; pointer-events: none;
+  position: absolute; inset: 0; z-index: 50; display: grid; place-items: center; pointer-events: none;
   background: radial-gradient(circle at 50% 38%, rgba(255,190,61,.5), rgba(255,190,61,0) 68%);
   animation: celebration-wash 1.5s ease forwards;
 }
@@ -231,7 +231,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 @keyframes celebration-pop { from { transform: scale(.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes celebration-wash { 0% { opacity: 0; } 18% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
 
-.miss-popup { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; pointer-events: none; }
+.miss-popup { position: absolute; inset: 0; z-index: 50; display: grid; place-items: center; pointer-events: none; }
 .miss-popup-bubble {
   display: flex; flex-direction: column; align-items: center; gap: 4px;
   padding: 22px 32px; border-radius: 26px; background: var(--surface);
@@ -478,7 +478,7 @@ legend { margin-bottom: 4px; font-size: 15px; font-weight: 700; color: var(--ink
    Fixed over the whole screen so nothing after it is ever scrolled
    to reach.
    ============================================================ */
-.resolution { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; padding: 20px; pointer-events: none; }
+.resolution { position: absolute; inset: 0; z-index: 55; display: grid; place-items: center; padding: 20px; pointer-events: none; }
 .resolution-bubble {
   display: flex; flex-direction: column; align-items: center; gap: 2px; width: min(100%, 320px);
   padding: 18px 22px; border-radius: 26px; background: linear-gradient(180deg, #f2fbf4, #eaf9f0);
@@ -586,7 +586,7 @@ footer {
    replaces the old inline notice/error banners.
    ============================================================ */
 .toast-stack {
-  position: fixed; left: 0; right: 0; bottom: max(18px, env(safe-area-inset-bottom, 0px));
+  position: absolute; left: 0; right: 0; bottom: max(18px, env(safe-area-inset-bottom, 0px));
   z-index: 40; display: flex; flex-direction: column; align-items: center; gap: 8px;
   padding: 0 18px; pointer-events: none;
 }
@@ -854,7 +854,7 @@ footer {
    that should not cost a whole screen to reach.
    ============================================================ */
 .sheet-backdrop {
-  position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end;
+  position: absolute; inset: 0; z-index: 60; display: flex; align-items: flex-end;
   justify-content: center; background: rgba(43, 58, 52, .42);
   animation: sheet-fade .16s ease;
 }

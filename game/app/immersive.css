@@ -598,8 +598,14 @@
    plain `.room-camp-stage` class on specificity alone -- without the extra
    `.app >` here that rule wins instead, collapsing this to a zero-height
    box (its only content is absolutely positioned) and the whole lobby
-   scene disappears. */
-.app > .room-camp-stage { position: fixed; inset: 0; z-index: 2; }
+   scene disappears.
+   `position: fixed` sizes against the browser viewport, not `.app` --
+   `.app` is capped at 520px and centered (see globals.css) so every other
+   screen looks like a phone app even on a wide window. `fixed` broke that
+   for the lobby alone, letting it bleed full-width. `.app` is already a
+   positioned ancestor (`position: relative`), so `absolute` confines this
+   to the same phone-width box instead. */
+.app > .room-camp-stage { position: absolute; inset: 0; z-index: 2; }
 .room-camp.room-camp-full {
   position: absolute; inset: 0;
   overflow: hidden;

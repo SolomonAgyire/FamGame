@@ -3,7 +3,7 @@
 .map-underlay, .game-layer { position: relative; z-index: 1; }
 .map-underlay-inactive { pointer-events: none; }
 .map-modal-layer {
-  position: fixed;
+  position: absolute;
   z-index: 40;
   inset: 0;
   display: grid;
@@ -569,7 +569,7 @@
 }
 .in-world .result-stage::before {
   content: '';
-  position: fixed;
+  position: absolute;
   z-index: -1;
   inset: 0;
   background: rgba(8, 43, 40, .20);
