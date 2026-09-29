@@ -11,7 +11,7 @@ export type ResultStat = { label: string; value: string | number };
  * optional gem callout, mode-specific extra content (a leaderboard, a
  * streak header, ...), a stat grid, and one dominant primary action. */
 export function Results({
-  character = 'nuri', stars, subtitle, title, banner, headline, coinsEarned, gemEarned, scripture, extra, stats,
+  character = 'nuri', stars, subtitle, title, banner, headline, coinsEarned, gemEarned, scripture, scriptureLabel = 'Scripture reward', extra, stats,
   primaryLabel, onPrimary, secondaryAction, onHome,
 }: {
   character?: GameCharacterId;
@@ -23,6 +23,10 @@ export function Results({
   coinsEarned?: number;
   gemEarned?: boolean;
   scripture?: string;
+  /** Only "Scripture reward" is a literal citation (Daily Word); the
+   * other modes pass a summary line ("N words remembered") under their
+   * own label instead of misnaming it scripture. */
+  scriptureLabel?: string;
   extra?: ReactNode;
   stats: ResultStat[];
   primaryLabel: string;
@@ -40,7 +44,7 @@ export function Results({
     {banner}
     <div className="result-score"><strong>{headline.value}</strong><span>{headline.label}</span></div>
     {coinsEarned !== undefined && <div className="reward-scroll"><span aria-hidden="true">✦</span><div><small>Coins earned</small><strong>+{coinsEarned}</strong></div><span aria-hidden="true">✦</span></div>}
-    {scripture && <div className="scripture-book" role="status"><span className="scripture-book-icon" aria-hidden="true">📖</span><div><small>Scripture reward</small><strong>{scripture}</strong></div></div>}
+    {scripture && <div className="scripture-book" role="status"><span className="scripture-book-icon" aria-hidden="true">📖</span><div><small>{scriptureLabel}</small><strong>{scripture}</strong></div></div>}
     {gemEarned && <p className="gem-earned-banner" role="status"><span aria-hidden="true">💎</span> New gem earned!</p>}
     {extra}
     <div className="stat-grid">{stats.map((stat) => <div key={stat.label}><strong>{stat.value}</strong><span>{stat.label}</span></div>)}</div>

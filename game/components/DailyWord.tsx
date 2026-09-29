@@ -247,7 +247,7 @@ export function DailyWord({ sound, onHome }: { sound: boolean; onHome: () => voi
       coinsEarned={undefined}
       scripture={entry.references[0]}
       extra={<>
-        <p className="page-subtitle">The answer was <strong>{entry.display}</strong> — {entry.references[0]}</p>
+        <p className="page-subtitle daily-answer">The answer was <strong>{entry.display}</strong> — {entry.references[0]}</p>
         <div className="daily-scoreline">
           <div><strong>{done.guesses}</strong><span>{done.guesses === 1 ? 'Guess' : 'Guesses'}</span></div>
           <div><strong>{done.hintsUsed}</strong><span>Hints</span></div>

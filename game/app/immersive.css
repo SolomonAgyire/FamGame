@@ -145,7 +145,11 @@
 .home-signpost:nth-child(2n) { transform: rotate(1deg); }
 
 .home-mascot {
-  position: absolute; z-index: 7; left: 8px; bottom: 78px; width: 120px !important; height: 120px !important;
+  /* Below the path's z-index (5 on .home-grid .ground-level-path) so the
+     mascot's drawn art -- which bleeds well past its own box via
+     .character-render's negative inset -- can never paint over a
+     medallion it happens to overlap. */
+  position: absolute; z-index: 3; left: 8px; bottom: 78px; width: 120px !important; height: 120px !important;
   pointer-events: none;
 }
 /* Home HUD -------------------------------------------------------- */

@@ -513,7 +513,9 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
     const ranking = [...scores].sort((a, b) => b.score - a.score);
     const winner = ranking[0];
     const accuracy = correctCount + wrongCount === 0 ? 0 : Math.round((correctCount / Math.max(1, correctCount + wrongCount)) * 100);
-    const stars = matchStars({ correct: correctCount, wrong: wrongCount });
+    // Matches the `wrong` count `recordMatch` was given (below, in `next()`)
+    // so the stars shown here always agree with the coins paid for them.
+    const stars = matchStars({ correct: correctCount, wrong: wrongCount + revealCount });
     return <Results
       character={mode === 'solo' ? 'nuri' : 'boaz'}
       stars={stars}
@@ -528,6 +530,7 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
       coinsEarned={summary?.coinsEarned}
       gemEarned={summary?.gemEarned}
       scripture={unlocked ? `${unlocked.name} is open` : `${correctCount} words remembered`}
+      scriptureLabel="Journey reward"
       extra={<>
         {summary && <div className="score-compare">
           {summary.isBest
@@ -1139,7 +1142,14 @@ function rankStars(score: number, allScores: number[]): number {
 function OnlineResults({ snapshot, isHost, action, leave }: { snapshot: RoomSnapshot; isHost: boolean; action: (input: Record<string, unknown>) => void; leave: () => void }) {
   const sides = snapshot.mode === 'teams' ? ([['sun', 'Sun Team'], ['olive', 'Olive Team']] as const).map(([id, name]) => ({ id, name, score: snapshot.players.filter((player) => player.teamId === id).reduce((sum, player) => sum + player.score, 0) })) : snapshot.players.map((player) => ({ id: player.id, name: player.name, score: player.score }));
   const ranking = [...sides].sort((a, b) => b.score - a.score);
-  const viewerScore = sides.find((side) => side.id === snapshot.viewerId)?.score ?? ranking[0]?.score ?? 0;
+  // In teams mode `sides` is keyed by team id ('sun'/'olive'), never a
+  // player id, so the viewer's own side has to be resolved through their
+  // team membership first -- looking it up by `viewerId` directly always
+  // missed and silently scored every viewer against the winning side.
+  const viewerSideId = snapshot.mode === 'teams'
+    ? snapshot.players.find((player) => player.id === snapshot.viewerId)?.teamId
+    : snapshot.viewerId;
+  const viewerScore = sides.find((side) => side.id === viewerSideId)?.score ?? ranking[0]?.score ?? 0;
   const stars = rankStars(viewerScore, sides.map((side) => side.score));
   return <Results
     character="tali"
@@ -1148,6 +1158,7 @@ function OnlineResults({ snapshot, isHost, action, leave }: { snapshot: RoomSnap
     title={snapshot.mode === 'cooperative' ? 'Great teamwork!' : `${ranking[0]?.name} wins!`}
     headline={{ value: ranking[0]?.score ?? 0, label: 'points' }}
     scripture={`${snapshot.puzzleCount} words shared`}
+    scriptureLabel="Room reward"
     extra={snapshot.mode === 'teams'
       ? <div className="leaderboard">{ranking.map((side, index) => <div key={side.id}><span>{index + 1}</span><span className="avatar">{side.name[0]}</span><strong>{side.name}</strong><b>{side.score}</b></div>)}</div>
       : <Standings players={snapshot.players} viewerId={snapshot.viewerId} answeredIds={[]} phase="results" />}
