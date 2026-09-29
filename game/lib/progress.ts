@@ -30,6 +30,12 @@ export type ProgressRecord = {
   /** A rare bonus: one gem the first time a level's clear condition
    * becomes true, never again after. */
   gems: number;
+  /** Levels that have already paid their one gem. `isLevelCleared` is not
+   * a one-way ratchet -- its accuracy term can fall back below 70% on a
+   * bad replay and rise again later -- so awarding on every false-to-true
+   * transition could pay the same level's gem more than once. This is
+   * the ledger that makes "once, ever" actually hold. */
+  gemLevels: Record<string, true>;
   totalSolved: number;
   totalWrong: number;
   /** Keyed "mode:level", e.g. "solo:3" -> best score seen for that pairing. */
@@ -75,6 +81,7 @@ export function emptyProgress(): ProgressRecord {
     lifetimePoints: 0,
     coins: 0,
     gems: 0,
+    gemLevels: {},
     totalSolved: 0,
     totalWrong: 0,
     bestByMode: {},
@@ -158,6 +165,10 @@ function migrate(parsed: Record<string, unknown>): ProgressRecord {
       if (progress.solvedIds.length >= LEGACY_WORDS_TO_CLEAR && accurate) legacyClears[key] = true;
     }
   }
+  const gemLevels: Record<string, true> = {};
+  for (const [key, value] of Object.entries(plainRecord<unknown>(parsed.gemLevels))) {
+    if (value === true) gemLevels[key] = true;
+  }
   const streak = plainRecord<unknown>(parsed.streak);
   // Fields are listed one by one rather than spread, so a stored record
   // cannot smuggle in a key this build does not understand. The cost is
@@ -170,6 +181,7 @@ function migrate(parsed: Record<string, unknown>): ProgressRecord {
     lifetimePoints: numberOr(parsed.lifetimePoints, 0),
     coins: numberOr(parsed.coins, 0),
     gems: numberOr(parsed.gems, 0),
+    gemLevels,
     totalSolved: numberOr(parsed.totalSolved, 0),
     totalWrong: numberOr(parsed.totalWrong, 0),
     bestByMode: plainRecord<number>(parsed.bestByMode),
@@ -306,16 +318,21 @@ export function recordMatch(
     attempts: existing.attempts + distinct.length + result.wrong,
   };
 
-  // Coins are a flat reward for a completed match; a gem is rarer, earned
-  // only the moment a level's clear condition first becomes true -- never
-  // recomputed afterward, so re-playing an already-cleared level cannot
-  // pay a second one.
-  const wasCleared = isLevelCleared(record, result.level);
+  // Coins are a flat reward for a completed match; a gem is rarer, paid
+  // once per level, the first time it's cleared. `gemLevels` is checked
+  // rather than a clear/unclear transition, because `isLevelCleared`'s
+  // accuracy term can fall back below 70% on a bad replay and rise again
+  // later -- a transition-based check would pay the same level twice.
   const stars = matchStars({ correct: distinct.length, wrong: result.wrong });
   const coinsEarned = coinsForMatch(stars, distinct.length);
   next.coins += coinsEarned;
-  const gemEarned = !wasCleared && isLevelCleared(next, result.level);
-  if (gemEarned) next.gems += 1;
+  next.gemLevels = { ...next.gemLevels };
+  const levelAlreadyPaid = Boolean(next.gemLevels[levelKey]);
+  const gemEarned = !levelAlreadyPaid && isLevelCleared(next, result.level);
+  if (gemEarned) {
+    next.gems += 1;
+    next.gemLevels[levelKey] = true;
+  }
 
   const today = dayKey(result.now ?? new Date());
   next.daysPlayed = [today, ...next.daysPlayed.filter((day) => day !== today)].slice(0, MAX_DAYS_TRACKED);
