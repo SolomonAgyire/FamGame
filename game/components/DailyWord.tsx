@@ -10,7 +10,7 @@ import { buildShareText, shareResult } from '@/lib/share';
 import { applyLetterHint, HINT_LABELS, hintsFor } from '@/lib/hints';
 import { scoreSolve } from '@/lib/scoring';
 import { showToast } from '@/lib/toast';
-import { playCorrect, playShuffle, playTap, playWrong } from '@/lib/audio';
+import { playCorrect, playShuffle, playWrong } from '@/lib/audio';
 import { LEVEL_NAMES } from '@/lib/types';
 import { ScoreFlight } from '@/components/ScoreFlight';
 import { GameCharacter } from '@/components/GameCharacter';
@@ -274,12 +274,11 @@ export function DailyWord({ sound, onHome }: { sound: boolean; onHome: () => voi
       <TileBoard scramble={daily.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} />
       {hints > 0 && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{ladder.slice(0, hints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
       <div className="game-actions tool-dock">
+        <GameTool icon="💡" label={nextHint ? HINT_LABELS[nextHint.kind] : 'Hints used'} count={Math.max(0, MAX_HINTS - hints)} disabled={!nextHint} onClick={takeHint} tone="gold" />
         <GameTool icon="↻" label="Shuffle" onClick={() => { playShuffle(); setOrder(shuffledOrder(daily.scramble.length)); }} />
-        <GameTool icon="↶" label="Undo" disabled={placed.length === 0} onClick={() => { playTap(); setPlaced(placed.slice(0, -1)); }} tone="olive" />
-        <GameTool icon="×" label="Clear" disabled={placed.length === 0} onClick={() => setPlaced([])} tone="coral" />
-        <GameTool icon="✦" label={nextHint ? HINT_LABELS[nextHint.kind] : 'Hints used'} count={Math.max(0, MAX_HINTS - hints)} disabled={!nextHint} onClick={takeHint} tone="gold" />
+        <GameTool icon="🔨" label="Clear" disabled={placed.length === 0} onClick={() => setPlaced([])} tone="coral" />
         <button type="button" className="check-button" onClick={check}>Check answer</button>
-        <GameTool icon="◉" label="Give up" onClick={() => finish(false, Math.max(1, guesses))} tone="violet" />
+        <GameTool icon="🧭" label="Give up" onClick={() => finish(false, Math.max(1, guesses))} tone="violet" />
       </div>
       <button type="button" className="quit-button" onClick={onHome}>Back home</button>
     </section>

@@ -297,6 +297,13 @@
   backdrop-filter: blur(8px) saturate(1.2);
 }
 .mission-hud.urgent { border-color: #ffd0b9; box-shadow: inset 0 2px 0 #ffffff3d, 0 5px 0 #7c3832, 0 0 22px #ff71586b; }
+.mission-hud.has-pause { grid-template-columns: 30px 48px minmax(60px, 1fr) auto auto; }
+.mission-hud-pause { display: grid; place-items: center; }
+.mission-hud-pause button {
+  width: 28px; height: 28px; padding: 0; border: 2px solid #fff0b7; border-radius: 8px;
+  background: linear-gradient(#8ddbc4, #3f9e81); color: #123c32; font-size: 13px;
+  box-shadow: inset 0 2px 0 #ffffff74, 0 3px 0 #24684f;
+}
 .mission-hud-guide { position: relative; width: 45px; height: 45px; border: 2px solid #fff0ab; border-radius: 50%; background: radial-gradient(circle at 50% 35%, #b9f4e7, #49a99c); box-shadow: inset 0 -4px 0 #176b646b, 0 3px 0 #8e5a23; }
 .mission-hud-guide .game-character { width: 45px; height: 45px; }
 .mission-hud-progress { display: grid; gap: 4px; min-width: 0; }
@@ -484,7 +491,6 @@
 .game-tool-gold { --tool-face: linear-gradient(#ffe47b, #e7a825); --tool-edge: #925717; color: #603a0e; }
 .game-tool-coral { --tool-face: linear-gradient(#ffab90, #e55f65); --tool-edge: #9e3843; color: #67242a; }
 .game-tool-violet { --tool-face: linear-gradient(#d0aff3, #8c5bcc); --tool-edge: #5c368d; color: #fff; }
-.game-tool-olive { --tool-face: linear-gradient(#a9d58d, #57965c); --tool-edge: #35633c; color: #213d28; }
 .game-tool:not(:disabled):active { translate: 0 4px; box-shadow: inset 0 3px 0 #ffffff62, 0 1px 0 var(--tool-edge); }
 .game-tool-icon { font: 900 22px/1 var(--font-display); }
 .game-tool small { display: block; margin-top: 1px; max-width: 45px; overflow: hidden; font: 800 6px/1 var(--font-display); text-overflow: ellipsis; white-space: nowrap; text-transform: uppercase; }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { advanceMatch, buildLevelQueue, createFreshRecipe, eligibleWords, getEntryById, getPuzzleEntry, nextPlayableLevelAbove, normalizeAnswer, playableLevelFrom, unplayableReason } from '@/lib/game-engine';
-import { duckMusic, playCorrect, playRewardFanfare, playShuffle, playTap, playWrong, startMusic, stopMusic } from '@/lib/audio';
+import { duckMusic, playCorrect, playRewardFanfare, playShuffle, playWrong, startMusic, stopMusic } from '@/lib/audio';
 import { showToast, subscribeToasts, type Toast } from '@/lib/toast';
 import type { Category, GameSettings, Level, MatchRecipe, PlayMode, PuzzleRecipe, RoomSettings, Team } from '@/lib/types';
 import { LEVEL_NAMES } from '@/lib/types';
@@ -500,7 +500,6 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
     </div>
   </section></main>;
   const shuffleTray = () => { playShuffle(); setOrder(shuffledOrder(puzzle.scramble.length)); };
-  const undo = () => { if (placed.length === 0) return; playTap(); rejectedRef.current = null; setPlaced(placed.slice(0, -1)); };
   const rematch = () => { finishedRef.current = false; const fresh = createFreshRecipe(settings); setRecipe(fresh); setTimeLeft(secondsForPuzzle(fresh, 0)); setIndex(0); setScores(scores.map((team) => ({ ...team, score: 0 }))); setCorrectCount(0); setWrongCount(0); setRevealCount(0); setFinished(false); resetPuzzle(); setSolvedIds([]); setCombo(0); setSummary(null); setUnlocked(null); };
   if (finished) {
     const ranking = [...scores].sort((a, b) => b.score - a.score);
@@ -557,7 +556,7 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} shakeKey={shake ?? undefined} feedback={resolved ? resolved.correct ? 'correct' : 'wrong' : 'playing'} locked={Boolean(resolved) || (mode === 'teams' && !claimedBy)} />
       {hints > 0 && !resolved && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{ladder.slice(0, hints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
       {resolved ? <Resolution lead={resolved.revealed ? 'The answer was' : 'Beautiful work!'} word={entry.display} reference={entry.references[0]} award={resolved.award ? `+${resolved.award} points` : 'No points this time'}><GameCharacter character={mode === 'solo' ? 'nuri' : 'boaz'} mood={resolved.correct ? 'cheer' : 'oops'} size="medium" className="resolution-character" /><button type="button" className="primary-button" onClick={next}>{index === recipe.puzzles.length - 1 ? 'See results' : 'Next puzzle'}</button></Resolution>
-      : <div className="game-actions tool-dock"><GameTool icon="↻" label="Shuffle" onClick={shuffleTray} /><GameTool icon="↶" label="Undo" disabled={placed.length === 0} onClick={undo} tone="olive" /><GameTool icon="×" label="Clear" disabled={placed.length === 0} onClick={() => { rejectedRef.current = null; setPlaced([]); }} tone="coral" /><GameTool icon="✦" label={nextHint ? HINT_LABELS[nextHint.kind] : 'Hints used'} count={Math.max(0, ladder.length - hints)} disabled={!nextHint} onClick={takeHint} tone="gold" /><GameTool icon="◉" label="Reveal" onClick={reveal} tone="violet" /></div>}
+      : <div className="game-actions tool-dock"><GameTool icon="💡" label={nextHint ? HINT_LABELS[nextHint.kind] : 'Hints used'} count={Math.max(0, ladder.length - hints)} disabled={!nextHint} onClick={takeHint} tone="gold" /><GameTool icon="↻" label="Shuffle" onClick={shuffleTray} /><GameTool icon="🔨" label="Clear" disabled={placed.length === 0} onClick={() => { rejectedRef.current = null; setPlaced([]); }} tone="coral" /><GameTool icon="🧭" label="Reveal" onClick={reveal} tone="violet" /></div>}
       <button type="button" className="quit-button" onClick={onHome}>End match</button>
     </section></main>;
 }
@@ -829,7 +828,7 @@ function TimeAttackGame({ categories, sound, started, onStart, onHome, onReplay 
       <div className="card-top"><div><p className="puzzle-kicker">{entry.categories[0]} · {LEVEL_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Build the word'}</h1></div><span className="points-pill">×{Math.max(1, combo + 1)}</span></div>
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} feedback={resolved ? resolved.correct ? 'correct' : 'wrong' : 'playing'} locked={Boolean(resolved)} />
       {resolved && <Resolution lead={resolved.correct ? 'Solved it' : 'Missed it'} word={entry.display} reference={entry.references[0]} award={resolved.correct ? `+${resolved.gained} points` : 'No points'}><GameCharacter character="tali" mood={resolved.correct ? 'cheer' : 'oops'} size="medium" className="resolution-character" /></Resolution>}
-      {!resolved && <div className="game-actions tool-dock arcade-tools"><GameTool icon="↻" label="Shuffle" onClick={() => { playShuffle(); setOrder(shuffledOrder(puzzle.scramble.length)); }} /><GameTool icon="↶" label="Undo" disabled={placed.length === 0} onClick={() => { playTap(); setPlaced(placed.slice(0, -1)); }} tone="olive" /><GameTool icon="×" label="Clear" disabled={placed.length === 0} onClick={() => setPlaced([])} tone="coral" /></div>}
+      {!resolved && <div className="game-actions tool-dock arcade-tools"><GameTool icon="↻" label="Shuffle" onClick={() => { playShuffle(); setOrder(shuffledOrder(puzzle.scramble.length)); }} /><GameTool icon="🔨" label="Clear" disabled={placed.length === 0} onClick={() => setPlaced([])} tone="coral" /></div>}
     </section>
     <button type="button" className="quit-button" onClick={() => setFinished('ended')}>End run</button>
   </main>;
@@ -1036,12 +1035,17 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
   const kick = (targetId: string) => { if (window.confirm('Remove this player from the room?')) void action({ action: 'kick', targetId }); };
   return <main className="game-shell online-play-shell"><div className="room-banner"><span>Room <strong>{snapshot.code}</strong></span><span>{error || '●'}</span></div>
     {isHost && <div className="host-controls">
-      {snapshot.status === 'PUZZLE_OPEN' && <button type="button" className="host-tool" title={paused ? 'Resume' : 'Pause'} aria-label={paused ? 'Resume' : 'Pause'} disabled={busy} onClick={() => action({ action: paused ? 'resume' : 'pause' })}>{paused ? '▶' : 'Ⅱ'}</button>}
       {snapshot.status === 'PUZZLE_OPEN' && <button type="button" className="host-tool" title="Skip puzzle" aria-label="Skip puzzle" disabled={busy} onClick={() => action({ action: 'skip' })}>»</button>}
       <button type="button" className="host-tool danger" title="End match" aria-label="End match" disabled={busy} onClick={() => action({ action: 'end' })}>■</button>
     </div>}
     {paused && <p className="notice">The host paused this puzzle.</p>}
-    <MissionHud character={<GameCharacter character="tali" mood={snapshot.status === 'PUZZLE_RESOLVED' ? viewerSolve ? 'cheer' : 'oops' : 'think'} size="small" />} mission={`${snapshot.currentIndex + 1} / ${snapshot.puzzleCount}`} progress={((snapshot.currentIndex + 1) / snapshot.puzzleCount) * 100} score={snapshot.mode === 'teams' ? <div className="hud-score-row">{teamScores.map((side) => <span key={side.id}>{side.name}<strong>{side.score}</strong></span>)}</div> : <><span aria-hidden="true">★</span><strong>{viewer?.score ?? 0}</strong></>} />
+    <MissionHud
+      pauseButton={isHost && snapshot.status === 'PUZZLE_OPEN' ? <button type="button" title={paused ? 'Resume' : 'Pause'} aria-label={paused ? 'Resume' : 'Pause'} disabled={busy} onClick={() => action({ action: paused ? 'resume' : 'pause' })}>{paused ? '▶' : 'Ⅱ'}</button> : undefined}
+      character={<GameCharacter character="tali" mood={snapshot.status === 'PUZZLE_RESOLVED' ? viewerSolve ? 'cheer' : 'oops' : 'think'} size="small" />}
+      mission={`${snapshot.currentIndex + 1} / ${snapshot.puzzleCount}`}
+      progress={((snapshot.currentIndex + 1) / snapshot.puzzleCount) * 100}
+      score={snapshot.mode === 'teams' ? <div className="hud-score-row">{teamScores.map((side) => <span key={side.id}>{side.name}<strong>{side.score}</strong></span>)}</div> : <><span aria-hidden="true">★</span><strong>{viewer?.score ?? 0}</strong></>}
+    />
     <Standings players={snapshot.players} viewerId={snapshot.viewerId} answeredIds={snapshot.resolution?.answeredIds ?? []} phase="play" isHost={isHost} onKick={kick} />
     <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{puzzle.category} · {LEVEL_NAMES[puzzle.band - 1]}</p><h1>{snapshot.status === 'PUZZLE_RESOLVED' ? puzzle.display : 'Build the word'}</h1></div><span className="points-pill">{scoreSolve({ letterCount: puzzle.scramble.length, level: puzzle.band, combo: 0, hintsUsed: snapshot.viewerHints })}</span></div>
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} feedback={snapshot.status === 'PUZZLE_RESOLVED' ? viewerSolve ? 'correct' : 'wrong' : 'playing'} locked={boardLocked} />
@@ -1051,7 +1055,7 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
       : sittingOut ? <p className="notice">You&rsquo;ll join in on the next puzzle.</p>
       : viewerSolve ? <p className="notice">Nice! +{viewerSolve.award} points — waiting for the round to finish…</p>
       : paused ? null
-      : <div className="game-actions tool-dock"><GameTool icon="↻" label="Shuffle" onClick={() => { playShuffle(); setOrder(shuffledOrder(puzzle.scramble.length)); }} /><GameTool icon="↶" label="Undo" disabled={placed.length === 0} onClick={() => { playTap(); setPlaced(placed.slice(0, -1)); }} tone="olive" /><GameTool icon="×" label="Clear" disabled={placed.length === 0} onClick={() => setPlaced([])} tone="coral" /><GameTool icon="✦" label={puzzle.hints[snapshot.viewerHints]?.kind ? HINT_LABELS[puzzle.hints[snapshot.viewerHints].kind] : 'Hints used'} count={Math.max(0, puzzle.hints.length - snapshot.viewerHints)} disabled={snapshot.viewerHints >= puzzle.hints.length || busy} onClick={() => action({ action: 'hint' })} tone="gold" />{isHost && <GameTool icon="◉" label="Reveal" onClick={() => action({ action: 'reveal' })} tone="violet" />}</div>}
+      : <div className="game-actions tool-dock"><GameTool icon="💡" label={puzzle.hints[snapshot.viewerHints]?.kind ? HINT_LABELS[puzzle.hints[snapshot.viewerHints].kind] : 'Hints used'} count={Math.max(0, puzzle.hints.length - snapshot.viewerHints)} disabled={snapshot.viewerHints >= puzzle.hints.length || busy} onClick={() => action({ action: 'hint' })} tone="gold" /><GameTool icon="↻" label="Shuffle" onClick={() => { playShuffle(); setOrder(shuffledOrder(puzzle.scramble.length)); }} /><GameTool icon="🔨" label="Clear" disabled={placed.length === 0} onClick={() => setPlaced([])} tone="coral" />{isHost && <GameTool icon="🧭" label="Reveal" onClick={() => action({ action: 'reveal' })} tone="violet" />}</div>}
       <button type="button" className="quit-button" onClick={leave}>Leave room</button>
     </section></main>;
 }
