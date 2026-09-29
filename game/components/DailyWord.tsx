@@ -10,8 +10,13 @@ import { buildShareText, shareResult } from '@/lib/share';
 import { applyLetterHint, HINT_LABELS, hintsFor } from '@/lib/hints';
 import { scoreSolve } from '@/lib/scoring';
 import { showToast } from '@/lib/toast';
-import { playCorrect, playTap, playWrong } from '@/lib/audio';
+import { playCorrect, playShuffle, playTap, playWrong } from '@/lib/audio';
 import { LEVEL_NAMES } from '@/lib/types';
+import { ScoreFlight } from '@/components/ScoreFlight';
+import { GameCharacter } from '@/components/GameCharacter';
+import { GameTool, MissionHud } from '@/components/GameChrome';
+import { Results } from '@/components/Results';
+import { matchStars } from '@/lib/economy';
 
 /** Four goes at it, then the word is shown. Enough room to think, not so
  * much that the share card stops meaning anything. */
@@ -227,49 +232,54 @@ export function DailyWord({ sound, onHome }: { sound: boolean; onHome: () => voi
 
   if (done) {
     const state = streakState(record, now);
-    return <main className="page-shell"><section className="panel daily-done">
-      {note?.milestone && <div className="milestone-banner" role="status">
+    const stars = matchStars({ correct: done.solved ? 1 : 0, wrong: done.solved ? done.guesses - 1 : done.guesses });
+    return <Results
+      character="mira"
+      stars={stars}
+      subtitle={`Daily #${daily.number} · ${levelName}`}
+      title={done.solved ? 'Solved it.' : 'Not today.'}
+      banner={note?.milestone ? <div className="milestone-banner" role="status">
         <span className="milestone-spark" aria-hidden="true">✦</span>
         <strong>{note.milestone} days in a row</strong>
         <small>A freeze is yours — one missed day is covered.</small>
-      </div>}
-      <p className="section-kicker">Daily Word #{daily.number} · {levelName}</p>
-      <h1 className="page-title">{done.solved ? 'Solved it.' : 'Not today.'}</h1>
-      <p className="page-subtitle">The answer was <strong>{entry.display}</strong> — {entry.references[0]}</p>
-      <div className="daily-scoreline">
-        <div><strong>{done.guesses}</strong><span>{done.guesses === 1 ? 'Guess' : 'Guesses'}</span></div>
-        <div><strong>{done.hintsUsed}</strong><span>Hints</span></div>
-        <div><strong>{done.points}</strong><span>Points</span></div>
-      </div>
-      {note && <p className="daily-note"><strong>{note.headline}</strong> {note.detail}</p>}
-      <StreakHeader />
-      <p className="daily-tomorrow">{state.playedToday ? 'Come back tomorrow for a new word.' : 'A new word is waiting.'}</p>
-      <div className="result-actions">
-        <button className="primary-button" type="button" disabled={sharing} onClick={share}>Share result <span aria-hidden="true">↗</span></button>
-        <button className="text-button" type="button" onClick={onHome}>Home</button>
-      </div>
-    </section></main>;
+      </div> : undefined}
+      headline={{ value: done.points, label: 'points' }}
+      coinsEarned={undefined}
+      scripture={entry.references[0]}
+      extra={<>
+        <p className="page-subtitle">The answer was <strong>{entry.display}</strong> — {entry.references[0]}</p>
+        <div className="daily-scoreline">
+          <div><strong>{done.guesses}</strong><span>{done.guesses === 1 ? 'Guess' : 'Guesses'}</span></div>
+          <div><strong>{done.hintsUsed}</strong><span>Hints</span></div>
+          <div><strong>{done.points}</strong><span>Points</span><ScoreFlight score={done.points} initialScore={note ? 0 : done.points} /></div>
+        </div>
+        {note && <p className="daily-note"><strong>{note.headline}</strong> {note.detail}</p>}
+        <StreakHeader />
+        <p className="daily-tomorrow">{state.playedToday ? 'Come back tomorrow for a new word.' : 'A new word is waiting.'}</p>
+      </>}
+      stats={[]}
+      primaryLabel={sharing ? '…' : 'Share result ↗'}
+      onPrimary={share}
+      onHome={onHome}
+    />;
   }
 
   return <main className="game-shell">
-    <div className="game-topbar"><div>
-      <span>Daily Word #{daily.number}</span>
-      <div className="progress"><i style={{ width: `${(guesses / MAX_GUESSES) * 100}%` }} /></div>
-    </div><div className="score-strip"><span>{MAX_GUESSES - guesses} left</span></div></div>
+    <MissionHud character={<GameCharacter character="mira" mood={guesses > 0 ? 'oops' : 'think'} size="small" />} mission={`Daily #${daily.number}`} progress={(guesses / MAX_GUESSES) * 100} score={<><span aria-hidden="true">♥</span><strong>{MAX_GUESSES - guesses}</strong></>} />
     <section className="puzzle-card play-card">
       <div className="card-top">
-        <div><p className="puzzle-kicker">Everyone gets this word today · {levelName}</p><h1>Unscramble the answer</h1></div>
-        <span className="points-pill">{value} pts</span>
+        <div><p className="puzzle-kicker">{levelName}</p><h1>Build the word</h1></div>
+        <span className="points-pill">{value}</span>
       </div>
       <TileBoard scramble={daily.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} />
       {hints > 0 && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{ladder.slice(0, hints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
-      <div className="game-actions">
-        <button type="button" className="soft-button" onClick={() => { playTap(); setOrder(shuffledOrder(daily.scramble.length)); }}>↻ Shuffle</button>
-        <button type="button" className="soft-button" disabled={placed.length === 0} onClick={() => { playTap(); setPlaced(placed.slice(0, -1)); }}>↩ Undo</button>
-        <button type="button" className="soft-button" disabled={placed.length === 0} onClick={() => setPlaced([])}>✕ Clear</button>
-        <button type="button" className="soft-button" disabled={!nextHint} onClick={takeHint}>{nextHint ? `✦ Hint · ${HINT_LABELS[nextHint.kind]}` : '✦ Hints used'}</button>
+      <div className="game-actions tool-dock">
+        <GameTool icon="↻" label="Shuffle" onClick={() => { playShuffle(); setOrder(shuffledOrder(daily.scramble.length)); }} />
+        <GameTool icon="↶" label="Undo" disabled={placed.length === 0} onClick={() => { playTap(); setPlaced(placed.slice(0, -1)); }} tone="olive" />
+        <GameTool icon="×" label="Clear" disabled={placed.length === 0} onClick={() => setPlaced([])} tone="coral" />
+        <GameTool icon="✦" label={nextHint ? HINT_LABELS[nextHint.kind] : 'Hints used'} count={Math.max(0, MAX_HINTS - hints)} disabled={!nextHint} onClick={takeHint} tone="gold" />
         <button type="button" className="check-button" onClick={check}>Check answer</button>
-        <button type="button" className="text-button" onClick={() => finish(false, Math.max(1, guesses))}>Give up</button>
+        <GameTool icon="◉" label="Give up" onClick={() => finish(false, Math.max(1, guesses))} tone="violet" />
       </div>
       <button type="button" className="quit-button" onClick={onHome}>Back home</button>
     </section>

@@ -20,7 +20,9 @@ import { DailyWord, useHydrated } from '@/components/DailyWord';
 import { dailyPuzzleFor } from '@/lib/daily';
 import { ScoreFlight } from '@/components/ScoreFlight';
 import { GameCharacter, type GameCharacterId } from '@/components/GameCharacter';
-import { GameTool, MissionHud, RewardStars } from '@/components/GameChrome';
+import { GameTool, MissionHud } from '@/components/GameChrome';
+import { Results } from '@/components/Results';
+import { matchStars } from '@/lib/economy';
 
 function ToastHost() {
   const [toasts, setToasts] = useState<(Toast & { leaving?: boolean })[]>([]);
@@ -323,7 +325,7 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
   // writes a permutation of the same indexes, so placed tiles never move.
   const [order, setOrder] = useState<number[] | null>(null);
   const [shake, setShake] = useState<number | null>(null);
-  const [summary, setSummary] = useState<{ points: number; isBest: boolean; previousBest: number; lifetime: number; mastered: number } | null>(null);
+  const [summary, setSummary] = useState<{ points: number; isBest: boolean; previousBest: number; lifetime: number; mastered: number; coinsEarned: number; gemEarned: boolean } | null>(null);
   const [unlocked, setUnlocked] = useState<{ level: Level; name: string } | null>(null);
   const puzzle = recipe.puzzles[index]; const entry = getPuzzleEntry(recipe, index);
   const assembled = puzzle ? placed.map((source) => puzzle.scramble[source]).join('') : '';
@@ -367,6 +369,8 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
         previousBest: outcome.previousBest,
         lifetime: outcome.record.lifetimePoints,
         mastered: masteredCount(outcome.record),
+        coinsEarned: outcome.coinsEarned,
+        gemEarned: outcome.gemEarned,
       });
     }
     if (step.finished) {
@@ -498,7 +502,44 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
   const shuffleTray = () => { playShuffle(); setOrder(shuffledOrder(puzzle.scramble.length)); };
   const undo = () => { if (placed.length === 0) return; playTap(); rejectedRef.current = null; setPlaced(placed.slice(0, -1)); };
   const rematch = () => { finishedRef.current = false; const fresh = createFreshRecipe(settings); setRecipe(fresh); setTimeLeft(secondsForPuzzle(fresh, 0)); setIndex(0); setScores(scores.map((team) => ({ ...team, score: 0 }))); setCorrectCount(0); setWrongCount(0); setRevealCount(0); setFinished(false); resetPuzzle(); setSolvedIds([]); setCombo(0); setSummary(null); setUnlocked(null); };
-  if (finished) return <Results mode={mode} scores={scores} correct={correctCount} wrong={wrongCount} total={recipe.puzzles.length} summary={summary} unlocked={unlocked} rematch={rematch} changeSet={onChangeSet} home={onHome} />;
+  if (finished) {
+    const ranking = [...scores].sort((a, b) => b.score - a.score);
+    const winner = ranking[0];
+    const accuracy = correctCount + wrongCount === 0 ? 0 : Math.round((correctCount / Math.max(1, correctCount + wrongCount)) * 100);
+    const stars = matchStars({ correct: correctCount, wrong: wrongCount });
+    return <Results
+      character={mode === 'solo' ? 'nuri' : 'boaz'}
+      stars={stars}
+      subtitle="Quest complete"
+      title={mode === 'teams' ? `${winner.name} wins!` : mode === 'solo' ? 'Trail cleared!' : 'Great teamwork!'}
+      banner={unlocked ? <div className="unlock-banner" role="status">
+        <span className="unlock-key" aria-hidden="true">🔓</span>
+        <strong>{unlocked.name} unlocked</strong>
+        <small>A new level is open on your journey.</small>
+      </div> : undefined}
+      headline={{ value: winner.score, label: 'points' }}
+      coinsEarned={summary?.coinsEarned}
+      gemEarned={summary?.gemEarned}
+      scripture={unlocked ? `${unlocked.name} is open` : `${correctCount} words remembered`}
+      extra={<>
+        {summary && <div className="score-compare">
+          {summary.isBest
+            ? <p className="best-flag">Your best yet at this level — previous best {summary.previousBest}</p>
+            : <p className="best-flag quiet">Your best at this level is {summary.previousBest}</p>}
+          <div className="lifetime-row">
+            <span><strong>{summary.lifetime.toLocaleString()}</strong>Points all time</span>
+            <span><strong>{summary.mastered}</strong>Words mastered</span>
+          </div>
+        </div>}
+        {mode === 'teams' && <div className="leaderboard">{ranking.map((team, index) => <div key={team.id}><span>{index + 1}</span><i style={{ background: team.color }} /><strong>{team.name}</strong><b>{team.score}</b></div>)}</div>}
+      </>}
+      stats={[{ label: 'Solved', value: correctCount }, { label: 'Misses', value: wrongCount }, { label: 'Accuracy', value: `${accuracy}%` }]}
+      primaryLabel="Play again"
+      onPrimary={rematch}
+      secondaryAction={<button className="secondary-button" type="button" onClick={onChangeSet} aria-label="Change word set">⚙</button>}
+      onHome={onHome}
+    />;
+  }
   return <main className="game-shell">
     {celebration && <BigCelebration key={celebration.id} title={celebration.title} subtitle={celebration.subtitle} character={mode === 'solo' ? 'nuri' : 'boaz'} />}
     {missPop !== null && <MissPopup key={missPop} character={mode === 'solo' ? 'nuri' : 'boaz'} />}
@@ -755,25 +796,21 @@ function TimeAttackGame({ categories, sound, started, onStart, onHome, onReplay 
     const best = Math.max(score, personalBest);
     const cleared = finished === 'cleared';
     const ended = finished === 'ended';
-    const stars = score === 0 ? 0 : cleared || score >= personalBest ? 3 : solved >= 5 ? 2 : 1;
-    return <main className="page-shell result-stage"><section className="panel results-panel result-popup">
+    const stars = matchStars({ correct: solved, wrong: strikes });
+    return <>
       {score >= personalBest && score > 0 && <Confetti key="final" />}
-      <ResultMascot character="tali" mood={cleared ? 'happy' : 'brave'} />
-      <RewardStars earned={stars} />
-      <p className="section-kicker">Time Attack</p>
-      <h1 className="page-title">{cleared ? 'Perfect clear!' : ended ? 'Run ended' : 'Time’s up!'}</h1>
-      <p className="page-subtitle">{cleared ? 'Every trail cleared.' : ended ? 'Score saved.' : 'Three misses ended the run.'}</p>
-      <div className="result-score"><strong>{score}</strong><span>points</span></div>
-      <div className="stat-grid">
-        <div><strong>{solved}</strong><span>Solved</span></div>
-        <div><strong>{LEVEL_NAMES[band - 1]}</strong><span>Reached</span></div>
-        <div><strong>{best}</strong><span>Best score</span></div>
-      </div>
-      <div className="result-actions">
-        <button className="primary-button" type="button" onClick={onReplay}>Play again</button>
-        <button className="text-button" type="button" onClick={onHome}>Home</button>
-      </div>
-    </section></main>;
+      <Results
+        character="tali"
+        stars={stars}
+        subtitle="Time Attack"
+        title={cleared ? 'Perfect clear!' : ended ? 'Run ended' : 'Time’s up!'}
+        headline={{ value: score, label: 'points' }}
+        stats={[{ label: 'Solved', value: solved }, { label: 'Reached', value: LEVEL_NAMES[band - 1] }, { label: 'Best score', value: best }]}
+        primaryLabel="Play again"
+        onPrimary={onReplay}
+        onHome={onHome}
+      />
+    </>;
   }
 
   const timeLimit = timeAttackSecondsFor(band, puzzle.scramble.length);
@@ -796,38 +833,6 @@ function TimeAttackGame({ categories, sound, started, onStart, onHome, onReplay 
     </section>
     <button type="button" className="quit-button" onClick={() => setFinished('ended')}>End run</button>
   </main>;
-}
-
-function Results({ mode, scores, correct, wrong, total, summary, unlocked, rematch, changeSet, home }: {
-  mode: PlayMode; scores: Team[]; correct: number; wrong: number; total: number;
-  summary: { points: number; isBest: boolean; previousBest: number; lifetime: number; mastered: number } | null;
-  unlocked: { level: Level; name: string } | null;
-  rematch: () => void; changeSet: () => void; home: () => void;
-}) {
-  const ranking = [...scores].sort((a, b) => b.score - a.score); const winner = ranking[0];
-  const accuracy = total === 0 ? 0 : Math.round((correct / Math.max(1, correct + wrong)) * 100);
-  const stars = correct === 0 ? 0 : correct >= total && wrong === 0 ? 3 : accuracy >= 70 ? 2 : 1;
-  return <main className="page-shell result-stage"><section className="panel results-panel result-popup"><ResultMascot character={mode === 'solo' ? 'nuri' : 'boaz'} /><RewardStars earned={stars} /><p className="section-kicker">Quest complete</p><h1 className="page-title">{mode === 'teams' ? `${winner.name} wins!` : mode === 'solo' ? 'Trail cleared!' : 'Great teamwork!'}</h1>
-    {unlocked && <div className="unlock-banner" role="status">
-      <span className="unlock-key" aria-hidden="true">🔓</span>
-      <strong>{unlocked.name} unlocked</strong>
-      <small>A new level is open on your journey.</small>
-    </div>}
-    <div className="result-score"><strong>{winner.score}</strong><span>points</span></div>
-    <div className="reward-scroll"><span aria-hidden="true">✦</span><div><small>Journey reward</small><strong>{unlocked ? `${unlocked.name} is open` : `${correct} words remembered`}</strong></div><span aria-hidden="true">✦</span></div>
-    {summary && <div className="score-compare">
-      {summary.isBest
-        ? <p className="best-flag">Your best yet at this level — previous best {summary.previousBest}</p>
-        : <p className="best-flag quiet">Your best at this level is {summary.previousBest}</p>}
-      <div className="lifetime-row">
-        <span><strong>{summary.lifetime.toLocaleString()}</strong>Points all time</span>
-        <span><strong>{summary.mastered}</strong>Words mastered</span>
-      </div>
-    </div>}
-    {mode === 'teams' && <div className="leaderboard">{ranking.map((team, index) => <div key={team.id}><span>{index + 1}</span><i style={{ background: team.color }} /><strong>{team.name}</strong><b>{team.score}</b></div>)}</div>}
-    <div className="stat-grid"><div><strong>{correct}</strong><span>Solved</span></div><div><strong>{wrong}</strong><span>Misses</span></div><div><strong>{accuracy}%</strong><span>Accuracy</span></div></div>
-    <div className="result-actions"><button className="primary-button" type="button" onClick={rematch}>Play again <span>↻</span></button><button className="secondary-button" type="button" onClick={changeSet} aria-label="Change word set">⚙</button><button className="text-button" type="button" onClick={home}>Map</button></div>
-  </section></main>;
 }
 
 function OnlineEntry({ onBack, onConnected, initialCode }: { onBack: () => void; onConnected: (credentials: Credentials) => void; initialCode: string }) {
@@ -1104,15 +1109,41 @@ function OnlineLobby({ snapshot, viewer, isHost, busy, action, leave }: { snapsh
   </section></main>;
 }
 
+/** Online rooms track only a cumulative `score` per player/side, not
+ * correct/wrong counts, so results use a rank-based approximation instead
+ * of `matchStars` -- top score (or a tie for it) is a clean sweep, the
+ * middle of the pack is solid, and a lone or zero score is a consolation
+ * star rather than a flat constant every room used to show. */
+function rankStars(score: number, allScores: number[]): number {
+  if (score <= 0) return allScores.every((value) => value <= 0) ? 0 : 1;
+  const best = Math.max(...allScores, 0);
+  if (score >= best) return 3;
+  const sorted = [...allScores].sort((a, b) => b - a);
+  const medianIndex = Math.floor(sorted.length / 2);
+  return score >= (sorted[medianIndex] ?? 0) ? 2 : 1;
+}
+
 function OnlineResults({ snapshot, isHost, action, leave }: { snapshot: RoomSnapshot; isHost: boolean; action: (input: Record<string, unknown>) => void; leave: () => void }) {
   const sides = snapshot.mode === 'teams' ? ([['sun', 'Sun Team'], ['olive', 'Olive Team']] as const).map(([id, name]) => ({ id, name, score: snapshot.players.filter((player) => player.teamId === id).reduce((sum, player) => sum + player.score, 0) })) : snapshot.players.map((player) => ({ id: player.id, name: player.name, score: player.score }));
   const ranking = [...sides].sort((a, b) => b.score - a.score);
-  return <main className="page-shell result-stage"><section className="panel results-panel result-popup"><ResultMascot character="tali" /><RewardStars earned={3} /><p className="section-kicker">Room {snapshot.code}</p><h1 className="page-title">{snapshot.mode === 'cooperative' ? 'Great teamwork!' : `${ranking[0]?.name} wins!`}</h1>
-    {snapshot.mode === 'teams'
+  const viewerScore = sides.find((side) => side.id === snapshot.viewerId)?.score ?? ranking[0]?.score ?? 0;
+  const stars = rankStars(viewerScore, sides.map((side) => side.score));
+  return <Results
+    character="tali"
+    stars={stars}
+    subtitle={`Room ${snapshot.code}`}
+    title={snapshot.mode === 'cooperative' ? 'Great teamwork!' : `${ranking[0]?.name} wins!`}
+    headline={{ value: ranking[0]?.score ?? 0, label: 'points' }}
+    scripture={`${snapshot.puzzleCount} words shared`}
+    extra={snapshot.mode === 'teams'
       ? <div className="leaderboard">{ranking.map((side, index) => <div key={side.id}><span>{index + 1}</span><span className="avatar">{side.name[0]}</span><strong>{side.name}</strong><b>{side.score}</b></div>)}</div>
       : <Standings players={snapshot.players} viewerId={snapshot.viewerId} answeredIds={[]} phase="results" />}
-    <div className="reward-scroll"><span aria-hidden="true">✦</span><div><small>Room reward</small><strong>{snapshot.puzzleCount} words shared</strong></div><span aria-hidden="true">✦</span></div>
-    <div className="result-actions">{isHost && <><button className="primary-button" type="button" onClick={() => action({ action: 'rematch' })}>Play again <span>↻</span></button><button className="secondary-button" type="button" aria-label="Change match settings" onClick={() => action({ action: 'lobby' })}>⚙</button></>}<button className="text-button" type="button" onClick={leave}>Leave</button></div></section></main>;
+    stats={[]}
+    primaryLabel={isHost ? 'Play again ↻' : 'Leave'}
+    onPrimary={isHost ? () => action({ action: 'rematch' }) : leave}
+    secondaryAction={isHost ? <button className="secondary-button" type="button" aria-label="Change match settings" onClick={() => action({ action: 'lobby' })}>⚙</button> : undefined}
+    onHome={leave}
+  />;
 }
 
 export default function GatherWordApp() {
