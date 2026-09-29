@@ -32,8 +32,8 @@
 import { DurableObject } from 'cloudflare:workers';
 import { getPuzzleEntry, normalizeAnswer } from '@/lib/game-engine';
 import {
-  activePlayers, applyCorrectSolve, applyWrongSolve, buildRoomRecipe, EMPTY_PROGRESS, eligiblePlayers,
-  pauseProgress, publicSnapshot, refundSolvers, resumeProgress, roleForJoin, roomUnplayableReason, shouldCloseWindow, validateSettings,
+  applyCorrectSolve, applyWrongSolve, buildRoomRecipe, EMPTY_PROGRESS, eligiblePlayers,
+  pauseProgress, prepareRoomStart, publicSnapshot, refundSolvers, resumeProgress, roleForJoin, roomUnplayableReason, shouldCloseWindow, validateSettings,
   type PuzzleProgress, type RoomMode, type RoomPlayer, type RoomState,
 } from '@/lib/room-rules';
 import { SOLVE_WINDOW_MS } from '@/lib/room-scoring';
@@ -208,13 +208,8 @@ export class RoomDO extends DurableObject<Cloudflare.Env> {
       if (mode === 'teams') nextPlayers = players.map((item, index) => item.role === 'player' ? ({ ...item, teamId: index % 2 === 0 ? 'sun' : 'olive' } as RoomPlayer) : item);
       else nextPlayers = players.map((item) => ({ ...item, teamId: undefined }));
     } else if (action === 'start' && player.isHost && status === 'LOBBY') {
-      const seated = activePlayers(players);
-      if (mode !== 'cooperative' && seated.length < 2) throw new Error('Invite at least one more player, or choose Cooperative.');
-      if (seated.some((item) => !item.isHost && !item.ready)) throw new Error('Everyone needs to be ready first.');
-      const blocked = roomUnplayableReason(settings.difficulty, settings.categories);
-      if (blocked) throw new Error(blocked);
-      match = buildRoomRecipe(settings.difficulty, settings.categories, settings.length, randomString(32));
-      nextPlayers = players.map((item) => ({ ...item, score: 0, sitOutCurrent: false }));
+      const started = prepareRoomStart(state, input, randomString(32));
+      settings = started.settings; mode = started.mode; match = started.match; nextPlayers = started.players;
       status = 'PUZZLE_OPEN'; puzzleStatus = 'OPEN'; currentIndex = 0; resolution = { ...EMPTY_PROGRESS }; hints = {};
     } else if (action === 'hint' && status === 'PUZZLE_OPEN') {
       if (player.role === 'spectator') throw new Error('Spectators are just watching this room.');

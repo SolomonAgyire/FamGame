@@ -309,6 +309,36 @@ export type RoomState = {
 
 export type PublicPlayer = Omit<RoomPlayer, 'tokenHash'>;
 
+/** Apply the lobby draft and start as one operation. A rejected start never
+ * saves half a configuration or resets players' scores. Older clients may
+ * omit the draft and start using the room's existing configuration. */
+export function prepareRoomStart(
+  room: Pick<RoomState, 'settings' | 'mode' | 'players'>,
+  input: Record<string, unknown>,
+  seed: string,
+): Pick<RoomState, 'settings' | 'mode' | 'players' | 'match'> {
+  const draft = input.settings && typeof input.settings === 'object' && !Array.isArray(input.settings)
+    ? input.settings as Partial<RoomSettings> : {};
+  const settings = input.settings === undefined ? room.settings : validateSettings({
+    ...draft, categories: Array.isArray(draft.categories) ? draft.categories : [],
+  });
+  const mode = input.mode === undefined ? room.mode
+    : input.mode === 'cooperative' ? 'cooperative' : input.mode === 'teams' ? 'teams' : 'individuals';
+  const seated = activePlayers(room.players);
+  if (mode !== 'cooperative' && seated.length < 2) throw new Error('Invite at least one more player, or choose Cooperative.');
+  if (seated.some((player) => !player.isHost && !player.ready)) throw new Error('Everyone needs to be ready first.');
+  const blocked = roomUnplayableReason(settings.difficulty, settings.categories);
+  if (blocked) throw new Error(blocked);
+  const match = buildRoomRecipe(settings.difficulty, settings.categories, settings.length, seed);
+  let seat = 0;
+  const players = room.players.map((player): RoomPlayer => ({
+    ...player, score: 0, sitOutCurrent: false,
+    teamId: mode === 'teams' && player.role === 'player' && !player.left
+      ? (seat++ % 2 === 0 ? 'sun' : 'olive') : undefined,
+  }));
+  return { settings, mode, players, match };
+}
+
 export type RoomSnapshotDTO = {
   code: string; status: RoomStatus; mode: RoomMode; settings: RoomSettings; players: PublicPlayer[];
   currentIndex: number; puzzleCount: number; version: number; viewerId: string; viewerHints: number;
