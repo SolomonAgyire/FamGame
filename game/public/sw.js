@@ -12,7 +12,7 @@
  * Progress lives in localStorage, not here. This worker does not touch it.
  */
 
-const VERSION = 'wordin-v1';
+const VERSION = 'wordin-v3';
 const SHELL = `${VERSION}-shell`;
 
 // Only the things needed to render something playable offline. The audio

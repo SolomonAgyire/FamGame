@@ -42,7 +42,7 @@ export function InstallPrompt() {
     // Register the worker that makes the game open without a signal. It is
     // optional -- a failure here must never stop the game loading.
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then((registration) => registration.update()).catch(() => {});
     }
 
     if (isStandalone()) return;
