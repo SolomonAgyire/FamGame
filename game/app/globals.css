@@ -472,7 +472,23 @@ legend { margin-bottom: 4px; font-size: 15px; font-weight: 700; color: var(--ink
 .check-button { margin-left: auto; }
 .game-actions .text-button { min-height: 42px; padding: 0 8px; margin-left: auto; }
 
-.resolution { position: relative; overflow: hidden; margin-top: 20px; padding: 22px; border-radius: 24px; background: linear-gradient(180deg, #f2fbf4, #eaf9f0); text-align: center; border: 1px solid #cdeed8; }
+/* ============================================================
+   The solve moment -- one popup, every mode: mascot on top, the
+   word, its citation, the award, then (online only) an action.
+   Fixed over the whole screen so nothing after it is ever scrolled
+   to reach.
+   ============================================================ */
+.resolution { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; padding: 20px; pointer-events: none; }
+.resolution-bubble {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; width: min(100%, 320px);
+  padding: 18px 22px; border-radius: 26px; background: linear-gradient(180deg, #f2fbf4, #eaf9f0);
+  border: 1px solid #cdeed8; box-shadow: 0 20px 50px rgba(20,50,35,.35);
+  text-align: center; pointer-events: auto;
+  animation: celebration-pop .32s cubic-bezier(.34,1.56,.64,1);
+}
+.resolution-bubble .resolution-character { margin-bottom: -6px; }
+.resolution-bubble .resolution-lead { display: block; color: var(--muted); font-size: 12px; font-weight: 700; }
+.resolution-bubble .resolution-word { display: block; margin: 4px 0; font-family: var(--font-display); font-weight: 600; font-size: clamp(22px, 6vw, 30px); color: var(--grass-deep); }
 .confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .confetti-piece {
   position: absolute; top: -10%; width: 8px; height: 12px; border-radius: 2px;
@@ -482,57 +498,20 @@ legend { margin-bottom: 4px; font-size: 15px; font-weight: 700; color: var(--ink
   from { top: -10%; opacity: 1; transform: rotate(var(--rotate)) translateY(0); }
   to { top: 105%; opacity: 0; transform: rotate(calc(var(--rotate) + 140deg)) translateY(0); }
 }
-.resolution span, .resolution strong { display: block; }
-.resolution span { color: var(--muted); font-size: 12px; font-weight: 700; }
-.resolution strong { margin: 6px 0; font-family: var(--font-display); font-weight: 600; font-size: clamp(26px, 6vw, 38px); color: var(--grass-deep); }
-.resolution p { margin: 6px 0 16px; color: var(--muted); font-size: 13px; }
-
-/* ============================================================
-   The solve moment. Three beats inside 700ms: the word settles,
-   the citation arrives under it, then the points. The citation is
-   the reason this game exists, so it gets a plaque of its own
-   instead of grey text after a middle dot — and the points, which
-   are only a mechanic, stop sharing its line.
-   ============================================================ */
-.resolution .scripture {
+.resolution-bubble .scripture {
   display: inline-flex; align-items: center; gap: 9px;
-  margin: 2px auto 0; padding: 10px 18px; border-radius: 999px;
+  margin: 4px auto 0; padding: 8px 16px; border-radius: 999px;
   background: linear-gradient(180deg, #fffaf0, var(--paper));
   border: 1px solid #e8cf9a; box-shadow: 0 4px 0 #d9bf82;
   color: var(--paper-ink); font-family: var(--font-display);
-  font-weight: 600; font-size: clamp(15px, 4.2vw, 19px);
+  font-weight: 600; font-size: clamp(13px, 3.6vw, 16px);
 }
-.resolution .scripture-mark { display: inline-block; color: var(--sun-deep); font-size: 14px; }
-.resolution .scripture-cite { display: inline-block; color: inherit; font-size: inherit; font-weight: inherit; font-style: normal; }
-.resolution .resolution-award {
-  margin: 14px 0 16px; color: var(--grass-deep); font-size: 13px; font-weight: 700;
+.resolution-bubble .scripture-mark { display: inline-block; color: var(--sun-deep); font-size: 14px; }
+.resolution-bubble .scripture-cite { display: inline-block; color: inherit; font-size: inherit; font-weight: inherit; font-style: normal; }
+.resolution-bubble .resolution-award {
+  margin: 10px 0 2px; color: var(--grass-deep); font-size: 13px; font-weight: 700;
 }
-.resolution-rule { display: block; width: 44px; height: 3px; margin: 14px auto 12px; border-radius: 3px; background: #cdeed8; }
-
-@keyframes reveal-word {
-  from { opacity: 0; transform: translateY(8px) scale(.9); }
-  62% { opacity: 1; transform: translateY(0) scale(1.04); }
-  to { opacity: 1; transform: none; }
-}
-@keyframes reveal-rise {
-  from { opacity: 0; transform: translateY(9px); }
-  to { opacity: 1; transform: none; }
-}
-.resolution .resolution-lead { animation: reveal-rise 200ms ease both; }
-.resolution .resolution-word { animation: reveal-word 320ms cubic-bezier(.2,.8,.25,1) 60ms both; }
-.resolution .resolution-rule { animation: reveal-rise 220ms ease 240ms both; }
-.resolution .scripture { animation: reveal-rise 240ms cubic-bezier(.2,.8,.25,1) 300ms both; }
-.resolution .resolution-award,
-.resolution .primary-button { animation: reveal-rise 200ms ease 460ms both; }
-
-/* The same content, all at once. Zeroing the durations is not enough on
-   its own — the delays would still stage it. */
-@media (prefers-reduced-motion: reduce) {
-  .resolution .resolution-lead, .resolution .resolution-word, .resolution .resolution-rule,
-  .resolution .scripture, .resolution .resolution-award, .resolution .primary-button {
-    animation: none !important; opacity: 1; transform: none;
-  }
-}
+.resolution-bubble p { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
 
 .claim-panel { margin: 0 auto 12px; padding: 12px 14px; border-radius: 20px; background: var(--surface); border: 1px solid var(--line); }
 .claim-panel p { margin: 0 0 8px; font-size: 13px; color: var(--ink); }
@@ -586,23 +565,9 @@ legend { margin-bottom: 4px; font-size: 15px; font-weight: 700; color: var(--ink
 .loader { display: block; width: 34px; height: 34px; margin: 0 auto 18px; border: 4px solid var(--surface2); border-top-color: var(--sun); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(1turn); } }
 
-.lobby-panel { max-width: 100%; }
 .lobby-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px; align-items: center; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
-.room-code { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: clamp(32px, 9vw, 44px); letter-spacing: .1em; color: var(--sun-deep); }
 .lobby-heading p { margin: 5px 0; color: var(--muted); font-size: 13px; }
-.lobby-grid { display: grid; margin-top: 22px; gap: 26px; }
-.lobby-grid h2 { display: flex; margin: 0 0 12px; justify-content: space-between; font-size: 16px; font-family: var(--font-display); font-weight: 600; }
-.lobby-grid h2 span { color: var(--muted); font-size: 12px; font-family: var(--font-body); }
-.player-list { display: grid; margin-bottom: 13px; gap: 7px; }
-.player-list > div { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 7px; border: 1px solid var(--line); background: var(--surface); border-radius: 16px; padding: 8px; }
 .avatar { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 50%; background: linear-gradient(180deg, #ffd876, var(--sun)); color: var(--sun-ink); font-weight: 700; }
-.player-list small { color: var(--sun-deep); font-weight: 700; }
-.player-list em { border-radius: 999px; background: var(--surface2); padding: 4px 8px; color: var(--muted); font-size: 10px; font-style: normal; font-weight: 700; }
-.player-list em.ready { background: #d9f5e2; color: var(--grass-deep); }
-.lobby-settings { border-top: 1px solid var(--line); padding-top: 22px; }
-.setting-summary { border-radius: 18px; background: var(--surface); border: 1px solid var(--line); padding: 16px; }
-.setting-summary p { margin: 7px 0; color: var(--ink); font-size: 13px; }
-.leave-button { display: block; margin: 22px auto 0; }
 .room-banner { display: flex; margin: 0 auto 10px; justify-content: space-between; color: var(--muted); font-size: 12px; }
 .room-banner strong { letter-spacing: .1em; color: var(--sun-deep); }
 .host-controls { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 auto 10px; }
@@ -645,10 +610,6 @@ footer {
 /* ============================================================
    Responsive — mobile is the primary canvas.
    ============================================================ */
-@media (min-width: 640px) {
-  .lobby-grid { grid-template-columns: .85fr 1.15fr; }
-  .lobby-settings { border-top: 0; border-left: 1px solid var(--line); padding-top: 0; padding-left: 28px; }
-}
 
 @media (max-width: 380px) {
   .primary-button, .check-button, .secondary-button { min-height: 46px; padding: 0 18px; font-size: 14px; }
@@ -1104,7 +1065,7 @@ legend { color: #4b4027; }
 
 /* Carved category tiles and controls repeat the home mode language. */
 .choice-card, .band-button, .length-button, .wide-choice, .custom-length,
-.team-inputs input, .form-stack input, .setting-summary {
+.team-inputs input, .form-stack input {
   border: 2px solid #b78340; background: #f4dda4;
   box-shadow: inset 0 2px 0 rgba(255,255,255,.55), 0 4px 0 #8d602e, 0 8px 14px rgba(65,55,30,.13);
 }
@@ -1167,8 +1128,6 @@ legend { color: #4b4027; }
 .tabs { border: 2px solid #a87736; background: #d9b26c; box-shadow: inset 0 2px 4px rgba(89,59,25,.16); }
 .tabs button { color: #5c4727; }
 .tabs button.active { background: #f1c34d; color: #443015; box-shadow: inset 0 2px 0 rgba(255,255,255,.44), 0 3px 0 #9c6824; }
-.setting-summary { background: #efd79d; }
-.room-code { border: 2px solid #c0872f; background: #efbf46; color: #234d49; box-shadow: inset 0 2px 0 rgba(255,255,255,.45), 0 4px 0 #936124; }
 
 /* Match status and outcome pieces sit on small map tokens. */
 .score-strip > span, .standings-toggle, .standings-row, .player-list > div, .claim-panel,
@@ -1185,9 +1144,8 @@ legend { color: #4b4027; }
 .progress { border-color: #a77a3f; background: #d6ba7e; }
 .progress i { background: #2bb78b; }
 .hint-box { border: 2px solid #d0a14c; background: #fae9ad; box-shadow: inset 0 2px 0 rgba(255,255,255,.58), 0 3px 0 #a97530; }
-.resolution { border: 2px solid #68b58d; background: #d5edbd; box-shadow: inset 0 2px 0 rgba(255,255,255,.58), 0 5px 0 #397d5d, 0 12px 24px rgba(34,72,48,.17); }
-.resolution .scripture { border: 2px solid #c48c39; background: #f5d58a; box-shadow: inset 0 2px 0 rgba(255,255,255,.52), 0 4px 0 #956127; }
-.resolution-rule { background: #279a78; }
+.resolution-bubble { border: 2px solid #68b58d; background: #d5edbd; box-shadow: 0 20px 50px rgba(34,72,48,.3), inset 0 2px 0 rgba(255,255,255,.58); }
+.resolution-bubble .scripture { border: 2px solid #c48c39; background: #f5d58a; box-shadow: inset 0 2px 0 rgba(255,255,255,.52), 0 4px 0 #956127; }
 .toast-info { border: 2px solid #b27c36; background: #f8e4ac; box-shadow: 0 6px 0 #8d602d, 0 14px 28px rgba(43,50,25,.25); }
 .best-flag.quiet { border-color: #b78b4c; background: #ead29a; box-shadow: 0 3px 0 #90632f; }
 

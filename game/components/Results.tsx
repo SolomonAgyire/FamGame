@@ -51,7 +51,7 @@ export function Results({
     <div className="result-actions">
       <button className="primary-button" type="button" onClick={onPrimary}>{primaryLabel}</button>
       {secondaryAction}
-      <button className="text-button" type="button" onClick={onHome}>Map</button>
+      <button className="text-button" type="button" onClick={onHome}>Home</button>
     </div>
   </section></main>;
 }

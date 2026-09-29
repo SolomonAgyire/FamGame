@@ -163,12 +163,15 @@
 }
 .home-hud-avatar { flex: none; width: 38px; height: 38px; border: 2px solid #f2d79d; border-radius: 50%; padding: 0; background: #4a2e1c; display: grid; place-items: center; overflow: hidden; }
 .home-hud-avatar .game-character { width: 30px; height: 30px; }
-.home-hud-currency { display: flex; gap: 10px; flex: 1; min-width: 0; }
+.home-hud-currency { display: flex; justify-content: center; gap: 10px; flex: 1; min-width: 0; }
 .home-hud-currency span { display: flex; align-items: center; gap: 3px; color: #fff4c8; font: 800 12px/1 var(--font-display); white-space: nowrap; }
 .home-hud-currency b { font-size: 13px; }
-.home-hud-actions { display: flex; gap: 6px; flex: none; }
-.home-hud-icon { position: relative; width: 34px; height: 34px; padding: 0; border: 2px solid #f2d79d; border-radius: 10px 10px 11px 4px; background: var(--cube-gold); color: #50340e; font-size: 15px; display: grid; place-items: center; box-shadow: inset 0 2px 0 #ffffff70, 0 3px 0 #a96b1d; }
-.home-hud-icon:active { translate: 0 3px; box-shadow: inset 0 2px 0 #ffffff70; }
+.home-hud-daily {
+  position: relative; flex: none; height: 34px; padding: 0 10px; border: 2px solid #f2d79d; border-radius: 10px 10px 11px 4px;
+  background: var(--cube-gold); color: #50340e; font: 800 10px/1 var(--font-display); white-space: nowrap;
+  display: grid; place-items: center; box-shadow: inset 0 2px 0 #ffffff70, 0 3px 0 #a96b1d;
+}
+.home-hud-daily:active { translate: 0 3px; box-shadow: inset 0 2px 0 #ffffff70; }
 .home-hud-dot { position: absolute; top: -3px; right: -3px; width: 9px; height: 9px; border-radius: 50%; background: #ff6b6b; border: 2px solid #34251b; }
 
 /* Title plaque ------------------------------------------------------ */
@@ -316,7 +319,7 @@
 .mission-hud-progress i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #ffd246, #ff9a37); box-shadow: inset 0 2px 0 #fff1a288; transition: width .3s ease; }
 .mission-hud-chip { display: flex; align-items: center; justify-content: center; gap: 3px; min-height: 34px; padding: 4px 7px; border: 2px solid #fff0b7; border-radius: 11px 11px 12px 4px; background: linear-gradient(#ffd760, #eba724); color: #57360d; box-shadow: inset 0 3px 0 #fff8b988, 0 3px 0 #975818; font-size: 11px; }
 .mission-hud-timer strong { font: 800 15px/1 var(--font-display); }
-.mission-hud-score { background: linear-gradient(#83e1c2, #38a97f); color: #123c32; box-shadow: inset 0 3px 0 #ffffff7d, 0 3px 0 #20684f; }
+.mission-hud-score { background: linear-gradient(#8fc9f5, #3f8fd9); color: #0d2d4a; box-shadow: inset 0 3px 0 #ffffff7d, 0 3px 0 #1f5f94; }
 .hud-score-row { display: flex; align-items: center; gap: 5px; }
 .hud-score-row > span { display: flex; align-items: center; gap: 2px; max-width: 76px; overflow: hidden; font-size: 7px; white-space: nowrap; }
 .hud-score-row i { width: 6px; height: 6px; border-radius: 50%; }
@@ -585,48 +588,34 @@
 .in-world .result-popup .result-actions .secondary-button { width: 42px; min-width: 42px; padding: 0; border-radius: 12px 12px 13px 4px; }
 @keyframes star-land { from { opacity: 0; transform: translateY(-48px) scale(1.8) rotate(-28deg); } 70% { transform: translateY(4px) scale(.92) rotate(5deg); } }
 
-/* Online camp ---------------------------------------------------- */
-.in-world .lobby-panel {
-  width: min(100%, 430px);
-  padding: 12px;
-  border: 3px solid #ecd29a;
-  background: linear-gradient(160deg, rgba(30, 81, 74, .91), rgba(46, 45, 35, .88));
-  box-shadow: inset 0 3px 0 #ffffff40, 0 7px 0 #3a291d, 0 22px 42px #11261f73;
+/* Online camp -- the whole screen, no separate background or card ------ */
+.room-camp-stage { position: fixed; inset: 0; z-index: 2; }
+.room-camp.room-camp-full {
+  position: absolute; inset: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 68%, #f0b65728 0 18%, transparent 41%),
+    linear-gradient(180deg, #1c4c51cc, #293d34d9 45%, #4b3427e8),
+    url('/art/bible-journey-map.webp') 79% 35% / 170% auto;
 }
-.in-world .lobby-heading { position: relative; z-index: 6; align-items: center; justify-content: center; border: 0; }
-.in-world .lobby-heading > div { display: none; }
-.in-world .lobby-heading .secondary-button { margin-left: auto; border-radius: 12px 12px 13px 4px; }
-.lobby-back-button, .lobby-invite-button {
+.room-camp.room-camp-full::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 50% 75%, transparent 0 19%, #ffb5492b 20% 21%, transparent 22%), radial-gradient(ellipse at 50% 110%, #080e0bad, transparent 65%); }
+.room-camp-full .lobby-heading {
+  position: absolute; z-index: 6; top: max(10px, env(safe-area-inset-top)); left: 10px; right: 10px;
+  display: flex; align-items: center; gap: 8px; padding: 0; border: 0;
+}
+.lobby-heading-actions { display: flex; gap: 8px; margin-left: auto; }
+.lobby-back-button, .lobby-invite-button, .lobby-settings-button {
   flex: none; width: 36px; height: 36px; padding: 0; display: grid; place-items: center;
   border: 2px solid #f2d79d; border-radius: 10px 10px 11px 4px;
   background: linear-gradient(#8ddbc4, #3f9e81); color: #123c32; font-size: 15px; font-weight: 800;
   box-shadow: inset 0 2px 0 #ffffff74, 0 3px 0 #24684f;
 }
-.lobby-back-button:active, .lobby-invite-button:active { translate: 0 3px; box-shadow: inset 0 2px 0 #ffffff70; }
-.room-camp {
-  position: relative;
-  height: 285px;
-  margin: -18px 0 5px;
-  overflow: hidden;
-  border: 3px solid #d6b16f;
-  border-radius: 28px 28px 31px 11px;
-  background:
-    radial-gradient(ellipse at 50% 68%, #f0b65728 0 18%, transparent 41%),
-    linear-gradient(180deg, #1c4c51cc, #293d34d9 45%, #4b3427e8),
-    url('/art/bible-journey-map.webp') 79% 35% / 170% auto;
-  box-shadow: inset 0 3px 0 #ffffff3b, inset 0 -12px 24px #22160da8, 0 5px 0 #6e492a;
-}
-.room-camp::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 50% 75%, transparent 0 19%, #ffb5492b 20% 21%, transparent 22%), radial-gradient(ellipse at 50% 110%, #080e0bad, transparent 65%); }
-.camp-code {
-  position: absolute;
-  z-index: 5;
-  top: 9px;
-  left: 50%;
+.lobby-back-button:active, .lobby-invite-button:active, .lobby-settings-button:active { translate: 0 3px; box-shadow: inset 0 2px 0 #ffffff70; }
+.room-camp-full .camp-code {
   display: flex;
   align-items: center;
   gap: 6px;
-  translate: -50% 0;
-  padding: 5px 11px;
+  padding: 6px 12px;
   border: 2px solid #f2d390;
   border-radius: 10px 10px 12px 4px;
   background: #4e3424e8;
@@ -639,7 +628,7 @@
   position: absolute;
   z-index: 3;
   left: 50%;
-  bottom: 37px;
+  top: 42%;
   width: 74px;
   height: 47px;
   translate: -50% 0;
@@ -655,35 +644,48 @@
   z-index: 4;
   display: grid;
   justify-items: center;
-  width: 68px;
+  width: 62px;
   color: #fff8d4;
   text-align: center;
   text-shadow: 0 1px 1px #1b130c;
 }
-.camp-avatar { position: relative; display: grid; place-items: center; width: 50px; height: 50px; border: 4px solid #baaf9e; border-radius: 50%; background: linear-gradient(#f7ddb0, #bd8051); color: #50341f; box-shadow: inset 0 3px 0 #ffffff77, 0 4px 0 #5c3c27, 0 0 0 3px #38261e7a; font: 800 19px/1 var(--font-display); }
+.camp-avatar {
+  position: relative; display: grid; place-items: center; overflow: hidden;
+  width: 46px; height: 46px; border: 4px solid #baaf9e; border-radius: 50%;
+  background: linear-gradient(#f7ddb0, #bd8051); color: #50341f;
+  box-shadow: inset 0 3px 0 #ffffff77, 0 4px 0 #5c3c27, 0 0 0 3px #38261e7a;
+}
+.camp-avatar .game-character { width: 42px; height: 42px; }
 .camp-avatar { border-color: var(--seat-accent, #baaf9e); }
 .camp-seat.ready .camp-avatar { border-color: #7feb8b; box-shadow: inset 0 3px 0 #ffffff77, 0 4px 0 #316e3d, 0 0 18px #6eff7e; }
 .camp-seat.team-sun .camp-avatar { border-color: #ffbd59; }
 .camp-seat.team-olive .camp-avatar { border-color: #71ce85; }
 .camp-seat.empty { opacity: .45; }
-.camp-avatar b { position: absolute; top: -14px; color: #ffd756; font-size: 17px; text-shadow: 0 2px 0 #8b4d16; }
+.camp-avatar b { position: absolute; top: -14px; z-index: 2; color: #ffd756; font-size: 17px; text-shadow: 0 2px 0 #8b4d16; }
 .camp-seat > small { width: 100%; margin-top: 2px; overflow: hidden; font-size: 9px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
 .camp-seat > i { padding: 2px 6px; border-radius: 999px; background: #241b16aa; color: #e9dfc4; font-size: 7px; font-style: normal; }
 .camp-seat.ready > i { background: #398641; color: #fff; }
-.camp-seat-1 { left: 8%; top: 47px; }
-.camp-seat-2 { right: 8%; top: 47px; }
-.camp-seat-3 { left: 2%; top: 143px; }
-.camp-seat-4 { right: 2%; top: 143px; }
-.camp-seat-5 { left: 22%; bottom: 7px; }
-.camp-seat-6 { right: 22%; bottom: 7px; }
-.room-roster { border: 1px solid #e8fff0a1; border-radius: 10px; background: #eafff0bd; color: #173e3a; }
-.room-roster summary { display: flex; justify-content: space-between; padding: 7px 9px; cursor: pointer; list-style: none; font: 800 11px/1 var(--font-display); }
-.room-roster summary::-webkit-details-marker { display: none; }
-.room-roster .player-list { padding: 0 6px 6px; }
-.in-world .room-ready-toggle { margin: -2px auto 8px; min-width: 82px; border-color: #fff2a9; background: linear-gradient(#ffe073, #e9a82b); color: #59370c; box-shadow: inset 0 3px 0 #ffffff75, 0 4px 0 #955918; }
-.in-world .lobby-grid { gap: 7px; margin-top: 6px; }
-.in-world .lobby-settings { padding-top: 4px; }
-.in-world .room-start-button { min-width: 86px; border-radius: 13px 13px 14px 5px; }
+.camp-seat-1  { left: 8%;  top: 14%; }
+.camp-seat-2  { right: 8%; top: 14%; }
+.camp-seat-3  { left: 2%;  top: 27%; }
+.camp-seat-4  { right: 2%; top: 27%; }
+.camp-seat-5  { left: 2%;  top: 58%; }
+.camp-seat-6  { right: 2%; top: 58%; }
+.camp-seat-7  { left: 8%;  top: 71%; }
+.camp-seat-8  { right: 8%; top: 71%; }
+.camp-seat-9  { left: 20%; top: 81%; }
+.camp-seat-10 { right: 20%; top: 81%; }
+.room-camp-action { position: absolute; z-index: 6; left: 0; right: 0; bottom: max(14px, env(safe-area-inset-bottom)); display: grid; place-items: center; }
+.room-ready-toggle, .room-start-button {
+  min-width: 96px; min-height: 40px; padding: 0 20px; border: 2px solid #fff2a9; border-radius: 999px;
+  background: linear-gradient(#ffe073, #e9a82b); color: #59370c; font: 800 13px/1 var(--font-display);
+  box-shadow: inset 0 3px 0 #ffffff75, 0 4px 0 #955918;
+}
+.room-ready-toggle:active, .room-start-button:not(:disabled):active { translate: 0 3px; box-shadow: inset 0 2px 0 #ffffff70; }
+.room-start-button {
+  border-color: #d9f4c0; background: linear-gradient(#7ad88b, #2d8b5c); color: #103d24;
+  box-shadow: inset 0 3px 0 #ffffff70, 0 4px 0 #1f5a3d;
+}
 @keyframes campfire-glow { to { filter: brightness(1.2); box-shadow: 0 0 46px #ffc14d, 0 9px 11px #120d0a90; } }
 @keyframes flame-dance { to { transform: rotate(8deg) scale(1.18); } }
 
@@ -693,22 +695,13 @@
   .home-grid .ground-level-path { inset-block: 84px 88px; }
   .ground-level-node { width: 39px; height: 39px; font-size: 14px; }
   .ground-level-node > small { display: none; }
-  .mode-dock { padding: 6px; }
-  .mode-orb { height: 55px; }
-  .mode-orb .mode-character { width: 47px; height: 47px; }
   .in-world .play-card .stone-letter-board { min-height: 300px; padding-top: 47px; }
   .stone-letter-board .answer-area { margin-bottom: 16px; }
   .tool-dock { min-height: 59px; padding: 5px 7px 7px; }
   .game-tool { width: 46px; min-width: 46px; height: 46px; }
-  .room-camp { height: 240px; }
-  .camp-seat-3, .camp-seat-4 { top: 117px; }
 }
 @media (max-width: 370px) {
-  .home-puzzle-sign { width: 72%; }
-  .home-puzzle-sign .home-scramble .letter-tile { width: 24px; }
   .ground-level-node { width: 41px; height: 41px; }
-  .mode-dock { gap: 5px; }
-  .mode-orb { height: 57px; }
   .mission-hud { grid-template-columns: 43px minmax(62px, 1fr) auto auto; gap: 4px; padding-inline: 5px; }
   .mission-hud-guide, .mission-hud-guide .game-character { width: 40px; height: 40px; }
   .mission-hud-chip { padding-inline: 5px; }

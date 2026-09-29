@@ -13,7 +13,7 @@ import { saveProgress, recordMatch, masteredCount, subscribeProgress, getProgres
 import { highestUnlocked, runLengthFor, totalStars } from '@/lib/levels';
 import { roomUnplayableReason, roomWordPool } from '@/lib/room-rules';
 import { LevelBar } from '@/components/LevelBar';
-import { DifficultyBar, roomDifficultyLabel } from '@/components/DifficultyBar';
+import { DifficultyBar } from '@/components/DifficultyBar';
 import { Standings } from '@/components/Standings';
 import { shuffledOrder, TileBoard } from '@/components/TileBoard';
 import { DailyWord, useHydrated } from '@/components/DailyWord';
@@ -71,10 +71,15 @@ function seatAccent(id: string): string {
   for (let index = 0; index < id.length; index += 1) hash = (hash * 31 + id.charCodeAt(index)) >>> 0;
   return SEAT_ACCENTS[hash % SEAT_ACCENTS.length];
 }
-// Mirrors `MAX_PLAYERS` in lib/room-service.ts -- kept as a plain constant
-// here rather than imported, since that module pulls in Workers-only APIs
-// that a client component must not bundle.
-const MAX_ROOM_PLAYERS = 30;
+const SEAT_CHARACTERS: GameCharacterId[] = ['nuri', 'tali', 'boaz', 'mira'];
+/** A stable, arbitrary mascot portrait per seated player -- there is no
+ * real per-player avatar choice, so this just gives each seat a face
+ * instead of a bare initial. */
+function seatCharacter(id: string): GameCharacterId {
+  let hash = 0;
+  for (let index = 0; index < id.length; index += 1) hash = (hash * 37 + id.charCodeAt(index)) >>> 0;
+  return SEAT_CHARACTERS[hash % SEAT_CHARACTERS.length];
+}
 
 function JourneyBackdrop() {
   return <div className="journey-world" aria-hidden="true">
@@ -82,9 +87,6 @@ function JourneyBackdrop() {
       <span className="journey-sunbeam" /><span className="journey-water-glint" />
       <span className="journey-firefly" /><span className="journey-firefly" /><span className="journey-firefly" />
       <span className="journey-firefly" /><span className="journey-firefly" />
-      {['near', 'far'].map((flock) => <div className={`journey-flock journey-flock-${flock}`} key={flock}>{[0, 1, 2, 3, 4].map((bird) => <span className="journey-bird" key={bird}>
-        <svg viewBox="0 0 48 24" focusable="false"><path className="bird-wing bird-wing-left" d="M24 16 Q13 1 2 8 Q13 8 24 16" /><path className="bird-wing bird-wing-right" d="M24 16 Q35 1 46 8 Q35 8 24 16" /><circle cx="24" cy="15" r="2.4" /></svg>
-      </span>)}</div>)}
       <span className="journey-leaf leaf-one" /><span className="journey-leaf leaf-two" /><span className="journey-leaf leaf-three" />
     </div>
     <div className="journey-foreground"><span /><span /></div>
@@ -126,17 +128,10 @@ function Header({ onHome, sound, setSound, homeMode = false, showingHome = false
       <span><b aria-hidden="true">🪙</b>{hud.coins}</span>
       <span><b aria-hidden="true">💎</b>{hud.gems}</span>
     </div>
-    <div className="home-hud-actions">
-      <button type="button" className="home-hud-icon" onClick={onDaily} aria-label={dailyDone ? 'Daily Word, already done today' : 'Daily Word'}>
-        <span aria-hidden="true">✎</span>
-        {!dailyDone && <b className="home-hud-dot" aria-hidden="true" />}
-      </button>
-      {/* No dedicated settings screen exists yet -- the gear keeps today's
-          one real option, sound, rather than adding a panel nothing else needs. */}
-      <button type="button" className="home-hud-icon" onClick={() => setSound(!sound)} aria-label={`${sound ? 'Turn off' : 'Turn on'} sound`}>
-        <span aria-hidden="true">⚙</span>
-      </button>
-    </div>
+    <button type="button" className="home-hud-daily" onClick={onDaily} aria-label={dailyDone ? 'Daily Word, already done today' : 'Daily Word'}>
+      Daily Word
+      {!dailyDone && <b className="home-hud-dot" aria-hidden="true" />}
+    </button>
   </header>;
   return <header className={`app-header ${homeMode ? 'home-header' : ''}`}>
     <button className={`brand ${homeMode ? 'home-brand' : ''}`} type="button" onClick={onHome} aria-label="WordIn home">
@@ -323,7 +318,6 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
   const [claimedBy, setClaimedBy] = useState<string | null>(mode === 'teams' ? null : 'group');
   const [resolved, setResolved] = useState<{ correct: boolean; revealed: boolean; award: number } | null>(null);
   const [correctCount, setCorrectCount] = useState(0); const [wrongCount, setWrongCount] = useState(0); const [finished, setFinished] = useState(false);
-  const [celebration, setCelebration] = useState<{ id: number; title: string; subtitle: string } | null>(null);
   const [missPop, setMissPop] = useState<number | null>(null);
   const [wrongStreak, setWrongStreak] = useState(0);
   const [solvedIds, setSolvedIds] = useState<string[]>([]);
@@ -392,11 +386,6 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
   };
   useEffect(() => { duckMusic(true); return () => duckMusic(false); }, []);
   useEffect(() => {
-    if (!celebration) return;
-    const timer = window.setTimeout(() => setCelebration(null), 1600);
-    return () => window.clearTimeout(timer);
-  }, [celebration]);
-  useEffect(() => {
     if (missPop === null) return;
     const timer = window.setTimeout(() => setMissPop(null), 1300);
     return () => window.clearTimeout(timer);
@@ -439,8 +428,6 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
       setCombo(combo + 1);
       setResolved({ correct: true, revealed: false, award: currentValue });
       if (sound) playCorrect();
-      const solverName = mode === 'teams' ? scores.find((team) => team.id === claimedBy)?.name : undefined;
-      setCelebration({ id: Date.now(), title: 'Beautiful!', subtitle: solverName ? `${solverName} · +${currentValue} points` : `+${currentValue} points` });
     } else {
       setScores(scores.map((team) => team.id === claimedBy ? { ...team, score: Math.max(0, team.score - 1) } : team));
       setWrongCount(wrongCount + 1);
@@ -551,7 +538,6 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
     />;
   }
   return <main className="game-shell">
-    {celebration && <BigCelebration key={celebration.id} title={celebration.title} subtitle={celebration.subtitle} character={mode === 'solo' ? 'nuri' : 'boaz'} />}
     {missPop !== null && <MissPopup key={missPop} character={mode === 'solo' ? 'nuri' : 'boaz'} />}
     <MissionHud
       character={<GameCharacter character={mode === 'solo' ? 'nuri' : 'boaz'} mood={resolved ? resolved.correct ? 'cheer' : 'oops' : timerMode === 'enforced' && timeLeft <= Math.ceil(secondsTotal * 0.3) ? 'urgent' : 'think'} size="small" />}
@@ -566,7 +552,14 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
       {timerMode === 'bonus' && !metLevelBefore && !resolved && <p className="notice">A clock from here on — but running out costs you nothing. Beat it and it pays a speed bonus.</p>}
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} shakeKey={shake ?? undefined} feedback={resolved ? resolved.correct ? 'correct' : 'wrong' : 'playing'} locked={Boolean(resolved) || (mode === 'teams' && !claimedBy)} />
       {hints > 0 && !resolved && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{ladder.slice(0, hints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
-      {resolved ? <Resolution lead={resolved.revealed ? 'The answer was' : 'Beautiful work!'} word={entry.display} reference={entry.references[0]} award={resolved.award ? `+${resolved.award} points` : 'No points this time'}><GameCharacter character={mode === 'solo' ? 'nuri' : 'boaz'} mood={resolved.correct ? 'cheer' : 'oops'} size="medium" className="resolution-character" /><button type="button" className="primary-button" onClick={next}>{index === recipe.puzzles.length - 1 ? 'See results' : 'Next puzzle'}</button></Resolution>
+      {resolved ? <Resolution
+        character={mode === 'solo' ? 'nuri' : 'boaz'}
+        mood={resolved.correct ? 'cheer' : 'oops'}
+        lead={resolved.revealed ? 'The answer was' : mode === 'teams' ? `${scores.find((team) => team.id === claimedBy)?.name ?? 'Someone'} solved it!` : 'Beautiful work!'}
+        word={entry.display}
+        reference={entry.references[0]}
+        award={resolved.award ? `+${resolved.award} points` : 'No points this time'}
+      />
       : <div className="game-actions tool-dock"><GameTool icon="💡" label={nextHint ? HINT_LABELS[nextHint.kind] : 'Hints used'} count={Math.max(0, ladder.length - hints)} disabled={!nextHint} onClick={takeHint} tone="gold" /><GameTool icon="↻" label="Shuffle" onClick={shuffleTray} /><GameTool icon="🔨" label="Clear" disabled={placed.length === 0} onClick={() => { rejectedRef.current = null; setPlaced([]); }} tone="coral" /><GameTool icon="🧭" label="Reveal" onClick={reveal} tone="violet" /></div>}
       <button type="button" className="quit-button" onClick={onHome}>End match</button>
     </section></main>;
@@ -596,14 +589,24 @@ function saveHighScore(value: number) {
  * than three simultaneous fades. The citation is the point of the game and
  * gets its own plaque; the award is a mechanic and sits below it, never
  * joined to it by a middle dot. */
-function Resolution({ lead, word, reference, award, children }: { lead: string; word: string; reference?: string; award: string; children?: React.ReactNode }) {
-  return <div className="resolution">
-    <span className="resolution-lead">{lead}</span>
-    <strong className="resolution-word">{word}</strong>
-    <i className="resolution-rule" aria-hidden="true" />
-    {reference && <p className="scripture"><span className="scripture-mark" aria-hidden="true">✦</span><cite className="scripture-cite">{reference}</cite></p>}
-    <p className="resolution-award">{award}</p>
-    {children}
+/** The one "you solved it" (or "here's the answer") popup every mode uses:
+ * a transient overlay bubble with the mascot on top, never an inline card,
+ * so nothing after it ever has to be scrolled to. `action` is only used by
+ * modes that can't auto-advance on a timer (the online host's Next puzzle
+ * button, or a non-host's "waiting for the host" note). */
+function Resolution({ character, mood, lead, word, reference, award, action }: {
+  character: GameCharacterId; mood: 'cheer' | 'oops'; lead: string; word: string; reference?: string; award: string; action?: React.ReactNode;
+}) {
+  return <div className="resolution" role="status" aria-live="assertive">
+    {mood === 'cheer' && <Confetti count={26} />}
+    <div className="resolution-bubble">
+      <GameCharacter character={character} mood={mood} size="medium" className="resolution-character" />
+      <span className="resolution-lead">{lead}</span>
+      <strong className="resolution-word">{word}</strong>
+      {reference && <p className="scripture"><span className="scripture-mark" aria-hidden="true">✦</span><cite className="scripture-cite">{reference}</cite></p>}
+      <p className="resolution-award">{award}</p>
+      {action}
+    </div>
   </div>;
 }
 
@@ -838,7 +841,7 @@ function TimeAttackGame({ categories, sound, started, onStart, onHome, onReplay 
     <section className="puzzle-card play-card">
       <div className="card-top"><div><p className="puzzle-kicker">{entry.categories[0]} · {LEVEL_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Build the word'}</h1></div><span className="points-pill">×{Math.max(1, combo + 1)}</span></div>
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} feedback={resolved ? resolved.correct ? 'correct' : 'wrong' : 'playing'} locked={Boolean(resolved)} />
-      {resolved && <Resolution lead={resolved.correct ? 'Solved it' : 'Missed it'} word={entry.display} reference={entry.references[0]} award={resolved.correct ? `+${resolved.gained} points` : 'No points'}><GameCharacter character="tali" mood={resolved.correct ? 'cheer' : 'oops'} size="medium" className="resolution-character" /></Resolution>}
+      {resolved && <Resolution character="tali" mood={resolved.correct ? 'cheer' : 'oops'} lead={resolved.correct ? 'Solved it' : 'Missed it'} word={entry.display} reference={entry.references[0]} award={resolved.correct ? `+${resolved.gained} points` : 'No points'} />}
       {!resolved && <div className="game-actions tool-dock arcade-tools"><GameTool icon="↻" label="Shuffle" onClick={() => { playShuffle(); setOrder(shuffledOrder(puzzle.scramble.length)); }} /><GameTool icon="🔨" label="Clear" disabled={placed.length === 0} onClick={() => setPlaced([])} tone="coral" /></div>}
     </section>
     <button type="button" className="quit-button" onClick={() => setFinished('ended')}>End run</button>
@@ -848,7 +851,7 @@ function TimeAttackGame({ categories, sound, started, onStart, onHome, onReplay 
 function OnlineEntry({ onBack, onConnected, initialCode }: { onBack: () => void; onConnected: (credentials: Credentials) => void; initialCode: string }) {
   const [kind, setKind] = useState<'create' | 'join'>(initialCode ? 'join' : 'create'); const [name, setName] = useState(''); const [code, setCode] = useState(initialCode); const [busy, setBusy] = useState(false);
   const submit = async () => { setBusy(true); try { const response = await fetch(kind === 'create' ? '/api/rooms' : `/api/rooms/${code}/join`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(kind === 'create' ? { name, settings: DEFAULT_ROOM_SETTINGS, mode: 'individuals' } : { name }) }); const data = await response.json() as Credentials & { error?: string }; if (!response.ok) throw new Error(data.error || 'Could not connect.'); onConnected(data); } catch (caught) { showToast(caught instanceof Error ? caught.message : 'Could not connect.', 'error'); } finally { setBusy(false); } };
-  return <main className="page-shell character-menu-stage"><section className="panel online-entry character-menu"><GameCharacter character="tali" mood="think" size="medium" className="menu-character" /><button className="back-button" type="button" onClick={onBack}>← Back</button><h1 className="page-title">Online room</h1>
+  return <main className="page-shell character-menu-stage entry-stage"><section className="panel online-entry character-menu"><GameCharacter character="tali" mood="think" size="small" className="entry-character" /><button className="back-button" type="button" onClick={onBack}>← Back</button><h1 className="page-title">Online room</h1>
     <div className="tabs room-entry-tabs"><button type="button" className={kind === 'create' ? 'active' : ''} onClick={() => setKind('create')}>Create</button><button type="button" className={kind === 'join' ? 'active' : ''} onClick={() => setKind('join')}>Join</button></div>
     <div className="form-stack"><label>Display name<input value={name} maxLength={24} autoComplete="name" placeholder="Your name" onChange={(event) => setName(event.target.value)} /></label>{kind === 'join' && <label>Room code<input className="code-input" value={code} maxLength={6} placeholder="A7K4PQ" autoCapitalize="characters" onChange={(event) => setCode(event.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ''))} /></label>}<button type="button" disabled={busy} className="primary-button room-entry-action" onClick={submit}>{busy ? '…' : kind === 'create' ? 'Create' : 'Join'}</button></div>
   </section></main>;
@@ -1058,10 +1061,18 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
       score={snapshot.mode === 'teams' ? <div className="hud-score-row">{teamScores.map((side) => <span key={side.id}>{side.name}<strong>{side.score}</strong></span>)}</div> : <><span aria-hidden="true">★</span><strong>{viewer?.score ?? 0}</strong></>}
     />
     <Standings players={snapshot.players} viewerId={snapshot.viewerId} answeredIds={snapshot.resolution?.answeredIds ?? []} phase="play" isHost={isHost} onKick={kick} />
-    <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{puzzle.category} · {LEVEL_NAMES[puzzle.band - 1]}</p><h1>{snapshot.status === 'PUZZLE_RESOLVED' ? puzzle.display : 'Build the word'}</h1></div><span className="points-pill">{scoreSolve({ letterCount: puzzle.scramble.length, level: puzzle.band, combo: 0, hintsUsed: snapshot.viewerHints })}</span></div>
+    <section className="puzzle-card play-card"><div className="card-top"><div><h1>{snapshot.status === 'PUZZLE_RESOLVED' ? puzzle.display : 'Build the word'}</h1></div><span className="points-pill">{scoreSolve({ letterCount: puzzle.scramble.length, level: puzzle.band, combo: 0, hintsUsed: snapshot.viewerHints })}</span></div>
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} feedback={snapshot.status === 'PUZZLE_RESOLVED' ? viewerSolve ? 'correct' : 'wrong' : 'playing'} locked={boardLocked} />
       {snapshot.viewerHints > 0 && snapshot.status === 'PUZZLE_OPEN' && !spectating && !sittingOut && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{puzzle.hints.slice(0, snapshot.viewerHints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
-      {snapshot.status === 'PUZZLE_RESOLVED' ? <Resolution lead={lead} word={puzzle.display ?? ''} reference={puzzle.reference} award={viewerSolve ? `+${viewerSolve.award} points` : 'No points this time'}>{solvers.length > 0 && <Confetti key={snapshot.currentIndex} />}<GameCharacter character="tali" mood={viewerSolve ? 'cheer' : 'oops'} size="medium" className="resolution-character" />{isHost ? <button type="button" className="primary-button" onClick={() => action({ action: 'next' })}>Next puzzle</button> : <p>Waiting for the host…</p>}</Resolution>
+      {snapshot.status === 'PUZZLE_RESOLVED' ? <Resolution
+        character="tali"
+        mood={viewerSolve ? 'cheer' : 'oops'}
+        lead={lead}
+        word={puzzle.display ?? ''}
+        reference={puzzle.reference}
+        award={viewerSolve ? `+${viewerSolve.award} points` : 'No points this time'}
+        action={isHost ? <button type="button" className="primary-button" onClick={() => action({ action: 'next' })}>Next puzzle</button> : <p>Waiting for the host…</p>}
+      />
       : spectating ? <p className="notice">You&rsquo;re watching this room.</p>
       : sittingOut ? <p className="notice">You&rsquo;ll join in on the next puzzle.</p>
       : viewerSolve ? <p className="notice">Nice! +{viewerSolve.award} points — waiting for the round to finish…</p>
@@ -1072,7 +1083,8 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
 }
 
 function OnlineLobby({ snapshot, viewer, isHost, busy, action, leave }: { snapshot: RoomSnapshot; viewer?: RoomPlayer; isHost: boolean; busy: boolean; action: (input: Record<string, unknown>) => void; leave: () => void }) {
-  const [settings, setSettings] = useState(snapshot.settings); const [mode, setMode] = useState(snapshot.mode); const joinUrl = typeof window !== 'undefined' ? `${window.location.origin}?room=${snapshot.code}` : '';
+  const [settings, setSettings] = useState(snapshot.settings); const [mode, setMode] = useState(snapshot.mode); const [settingsOpen, setSettingsOpen] = useState(false);
+  const joinUrl = typeof window !== 'undefined' ? `${window.location.origin}?room=${snapshot.code}` : '';
   // The difficulty picker is deliberately ungated, so a host can land on
   // one their categories have no words at. Say so here rather than
   // letting them start a match nobody can play.
@@ -1080,34 +1092,39 @@ function OnlineLobby({ snapshot, viewer, isHost, busy, action, leave }: { snapsh
   const copy = async () => { try { await navigator.clipboard.writeText(joinUrl); } catch { /* clipboard can be blocked */ } };
   const activePlayers = snapshot.players.filter((player) => player.role === 'player' && !player.left);
   const seatedCount = activePlayers.length;
-  const spectatorCount = snapshot.players.filter((player) => player.role === 'spectator' && !player.left).length;
-  const campSeats = Array.from({ length: 6 }, (_, index) => activePlayers[index] ?? null);
-  return <main className="page-shell character-menu-stage"><section className="panel lobby-panel character-menu"><GameCharacter character="tali" mood="idle" size="medium" className="menu-character" />
-    <div className="lobby-heading">
-      <button type="button" className="lobby-back-button" onClick={leave} aria-label="Leave room">‹</button>
-      <div><p className="section-kicker">Room code</p><h1 className="room-code">{snapshot.code}</h1></div>
-      <button type="button" className="lobby-invite-button" onClick={copy} aria-label="Copy invite link">＋👤</button>
-    </div>
-    <div className="room-camp" aria-label={`${seatedCount} players in the room`}>
-      <div className="camp-code"><small>Room</small><strong>{snapshot.code}</strong></div>
+  // Ten seats fill a phone screen without crowding; the roster used to
+  // cover the rest, but every seated player already appears at the fire,
+  // so there is nothing left for a list to show that isn't shown twice.
+  const campSeats = Array.from({ length: 10 }, (_, index) => activePlayers[index] ?? null);
+  return <main className="room-camp-stage">
+    <div className="room-camp room-camp-full" aria-label={`${seatedCount} players in the room`}>
+      <div className="lobby-heading">
+        <button type="button" className="lobby-back-button" onClick={leave} aria-label="Leave room">‹</button>
+        <div className="camp-code"><small>Room</small><strong>{snapshot.code}</strong></div>
+        <div className="lobby-heading-actions">
+          {isHost && <button type="button" className="lobby-settings-button" onClick={() => setSettingsOpen(true)} aria-label="Room settings">⚙</button>}
+          <button type="button" className="lobby-invite-button" onClick={copy} aria-label="Copy invite link">＋👤</button>
+        </div>
+      </div>
       <div className="campfire" aria-hidden="true"><i /><i /><span>✦</span></div>
       {campSeats.map((player, index) => <div key={player?.id ?? `empty-${index}`} className={`camp-seat camp-seat-${index + 1}${player?.ready ? ' ready' : ''}${player?.teamId ? ` team-${player.teamId}` : ''}${player ? '' : ' empty'}`}>
-        <span className="camp-avatar" style={player && !player.teamId ? { '--seat-accent': seatAccent(player.id) } as React.CSSProperties : undefined}>{player ? player.name[0]?.toUpperCase() : '+'}{player?.isHost && <b aria-label="Host">♛</b>}</span>
+        <span className="camp-avatar" style={player && !player.teamId ? { '--seat-accent': seatAccent(player.id) } as React.CSSProperties : undefined}>
+          {player ? <GameCharacter character={seatCharacter(player.id)} mood="idle" size="small" /> : '+'}
+          {player?.isHost && <b aria-label="Host">♛</b>}
+        </span>
         <small>{player ? player.name : 'Open'}</small>
         {player && <i>{player.ready ? 'Ready' : 'Waiting'}</i>}
       </div>)}
-    </div>
-    {!isHost && viewer?.role === 'player' && <button type="button" disabled={busy} className="room-ready-toggle" aria-pressed={viewer.ready} onClick={() => action({ action: 'ready', ready: !viewer.ready })}>{viewer.ready ? '✓ Ready' : 'Ready'}</button>}
-    <div className="lobby-grid">
-      <div className="lobby-players">
-        <details className="room-roster"><summary>Players <span>{seatedCount}/{MAX_ROOM_PLAYERS}{spectatorCount > 0 ? ` · ${spectatorCount} watching` : ''}</span></summary><div className="player-list">{snapshot.players.filter((player) => !player.left).map((player) => <div key={player.id}>
-          <span className="avatar">{player.name[0]?.toUpperCase()}</span>
-          <strong>{player.name}{player.id === viewer?.id ? ' (you)' : ''}{player.isHost && <small>Host</small>}</strong>
-          <em>{player.role === 'spectator' ? 'Watching' : player.ready ? '✓ Ready' : 'Not ready'}</em>
-        </div>)}</div></details>
+      <div className="room-camp-action">
+        {!isHost && viewer?.role === 'player' && <button type="button" disabled={busy} className="room-ready-toggle" aria-pressed={viewer.ready} onClick={() => action({ action: 'ready', ready: !viewer.ready })}>{viewer.ready ? '✓ Ready' : 'Ready'}</button>}
+        {isHost && <button type="button" disabled={busy || Boolean(blocked)} className="room-start-button" onClick={() => action({ action: 'start', settings, mode })}>{busy ? '…' : 'Start'}</button>}
       </div>
-      <div className="lobby-settings">
-        {isHost ? <>
+    </div>
+    {settingsOpen && <div className="sheet-backdrop" onClick={() => setSettingsOpen(false)}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label="Room settings" onClick={(event) => event.stopPropagation()}>
+        <div className="sheet-grip" aria-hidden="true" />
+        <div className="sheet-head"><h2>Room settings</h2><button type="button" className="sheet-close" onClick={() => setSettingsOpen(false)} aria-label="Close">×</button></div>
+        <div className="sheet-body">
           <div className="tabs compact three-tabs" aria-label="Room play style">
             <button type="button" aria-pressed={mode === 'individuals'} className={mode === 'individuals' ? 'active' : ''} onClick={() => setMode('individuals')}>Solo</button>
             <button type="button" aria-pressed={mode === 'teams'} className={mode === 'teams' ? 'active' : ''} onClick={() => setMode('teams')}>Teams</button>
@@ -1115,14 +1132,10 @@ function OnlineLobby({ snapshot, viewer, isHost, busy, action, leave }: { snapsh
           </div>
           <fieldset className="room-difficulty"><legend>Difficulty</legend><DifficultyBar selected={settings.difficulty} onSelect={(difficulty) => setSettings({ ...settings, difficulty })} /></fieldset>
           <RoomSettingsPanel settings={settings} setSettings={setSettings} />
-        </> : <div className="setting-summary"><p><strong>{snapshot.mode === 'individuals' ? 'Solo' : snapshot.mode === 'teams' ? 'Teams' : 'Co-op'}</strong> · {roomDifficultyLabel(snapshot.settings.difficulty)} · {snapshot.settings.length} puzzles</p><p>{snapshot.settings.categories.join(' + ')}</p></div>}
+        </div>
       </div>
-    </div>
-    <div className="room-actions">
-      <button type="button" className="text-button" onClick={leave}>Leave room</button>
-      {isHost && <button type="button" disabled={busy || Boolean(blocked)} className="primary-button room-start-button" onClick={() => action({ action: 'start', settings, mode })}>{busy ? 'Starting…' : 'Start match'} <span aria-hidden="true">▶</span></button>}
-    </div>
-  </section></main>;
+    </div>}
+  </main>;
 }
 
 /** Online rooms track only a cumulative `score` per player/side, not
