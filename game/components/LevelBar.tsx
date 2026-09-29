@@ -69,7 +69,7 @@ export function LevelBar({ selected, onSelect, variant = 'bar', newlyUnlocked }:
           onClick={() => onSelect(level)}
           aria-label={`${each.name}, level ${level}${level === selected ? ', selected' : ''}${each.unlocked ? '' : ', locked'}`}
         >
-          <span>{each.unlocked ? level : '◆'}</span>
+          <span>{level}</span>
           {level === selected && <small>{each.name}</small>}
           <i className="ground-node-stars" aria-hidden="true">{[1, 2, 3].map((star) => <b key={star} className={star <= stars ? 'earned' : ''}>★</b>)}</i>
         </button>;

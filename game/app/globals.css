@@ -545,6 +545,7 @@ legend { margin-bottom: 4px; font-size: 15px; font-weight: 700; color: var(--ink
 }
 .leaderboard b { text-align: right; }
 .leaderboard i { width: 10px; height: 10px; border-radius: 50%; }
+.leaderboard b.leaderboard-crown { display: inline-block; margin-left: 4px; font-size: 13px; text-align: left; }
 
 /* ============================================================
    Online room

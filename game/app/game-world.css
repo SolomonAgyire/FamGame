@@ -326,11 +326,6 @@
 @keyframes scene-arrive { from { opacity: 0; translate: 0 10px; } to { opacity: 1; translate: 0 0; } }
 
 .journey-atmosphere { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.journey-cloud {
-  position: absolute; left: -15%; top: 9%; width: 75%; height: 70px; opacity: .2;
-  background: radial-gradient(ellipse at 30% 65%, #fff 0, #ffffff00 65%), radial-gradient(ellipse at 70% 50%, #fff 0, #ffffff00 65%);
-  animation: cloud-drift 38s ease-in-out infinite alternate;
-}
 .journey-firefly {
   position: absolute; left: 13%; top: 52%; width: 3px; height: 3px; border-radius: 50%;
   background: #fffac4; box-shadow: 0 0 6px 2px #ffed9880; opacity: 0;
@@ -340,7 +335,6 @@
 .journey-firefly:nth-child(4) { left: 38%; top: 85%; animation-delay: -4s; }
 .journey-firefly:nth-child(5) { left: 76%; top: 36%; animation-delay: -1s; }
 .journey-firefly:nth-child(6) { left: 22%; top: 25%; animation-delay: -5s; }
-@keyframes cloud-drift { to { transform: translateX(45%); } }
 @keyframes firefly-drift {
   0%, 100% { opacity: 0; transform: translate(0, 6px); }
   35% { opacity: .8; }
@@ -373,7 +367,7 @@
   50% { filter: brightness(1.2); box-shadow: 0 5px 0 #967022, 0 0 0 9px #ffec8940, 0 0 26px #fff2a6; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .journey-cloud, .journey-firefly, .ground-level-node.just-unlocked { animation: none; }
+  .journey-firefly, .ground-level-node.just-unlocked { animation: none; }
   .score-flight { display: none; }
   .in-world > main { animation: none; }
   .in-world .journey-world { transition: none; }

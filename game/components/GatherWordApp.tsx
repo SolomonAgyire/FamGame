@@ -83,7 +83,7 @@ function seatCharacter(id: string): GameCharacterId {
 
 function JourneyBackdrop() {
   return <div className="journey-world" aria-hidden="true">
-    <div className="journey-atmosphere"><span className="journey-cloud" />
+    <div className="journey-atmosphere">
       <span className="journey-sunbeam" /><span className="journey-water-glint" />
       <span className="journey-firefly" /><span className="journey-firefly" /><span className="journey-firefly" />
       <span className="journey-firefly" /><span className="journey-firefly" />
@@ -120,9 +120,7 @@ function Header({ onHome, sound, setSound, homeMode = false, showingHome = false
   dailyNumber?: number | null; dailyDone?: boolean; onDaily?: () => void;
 }) {
   if (showingHome && hud) return <header className="app-header home-hud">
-    <button type="button" className="home-hud-avatar" onClick={onHome} aria-label="WordIn home">
-      <GameCharacter character="nuri" mood="idle" size="small" />
-    </button>
+    <button type="button" className="home-hud-brand" onClick={onHome} aria-label="WordIn home">WordIn</button>
     <div className="home-hud-currency" aria-label={`${hud.totalStars} stars, ${hud.coins} coins, ${hud.gems} gems`}>
       <span><b aria-hidden="true">★</b>{hud.totalStars}</span>
       <span><b aria-hidden="true">🪙</b>{hud.coins}</span>
@@ -496,6 +494,11 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
   </section></main>;
   const shuffleTray = () => { playShuffle(); setOrder(shuffledOrder(puzzle.scramble.length)); };
   const rematch = () => { finishedRef.current = false; const fresh = createFreshRecipe(settings); setRecipe(fresh); setTimeLeft(secondsForPuzzle(fresh, 0)); setIndex(0); setScores(scores.map((team) => ({ ...team, score: 0 }))); setCorrectCount(0); setWrongCount(0); setRevealCount(0); setFinished(false); resetPuzzle(); setSolvedIds([]); setCombo(0); setSummary(null); setUnlocked(null); };
+  // Ending early still shows a results screen, same as Time Attack's "End
+  // run" -- marking finishedRef first means a resolution popup's pending
+  // auto-advance timer (if one is still running) cannot record a second,
+  // later "finish" on top of this one.
+  const endMatch = () => { finishedRef.current = true; setFinished(true); };
   if (finished) {
     const ranking = [...scores].sort((a, b) => b.score - a.score);
     const winner = ranking[0];
@@ -528,7 +531,7 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
             <span><strong>{summary.mastered}</strong>Words mastered</span>
           </div>
         </div>}
-        {mode === 'teams' && <div className="leaderboard">{ranking.map((team, index) => <div key={team.id}><span>{index + 1}</span><i style={{ background: team.color }} /><strong>{team.name}</strong><b>{team.score}</b></div>)}</div>}
+        {mode === 'teams' && <div className="leaderboard">{ranking.map((team, index) => <div key={team.id}><span>{index + 1}</span><i style={{ background: team.color }} /><strong>{team.name}{index === 0 && <b className="leaderboard-crown" aria-label="Winner">👑</b>}</strong><b>{team.score}</b></div>)}</div>}
       </>}
       stats={[{ label: 'Solved', value: correctCount }, { label: 'Misses', value: wrongCount }, { label: 'Accuracy', value: `${accuracy}%` }]}
       primaryLabel="Play again"
@@ -561,7 +564,7 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
         award={resolved.award ? `+${resolved.award} points` : 'No points this time'}
       />
       : <div className="game-actions tool-dock"><GameTool icon="💡" label={nextHint ? HINT_LABELS[nextHint.kind] : 'Hints used'} count={Math.max(0, ladder.length - hints)} disabled={!nextHint} onClick={takeHint} tone="gold" /><GameTool icon="↻" label="Shuffle" onClick={shuffleTray} /><GameTool icon="🔨" label="Clear" disabled={placed.length === 0} onClick={() => { rejectedRef.current = null; setPlaced([]); }} tone="coral" /><GameTool icon="🧭" label="Reveal" onClick={reveal} tone="violet" /></div>}
-      <button type="button" className="quit-button" onClick={onHome}>End match</button>
+      <button type="button" className="quit-button" onClick={endMatch}>End match</button>
     </section></main>;
 }
 
@@ -1173,7 +1176,7 @@ function OnlineResults({ snapshot, isHost, action, leave }: { snapshot: RoomSnap
     scripture={`${snapshot.puzzleCount} words shared`}
     scriptureLabel="Room reward"
     extra={snapshot.mode === 'teams'
-      ? <div className="leaderboard">{ranking.map((side, index) => <div key={side.id}><span>{index + 1}</span><span className="avatar">{side.name[0]}</span><strong>{side.name}</strong><b>{side.score}</b></div>)}</div>
+      ? <div className="leaderboard">{ranking.map((side, index) => <div key={side.id}><span>{index + 1}</span><span className="avatar">{side.name[0]}</span><strong>{side.name}{index === 0 && <b className="leaderboard-crown" aria-label="Winner">👑</b>}</strong><b>{side.score}</b></div>)}</div>
       : <Standings players={snapshot.players} viewerId={snapshot.viewerId} answeredIds={[]} phase="results" />}
     stats={[]}
     primaryLabel={isHost ? 'Play again ↻' : 'Leave'}
