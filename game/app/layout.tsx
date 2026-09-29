@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import './game-world.css';
+import './immersive.css';
 
 export const metadata: Metadata = {
   title: 'WordIn — Bible Word Game',
