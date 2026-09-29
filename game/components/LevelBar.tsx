@@ -58,7 +58,6 @@ export function LevelBar({ selected, onSelect, variant = 'bar', newlyUnlocked }:
 
   if (variant === 'ground') return <>
     <nav className="ground-level-path" aria-label="Journey levels">
-      <span className="ground-path-trail" aria-hidden="true" />
       {ALL_LEVELS.map((level, index) => {
         const each = levelStatus(record, level);
         const stars = starsForLevel(record, level);

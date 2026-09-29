@@ -153,7 +153,11 @@ function HomeScreen({ startAs, level, setLevel, blocked, newlyUnlocked }: { star
   return <main className="home-shell">
     <section className="home-grid">
       <h1 className="home-title-plaque">WordIn</h1>
+      <div className="home-signposts" aria-hidden="true">
+        {['Rivers', 'Villages', 'High Places', 'New World'].map((label) => <span key={label} className="home-signpost">{label}</span>)}
+      </div>
       <LevelBar selected={level} onSelect={setLevel} variant="ground" newlyUnlocked={newlyUnlocked} />
+      <GameCharacter character="nuri" mood="idle" size="large" className="home-mascot" />
       {stopped && <p className="field-help warn" role="status">{blocked}</p>}
       <div className="home-mode-row" aria-label="Choose how to play">
         {modes.map((item) => {

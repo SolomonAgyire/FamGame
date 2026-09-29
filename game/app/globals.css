@@ -79,7 +79,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
    actions are full pills; smaller actions stay rounded-square.
    ============================================================ */
 .primary-button, .secondary-button, .check-button, .soft-button,
-.mode-tile, .choice-card, .band-button, .length-button, .wide-choice,
+.choice-card, .band-button, .length-button, .wide-choice,
 .letter-tile, .answer-slot, .fixed-tile {
   border: none;
   font-weight: 700;
@@ -248,55 +248,6 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   80% { transform: scale(1); opacity: 1; }
   100% { transform: scale(.92); opacity: 0; }
 }
-
-.mode-grid { display: grid; width: 100%; gap: 12px; grid-template-columns: repeat(2, 1fr); }
-.mode-tile {
-  position: relative; border-radius: 24px; border: 2px solid var(--glass-border);
-  box-shadow: 0 8px 20px rgba(31, 78, 118, .12), inset 0 1px 2px rgba(255,255,255,.4);
-  overflow: hidden; transition: transform .08s ease, box-shadow .08s ease;
-}
-.mode-tile-main {
-  display: flex; width: 100%; min-height: 112px; flex-direction: column; align-items: center; justify-content: center;
-  gap: 8px; padding: 18px 14px; text-align: center; background: transparent; border: 0;
-}
-.mode-tile:active { transform: translateY(6px); box-shadow: 0 2px 8px rgba(31, 78, 118, .08), inset 0 1px 2px rgba(255,255,255,.4); }
-.mode-tile.active { box-shadow: 0 8px 20px rgba(31, 78, 118, .18); }
-.mode-tile.active strong { color: var(--ink); }
-.mode-icon {
-  display: grid; width: 52px; height: 52px; place-items: center; border-radius: 50%;
-  font-size: 24px;
-  box-shadow: 0 4px 12px rgba(0,0,0,.12), inset 0 2px 4px rgba(255,255,255,.5);
-  border: 2px solid var(--glass-border);
-  transition: transform .08s ease;
-}
-.mode-tint-sky .mode-icon { background: linear-gradient(135deg, #8bd8f4 0%, #48c9f0 100%); color: #fff; }
-.mode-tint-grass .mode-icon { background: linear-gradient(135deg, #7be0a0 0%, #4fc072 100%); color: #fff; }
-.mode-tint-violet .mode-icon { background: linear-gradient(135deg, #c9a9ef 0%, #9b6bd6 100%); color: #fff; }
-.mode-tint-berry .mode-icon { background: linear-gradient(135deg, #ff9a86 0%, #ff6b81 100%); color: #fff; }
-.mode-tile.active .mode-icon { transform: scale(1.08); }
-.mode-tile strong { font-size: 15px; font-family: var(--font-display); font-weight: 700; color: var(--ink); }
-.mode-tile {
-  background: linear-gradient(135deg, rgba(255,255,255,.7), rgba(255,255,255,.5));
-}
-.mode-tint-sky { border-color: var(--glass-border); }
-.mode-tint-grass { border-color: var(--glass-border); }
-.mode-tint-violet { border-color: var(--glass-border); }
-.mode-tint-berry { border-color: var(--glass-border); }
-.mode-info-button {
-  position: absolute; top: 8px; right: 8px; display: grid; place-items: center;
-  width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line);
-  background: var(--surface); color: var(--muted); font-family: var(--font-display);
-  font-size: 12px; font-weight: 700; font-style: italic; padding: 0;
-}
-.mode-tile.active .mode-info-button { background: rgba(255,255,255,.55); border-color: transparent; color: var(--sun-ink); }
-.mode-tile.expanded .mode-info-button { background: var(--ink); color: var(--surface); border-color: var(--ink); }
-.mode-detail {
-  margin: 0; padding: 0 14px 14px; color: var(--muted); font-size: 12px; line-height: 1.5;
-  animation: detail-drop .18s ease;
-}
-.mode-tile.active .mode-detail { color: var(--sun-ink); opacity: .85; }
-@keyframes detail-drop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
-@media (max-width: 420px) { .mode-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; } .mode-tile-main { min-height: 92px; padding: 14px 10px; } }
 
 .free-note { margin: 0; color: var(--muted); font-size: 12px; }
 
@@ -849,27 +800,6 @@ footer {
 .repair-meter { display: block; width: 100%; height: 6px; margin-top: 5px; border-radius: 999px; background: rgba(255,255,255,.4); overflow: hidden; }
 .repair-meter i { display: block; height: 100%; background: #fff; transition: width .25s ease; }
 
-/* The Daily Word tile spans the grid -- it is the reason to open the app,
-   not one option among five. */
-.daily-tile { grid-column: 1 / -1; }
-.daily-tile .mode-tile-main { min-height: 0; padding: 16px 52px 16px 16px; flex-direction: row; justify-content: flex-start; text-align: left; gap: 12px; }
-.daily-tile .mode-tile-main > span { flex: none; }
-.daily-tile strong { display: block; }
-.mode-sub { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 600; line-height: 1.4; }
-.mode-tile.active .mode-sub { color: var(--sun-ink); opacity: .85; }
-.mode-tint-sun .mode-icon { background: #fff0cf; }
-.mode-badge {
-  position: absolute; top: 10px; right: 10px; border-radius: 999px;
-  background: var(--surface2); border: 1px solid var(--line); color: var(--muted);
-  padding: 3px 9px; font-size: 11px; font-weight: 700;
-}
-.mode-tile.active .mode-badge { background: rgba(255,255,255,.55); border-color: transparent; color: var(--sun-ink); }
-.mode-dot {
-  position: absolute; top: 6px; right: 6px; width: 11px; height: 11px; border-radius: 50%;
-  background: var(--berry); border: 2px solid var(--surface);
-  animation: flame-breathe 2s ease-in-out infinite;
-}
-
 /* The result card, shown once the day is spent. */
 .daily-done { padding: 24px 20px; max-width: 460px; margin: auto; }
 .daily-done .streak-header { margin: 18px 0 10px; }
@@ -897,7 +827,6 @@ footer {
 @media (max-width: 400px) {
   .streak-header { padding: 12px; gap: 10px; }
   .week-dot i { width: 19px; height: 19px; }
-  .daily-tile .mode-tile-main { padding: 14px 46px 14px 12px; gap: 10px; }
   .daily-scoreline strong { font-size: 19px; }
 }
 
@@ -1003,47 +932,6 @@ footer {
 .sample-card { padding: 16px; }
 .sample-card .card-top h2 { font-size: 18px; }
 .sample-footer { margin-top: 14px; padding-top: 11px; }
-.mode-tile-main { min-height: 86px; gap: 6px; padding: 13px 12px; }
-.mode-icon { width: 38px; height: 38px; font-size: 19px; }
-
-/* The Daily tile is the one horizontal card: icon on the left, title and
-   its line of explanation stacked beside it. As three flex siblings the
-   title was shrinking and wrapping mid-phrase, so it is a grid instead. */
-.daily-tile .mode-tile-main {
-  display: grid; min-height: 0; align-items: center;
-  grid-template-columns: auto 1fr; column-gap: 12px; row-gap: 1px;
-  grid-template-areas: "icon title" "icon sub";
-  padding: 12px 52px 12px 14px;
-}
-.daily-tile .mode-icon { grid-area: icon; }
-.daily-tile strong { grid-area: title; align-self: end; }
-.daily-tile .mode-sub { grid-area: sub; align-self: start; margin-top: 0; }
-
-/* ============================================================
-   Daily bar — the habit sits directly under the streak it feeds,
-   so it is one slim row rather than a card that explains itself.
-   "Daily Word" and a number say everything the tile needs to.
-   ============================================================ */
-.daily-bar { width: 100%; }
-.daily-bar button {
-  position: relative; display: flex; width: 100%; gap: 11px; padding: 9px 14px;
-  align-items: center; text-align: left; border: 1px solid var(--line);
-  border-radius: 999px; background: var(--surface); box-shadow: 0 4px 0 #e8dcbc;
-}
-.daily-bar button:active { transform: translateY(4px); box-shadow: 0 0 0 #e8dcbc; }
-.daily-bar .mode-icon { width: 34px; height: 34px; font-size: 17px; background: #fff0cf; }
-.daily-bar strong { flex: 1; font-family: var(--font-display); font-size: 15.5px; color: var(--ink); }
-.daily-bar-num {
-  border-radius: 999px; background: var(--surface2); border: 1px solid var(--line);
-  padding: 3px 9px; color: var(--muted); font-size: 11.5px; font-weight: 700;
-}
-.daily-bar .mode-dot { position: static; width: 8px; height: 8px; flex: none; }
-.daily-bar.active button {
-  background: linear-gradient(180deg, #ffd876, var(--sun)); border-color: var(--sun-deep);
-  box-shadow: 0 4px 0 var(--sun-deep);
-}
-.daily-bar.active strong { color: var(--sun-ink); }
-.daily-bar.active .daily-bar-num { background: rgba(255,255,255,.6); border-color: rgba(58,37,4,.16); color: var(--sun-ink); }
 
 /* The streak box is a header, not a panel -- it earns less height now
    that the Daily Word sits right beneath it. */
@@ -1075,8 +963,6 @@ footer {
 .streak-flame { font-size: 19px; }
 .week-dot i { width: 15px; height: 15px; }
 .week-dot small { font-size: 9px; }
-.daily-bar button { padding: 8px 13px; }
-.daily-bar .mode-icon { width: 30px; height: 30px; font-size: 15px; }
 
 /* The sample is a demonstration, not a puzzle to solve -- it earns a
    smaller tile than the real board. */
@@ -1092,17 +978,6 @@ footer {
 .level-bar { padding: 9px 13px; }
 .level-bar .level-badge { width: 32px; height: 32px; font-size: 14px; }
 .level-bar-text strong { font-size: 14.5px; }
-
-.mode-tile-main { min-height: 72px; gap: 4px; padding: 10px 10px 9px; }
-.mode-icon { width: 32px; height: 32px; font-size: 16px; }
-.mode-tile-main strong { font-size: 13.5px; }
-/* Each level-using tile names the level it will start, so removing the
-   Start button did not remove the confirmation of what happens next. */
-.mode-level {
-  color: var(--muted); font-size: 10.5px; font-weight: 700;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
-}
-.mode-tile-main:disabled { opacity: .45; }
 
 /* ============================================================
    Bible Journey — the approved art direction. The illustrated
@@ -1170,14 +1045,6 @@ footer {
 .week-dot i { border-color: #b98d4e; background: #e7cc8f; }
 .best-pill { border-color: #bc8d48; background: #ead39a; color: #705729; }
 .freeze-pill { background: #9eddf0; color: #195c78; box-shadow: 0 3px 0 #4c9cb5; }
-.daily-bar button {
-  border: 2px solid #c8892c; background: #f2c655;
-  box-shadow: inset 0 2px 0 rgba(255,255,255,.52), 0 4px 0 #986125, 0 10px 18px rgba(72,55,24,.19);
-  backdrop-filter: none; -webkit-backdrop-filter: none;
-}
-.daily-bar button:active { box-shadow: inset 0 2px 0 rgba(255,255,255,.52); }
-.daily-bar .mode-icon { color: #a65316; background: #ffe69a; border: 1px solid rgba(126,76,20,.28); }
-.daily-bar-num { border-color: rgba(104,68,20,.3); background: rgba(255,248,207,.7); color: #62451e; }
 .level-bar {
   border-radius: 18px 18px 18px 7px; background: #f1d397;
   box-shadow: inset 0 2px 0 rgba(255,255,255,.55), 0 4px 0 #8d602c, 0 10px 20px rgba(52,55,28,.18);
@@ -1214,36 +1081,7 @@ button.letter-tile:active { box-shadow: inset 0 2px 0 rgba(255,255,255,.42); }
 .answer-slot { border-color: rgba(232,255,244,.72); background: rgba(244,255,241,.18); }
 .fixed-tile { background: rgba(255,244,202,.72); border-color: rgba(123,91,40,.35); color: #66512e; }
 
-/* Four physical mode buttons anchored at the bottom of the home world. */
-.mode-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; align-items: start; }
-.mode-tile {
-  border: 2px solid rgba(255,255,255,.56); border-radius: 15px 15px 17px 6px; overflow: visible;
-  box-shadow: inset 0 3px 0 rgba(255,255,255,.28), inset 0 -4px 0 rgba(33,62,48,.17), 0 5px 0 var(--mode-edge), 0 10px 16px rgba(40,57,31,.25);
-  backdrop-filter: none; -webkit-backdrop-filter: none;
-}
-.mode-tint-sky { --mode-edge: #9a6621; background: #e7b84b; color: #5e4118; }
-.mode-tint-grass { --mode-edge: #14715f; background: #29ae8c; color: #fff9d8; }
-.mode-tint-violet { --mode-edge: #176ca2; background: #309fda; color: #f4fcff; }
-.mode-tint-berry { --mode-edge: #6540a4; background: #8565d4; color: #fff8ec; }
-.mode-tile-main { min-height: 78px; padding: 7px 4px 6px; gap: 4px; }
-.mode-icon, .mode-tint-sky .mode-icon, .mode-tint-grass .mode-icon, .mode-tint-violet .mode-icon, .mode-tint-berry .mode-icon {
-  width: 34px; height: 34px; padding: 5px; border: 2px solid rgba(255,255,255,.45); border-radius: 12px 12px 13px 4px;
-  background: rgba(255,255,255,.2); color: currentColor; box-shadow: inset 0 2px 0 rgba(255,255,255,.3), 0 2px 0 rgba(32,61,52,.18);
-}
-.mode-icon svg, .choice-card svg { display: block; width: 100%; height: 100%; }
-.mode-tile .mode-character { width: 38px; height: 38px; margin-top: -2px; }
-.mode-tile .mode-character svg { filter: drop-shadow(0 2px 1px rgba(31,57,48,.28)); }
-.mode-tile-main strong {
-  display: block; width: calc(100% - 4px); padding: 3px 2px; border: 1px solid #c89c58; border-radius: 7px 7px 7px 3px;
-  background: #fff0c7; color: #3d321d; font-family: Georgia, 'Times New Roman', serif; font-size: 10px; line-height: 1.05;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 2px 0 rgba(84,56,24,.26);
-}
-.mode-level { color: rgba(255,255,255,.9); font-size: 8.5px; text-shadow: 0 1px rgba(30,57,47,.5); }
-.mode-info-button { top: 5px; right: 5px; border-color: rgba(255,255,255,.55); background: rgba(255,246,206,.9); color: #554221; }
-.mode-tile:active { box-shadow: inset 0 2px 0 rgba(255,255,255,.25), 0 1px 0 var(--mode-edge); }
-.mode-tile.expanded { grid-column: span 2; border-color: rgba(255,255,255,.8); box-shadow: inset 0 3px 0 rgba(255,255,255,.28), 0 6px 0 var(--mode-edge), 0 13px 22px rgba(40,57,31,.25); }
-.mode-tile.expanded .mode-info-button { background: #fff0c7; color: #4f3b1e; }
-.mode-detail { margin: 2px 7px 8px; padding: 7px 8px; border-radius: 8px 8px 8px 3px; background: rgba(255,240,199,.94); color: #4e422d; font-size: 11px; text-align: left; }
+.choice-card svg { display: block; width: 100%; height: 100%; }
 
 /* Parchment is the shared reading surface for setup, rooms and results --
    translucent rather than a flat opaque fill, so the journey map fixed
@@ -1372,26 +1210,17 @@ footer {
   .journey-world::before { background: rgba(236,247,222,.04); }
 }
 
-@media (max-width: 390px) {
-  .mode-tile-main { min-height: 72px; padding-inline: 3px; }
-  .mode-icon, .mode-tint-sky .mode-icon, .mode-tint-grass .mode-icon, .mode-tint-violet .mode-icon, .mode-tint-berry .mode-icon { width: 30px; height: 30px; }
-  .mode-tile-main strong { font-size: 9.5px; }
-}
-
-@media (max-width: 350px) {
-  .mode-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .mode-tile.expanded { grid-column: span 2; }
-  .mode-tile-main strong { font-size: 12px; }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .journey-world { background-attachment: scroll; }
 }
 
 /* ============================================================
-   Phone home screen — the world itself is the layout. There is
-   no dashboard card around the sample scramble: title, cubes,
-   level stones and mode buttons sit directly in the landscape.
+   Phone app frame, plus what's left of the pre-HUD home header --
+   `.home-header`/`.home-brand`/`.home-daily-button` still render
+   whenever the map shows behind a setup/online-entry overlay (see
+   `Header`'s non-`showingHome` branch); the current home screen's own
+   HUD, title plaque and medallions are styled in immersive.css.
    ============================================================ */
 .app {
   width: 100%; max-width: 520px; margin: 0 auto;
@@ -1436,74 +1265,27 @@ footer {
 .home-daily-button strong { color: #b96216; font-size: 12px; line-height: 1; }
 .home-daily-button:active { translate: 0 4px; box-shadow: inset 0 2px 0 rgba(255,255,255,.6); }
 
-.home-shell { min-height: calc(100svh - 86px); }
-.home-grid {
-  width: 100%; min-height: calc(100svh - 86px); max-width: 500px;
-  padding: 9px 16px max(14px, env(safe-area-inset-bottom)); gap: 12px;
-}
-.home-grid .hero-title {
-  margin: 0 auto; padding: 7px 24px; font-size: clamp(20px, 5.6vw, 25px);
-}
-
-.home-scramble {
-  position: relative; width: 100%; padding: 9px 0 19px; isolation: isolate;
-}
-.home-scramble::after {
-  content: ""; position: absolute; z-index: -1; left: 2%; right: 2%; bottom: 5px; height: 19px;
-  border: 2px solid rgba(213,255,255,.78); border-radius: 9px;
-  background: rgba(69, 218, 219, .52);
-  box-shadow: inset 0 3px 0 rgba(255,255,255,.38), 0 5px 0 rgba(7,103,108,.65), 0 10px 17px rgba(26,66,54,.2);
-  transform: perspective(120px) rotateX(12deg);
-}
-.home-scramble .tile-row { margin: 0; gap: 5px; align-items: flex-end; }
-.home-scramble .letter-tile {
-  width: clamp(38px, 11.3vw, 49px); font-size: clamp(18px, 5.2vw, 23px);
-}
-
-.ground-level-path {
-  position: relative; width: 100%; height: clamp(210px, 28svh, 245px); flex: none;
-}
-.ground-level-node {
-  position: absolute; display: grid; width: 52px; height: 38px; place-items: center;
-  border: 3px solid #ddd8c9; border-radius: 50%; padding: 0;
-  background: #777b78; color: #fffbed;
-  box-shadow: inset 0 4px 0 rgba(255,255,255,.28), inset 0 -5px 0 rgba(51,55,52,.28), 0 5px 0 #4d514e, 0 10px 15px rgba(36,51,40,.24);
-  font-family: Georgia, 'Times New Roman', serif; font-size: 20px; font-weight: 700;
-  text-shadow: 0 2px 1px rgba(38,42,39,.48);
-}
-.ground-level-node:disabled { cursor: default; opacity: .72; }
+/* `.ground-level-node`'s box look (border/background/box-shadow/font) and
+   its nine positions now live in immersive.css; what stays here is the
+   structural plumbing nothing else redeclares -- absolute positioning,
+   the disabled cursor, and the press feedback -- plus the "more levels"
+   button's own colors, which immersive.css never gave it. */
+.ground-level-node { position: absolute; display: grid; place-items: center; padding: 0; }
+.ground-level-node:disabled { cursor: default; }
 .ground-level-node:not(:disabled):active { translate: 0 4px; box-shadow: inset 0 3px 0 rgba(255,255,255,.22), 0 1px 0 #4d514e; }
-.ground-level-node.selected {
-  border-color: #ffec8c; background: #ecb62d; color: #fff9d9;
-  box-shadow: inset 0 4px 0 rgba(255,255,255,.4), inset 0 -5px 0 rgba(153,86,11,.16), 0 5px 0 #9f641d, 0 0 18px rgba(255,212,54,.65);
-}
-.ground-level-node.cleared:not(.selected) { border-color: #c9efcd; background: #3ca779; box-shadow: inset 0 4px 0 rgba(255,255,255,.26), 0 5px 0 #226d50; }
 .ground-level-node small {
-  position: absolute; top: 40px; left: 50%; width: max-content; max-width: 100px; translate: -50% 0;
+  position: absolute; left: 50%; width: max-content; max-width: 100px; translate: -50% 0;
   border: 1px solid #b88442; border-radius: 7px 7px 8px 3px; padding: 3px 7px;
   background: #f7e5b3; color: #4b3b22; box-shadow: 0 2px 0 #8f612f;
   font-family: var(--font-body); font-size: 9px; line-height: 1; text-shadow: none;
 }
-/* Bottom-anchored throughout so the gaps stay predictable -- level 5 gets a
-   wider jump above level 4 instead of crowding it at the container's top. */
-.ground-level-0 { left: 43%; bottom: 2%; }
-.ground-level-1 { left: 66%; bottom: 24%; }
-.ground-level-2 { left: 45%; bottom: 46%; }
-.ground-level-3 { left: 65%; bottom: 66%; }
-.ground-level-4 { left: 45%; bottom: 90%; }
 .ground-level-more {
-  position: absolute; right: 2px; bottom: 0; min-height: 32px; padding: 0 10px;
-  border: 2px solid #b27b35; border-radius: 9px 9px 10px 3px;
-  background: #f2d797; color: #594322; box-shadow: inset 0 2px 0 rgba(255,255,255,.55), 0 3px 0 #895b29;
-  font-size: 10px; font-weight: 800;
+  position: absolute;
+  border: 2px solid #b27b35; background: #f2d797; color: #594322;
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.55), 0 3px 0 #895b29;
+  font-weight: 800;
 }
 .ground-level-more:active { translate: 0 3px; box-shadow: inset 0 2px 0 rgba(255,255,255,.5); }
-
-/* The trail is what gets pushed down to sit flush above the mode buttons --
-   pinning margin-top:auto to the buttons instead left a gap floating
-   between the trail and the buttons it's supposed to lead into. */
-.home-grid .ground-level-path { margin-top: auto; margin-bottom: 4px; }
-.home-grid .mode-grid { width: 100%; }
 
 @media (min-width: 521px) {
   body { background: #19483b; }
@@ -1516,9 +1298,6 @@ footer {
   .home-brand strong { font-size: 27px; }
   .home-daily-button { width: 91px; height: 51px; }
   .home-daily-button span { font-size: 11px; }
-  .home-shell, .home-grid { min-height: calc(100svh - 80px); }
-  .ground-level-node { width: 46px; height: 34px; font-size: 16px; }
-  .ground-level-node small { top: 36px; }
 }
 
 @media (max-width: 350px) {
@@ -1526,5 +1305,4 @@ footer {
   .home-brand strong { font-size: 24px; }
   .home-daily-button { width: 82px; }
   .home-daily-button span { font-size: 10px; }
-  .ground-level-path { height: 200px; }
 }
