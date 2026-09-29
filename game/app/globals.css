@@ -6,6 +6,14 @@
    whole experience instead of fading into a neutral lower page.
    ============================================================ */
 :root {
+  /* The home scramble and all game controls share these cube materials. */
+  --cube-cyan: linear-gradient(135deg, #48c9f0, #3fa9e8);
+  --cube-coral: linear-gradient(135deg, #ff9a86, #ff6b81);
+  --cube-violet: linear-gradient(135deg, #c9a9ef, #9b6bd6);
+  --cube-mint: #72e5bc;
+  --cube-gold: #f1bf41;
+  --cube-rim: rgba(226,255,255,.84);
+  --cube-corners: 12px 12px 13px 4px;
   --sky-top: #8bd8f4;
   --sky-bottom: #e9c978;
   --surface: #fff1c7;
@@ -119,38 +127,70 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .icon-button:active { transform: translateY(3px); box-shadow: 0 0 0 #d8c79f; }
 
 /* ============================================================
-   Header
+   Header — prominent branding with glass effect logo
    ============================================================ */
 .app-header {
-  display: flex; max-width: 720px; margin: auto; padding: 16px 20px;
+  display: flex; max-width: 720px; margin: auto; padding: 12px 20px;
   align-items: center; justify-content: space-between;
+  background: linear-gradient(135deg, rgba(255,255,255,.6), rgba(255,255,255,.4));
+  border-bottom: 2px solid var(--glass-border);
+  box-shadow: 0 4px 12px rgba(31, 78, 118, .08);
 }
 .brand { display: flex; align-items: center; gap: 10px; border: 0; background: transparent; text-align: left; }
 .brand-mark {
-  display: grid; width: 42px; height: 42px; place-items: center;
-  border-radius: 50%; background: linear-gradient(180deg, #ffd876, var(--sun)); color: var(--sun-ink);
-  font-family: var(--font-display); font-size: 19px; font-weight: 700;
-  box-shadow: 0 3px 0 var(--sun-deep);
+  display: grid; width: 48px; height: 48px; place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ffc52a 0%, #ffbe3d 100%);
+  color: #3a2504;
+  font-family: var(--font-display); font-size: 22px; font-weight: 900;
+  box-shadow: 0 6px 16px rgba(255, 190, 61, .3), inset 0 2px 4px rgba(255,255,255,.6), inset 0 -2px 4px rgba(0,0,0,.1);
+  border: 2px solid rgba(255,255,255,.8);
 }
-.brand strong { display: block; font-family: var(--font-display); font-size: 17px; color: var(--ink); }
-.brand small { display: block; margin-top: 1px; color: var(--muted); font-size: 11px; font-weight: 600; }
+.brand strong { display: block; font-family: var(--font-display); font-size: 18px; font-weight: 900; color: var(--ink); letter-spacing: -.5px; }
+.brand small { display: block; margin-top: 1px; color: var(--muted); font-size: 10px; font-weight: 700; }
 .header-actions { display: flex; gap: 8px; align-items: center; }
 
 /* ============================================================
    Home — puzzle-first, single column, mobile-native
    ============================================================ */
 .home-shell { position: relative; }
-.home-grid { max-width: 460px; margin: auto; padding: 8px 20px 60px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 22px; }
+.home-header { background: var(--surface); }
+.home-daily-button {
+  padding: 10px 18px;
+  border: 2px solid var(--glass-border);
+  background: linear-gradient(135deg, rgba(255, 190, 61, .2), rgba(255, 190, 61, .1));
+  border-radius: 999px;
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 4px 12px rgba(255, 190, 61, .15);
+}
+.home-daily-button span { font-size: 11px; color: var(--muted); }
+.home-daily-button strong { font-size: 16px; color: var(--sun-deep); }
+.home-grid { max-width: 460px; margin: auto; padding: 16px 20px 60px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 22px; }
 .hero-title {
   margin: 0; font-family: var(--font-display); font-weight: 600;
   font-size: clamp(30px, 8vw, 38px); line-height: 1.08; color: var(--ink);
 }
 .hero-copy { margin: 0; max-width: 380px; color: var(--muted); font-size: 15px; line-height: 1.55; }
 
-.sample-wrap { width: 100%; }
+.sample-wrap {
+  width: 100%;
+  background: linear-gradient(135deg, rgba(72, 201, 240, .15), rgba(62, 220, 174, .15));
+  padding: 20px;
+  border-radius: 24px;
+  border: 2px solid var(--glass-border);
+  box-shadow: inset 0 1px 2px rgba(255,255,255,.4), 0 8px 24px rgba(31, 78, 118, .12);
+}
 .puzzle-card, .panel {
-  border: 1px solid var(--line); background: var(--surface); border-radius: 26px;
-  box-shadow: 0 10px 0 -4px #fff, 0 14px 30px rgba(122,94,26,.12);
+  border: 2px solid var(--glass-border);
+  background: linear-gradient(135deg, rgba(255,255,255,.8), rgba(255,255,255,.6));
+  border-radius: 26px;
+  box-shadow: 0 12px 28px rgba(31, 78, 118, .15), inset 0 1px 2px rgba(255,255,255,.4);
 }
 .puzzle-card { padding: 22px; }
 .card-top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
@@ -209,28 +249,39 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   100% { transform: scale(.92); opacity: 0; }
 }
 
-.mode-grid { display: grid; width: 100%; gap: 10px; grid-template-columns: repeat(2, 1fr); }
+.mode-grid { display: grid; width: 100%; gap: 12px; grid-template-columns: repeat(2, 1fr); }
 .mode-tile {
-  position: relative; border-radius: 24px; background: var(--surface); border: 1px solid var(--line);
-  box-shadow: 0 4px 0 #e8dcbc; overflow: hidden;
+  position: relative; border-radius: 24px; border: 2px solid var(--glass-border);
+  box-shadow: 0 8px 20px rgba(31, 78, 118, .12), inset 0 1px 2px rgba(255,255,255,.4);
+  overflow: hidden; transition: transform .08s ease, box-shadow .08s ease;
 }
 .mode-tile-main {
-  display: flex; width: 100%; min-height: 108px; flex-direction: column; align-items: center; justify-content: center;
+  display: flex; width: 100%; min-height: 112px; flex-direction: column; align-items: center; justify-content: center;
   gap: 8px; padding: 18px 14px; text-align: center; background: transparent; border: 0;
 }
-.mode-tile:active { transform: translateY(4px); box-shadow: 0 0 0 #e8dcbc; }
-.mode-tile.active { background: linear-gradient(180deg, #ffd876, var(--sun)); border-color: var(--sun); box-shadow: 0 4px 0 var(--sun-deep); }
-.mode-tile.active strong { color: var(--sun-ink); }
+.mode-tile:active { transform: translateY(6px); box-shadow: 0 2px 8px rgba(31, 78, 118, .08), inset 0 1px 2px rgba(255,255,255,.4); }
+.mode-tile.active { box-shadow: 0 8px 20px rgba(31, 78, 118, .18); }
+.mode-tile.active strong { color: var(--ink); }
 .mode-icon {
-  display: grid; width: 44px; height: 44px; place-items: center; border-radius: 50%;
-  background: var(--surface2); font-size: 21px; box-shadow: inset 0 0 0 1px var(--line);
+  display: grid; width: 52px; height: 52px; place-items: center; border-radius: 50%;
+  font-size: 24px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.12), inset 0 2px 4px rgba(255,255,255,.5);
+  border: 2px solid var(--glass-border);
+  transition: transform .08s ease;
 }
-.mode-tint-sky .mode-icon { background: #dcf1fc; }
-.mode-tint-grass .mode-icon { background: #ddf5e3; }
-.mode-tint-violet .mode-icon { background: #ecdffb; }
-.mode-tint-berry .mode-icon { background: #ffe1e6; }
-.mode-tile.active .mode-icon { background: rgba(255,255,255,.55); box-shadow: none; }
-.mode-tile strong { font-size: 14px; font-family: var(--font-display); font-weight: 600; color: var(--ink); }
+.mode-tint-sky .mode-icon { background: linear-gradient(135deg, #8bd8f4 0%, #48c9f0 100%); color: #fff; }
+.mode-tint-grass .mode-icon { background: linear-gradient(135deg, #7be0a0 0%, #4fc072 100%); color: #fff; }
+.mode-tint-violet .mode-icon { background: linear-gradient(135deg, #c9a9ef 0%, #9b6bd6 100%); color: #fff; }
+.mode-tint-berry .mode-icon { background: linear-gradient(135deg, #ff9a86 0%, #ff6b81 100%); color: #fff; }
+.mode-tile.active .mode-icon { transform: scale(1.08); }
+.mode-tile strong { font-size: 15px; font-family: var(--font-display); font-weight: 700; color: var(--ink); }
+.mode-tile {
+  background: linear-gradient(135deg, rgba(255,255,255,.7), rgba(255,255,255,.5));
+}
+.mode-tint-sky { border-color: var(--glass-border); }
+.mode-tint-grass { border-color: var(--glass-border); }
+.mode-tint-violet { border-color: var(--glass-border); }
+.mode-tint-berry { border-color: var(--glass-border); }
 .mode-info-button {
   position: absolute; top: 8px; right: 8px; display: grid; place-items: center;
   width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line);
@@ -250,27 +301,49 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .free-note { margin: 0; color: var(--muted); font-size: 12px; }
 
 /* ============================================================
-   Letter tiles — glossy candy pieces on a soft cream tray.
-   Rounder than a plain square, a pop-in on placement.
+   Letter tiles — glossy glass cubes with depth and vibrancy.
+   Colorful like 8ball pool and Wordscapes, with 3D perspective.
    ============================================================ */
 .tile-row, .answer-area, .scramble-area { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; }
 .tile-row { margin-top: 22px; flex-wrap: nowrap; }
 .answer-row { margin-top: 18px; }
 .letter-tile, .answer-slot, .fixed-tile {
   display: grid; width: clamp(34px, 8.5vw, 50px); aspect-ratio: 1; place-items: center;
-  border-radius: 30%; font-size: clamp(16px, 3vw, 21px); font-weight: 700; font-family: var(--font-display);
+  border-radius: 16px; font-size: clamp(16px, 3vw, 21px); font-weight: 700; font-family: var(--font-display);
+  position: relative; transition: transform .08s ease, box-shadow .08s ease;
 }
 .letter-tile {
-  background: linear-gradient(180deg, #fffaf0, var(--paper)); color: var(--paper-ink);
-  box-shadow: 0 3px 0 #d9bf82;
+  background: linear-gradient(135deg, #48c9f0 0%, #3fa9e8 100%);
+  color: #fff; font-weight: 800;
+  box-shadow: 0 8px 0 rgba(31, 78, 118, .35), inset 0 -4px 8px rgba(0,0,0,.1), inset 0 2px 4px rgba(255,255,255,.5);
+  border: 2px solid var(--glass-border);
 }
-button.letter-tile:active { transform: translateY(3px); box-shadow: 0 0 0 #d9bf82; }
-.letter-tile.placed { background: linear-gradient(180deg, #7be0a0, var(--grass)); color: #fff; box-shadow: 0 3px 0 var(--grass-deep); animation: tile-pop .18s ease; }
-@keyframes tile-pop { from { transform: scale(.8) rotate(-4deg); } to { transform: scale(1) rotate(0); } }
-.answer-slot { border: 2px dashed #d9c691; background: rgba(255,255,255,.5); box-shadow: none; }
-.fixed-tile { background: var(--surface2); color: var(--muted); box-shadow: none; border: 1px dashed var(--line); }
+.letter-tile:nth-child(3n+1) { background: var(--cube-cyan); }
+.letter-tile:nth-child(3n+2) { background: linear-gradient(135deg, #7be0a0 0%, #4fc072 100%); }
+.letter-tile:nth-child(3n) { background: linear-gradient(135deg, #ffc52a 0%, #ffbe3d 100%); color: #3a2504; }
+.letter-tile:nth-child(5n+2) { background: var(--cube-violet); color: #fff; }
+.letter-tile:nth-child(7n+1) { background: var(--cube-coral); color: #fff; }
+button.letter-tile:active { transform: translateY(8px); box-shadow: 0 0 0 rgba(31, 78, 118, .35), inset 0 -4px 8px rgba(0,0,0,.1), inset 0 2px 4px rgba(255,255,255,.5); }
+.letter-tile.placed {
+  background: linear-gradient(135deg, #7be0a0 0%, #4fc072 100%);
+  color: #fff;
+  box-shadow: 0 8px 0 var(--grass-deep), inset 0 -4px 8px rgba(0,0,0,.15), inset 0 2px 4px rgba(255,255,255,.6);
+  animation: tile-pop .18s ease;
+}
+@keyframes tile-pop { from { transform: scale(.8) rotate(-8deg); } to { transform: scale(1) rotate(0); } }
+.answer-slot {
+  border: 2px solid var(--glass-border);
+  background: linear-gradient(135deg, rgba(255,255,255,.4), rgba(255,255,255,.2));
+  box-shadow: inset 0 2px 4px rgba(255,255,255,.3), 0 4px 12px rgba(0,0,0,.08);
+}
+.fixed-tile {
+  background: linear-gradient(135deg, rgba(207,199,182,.4), rgba(197,179,154,.3));
+  color: var(--muted);
+  box-shadow: inset 0 -2px 4px rgba(0,0,0,.05);
+  border: 2px solid var(--glass-border);
+}
 .sample-footer {
-  display: flex; margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line);
+  display: flex; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--glass-border);
   align-items: center; justify-content: space-between; color: var(--muted); font-size: 12px; font-weight: 700;
 }
 
@@ -387,7 +460,14 @@ legend { margin-bottom: 4px; font-size: 15px; font-weight: 700; color: var(--ink
 .play-card { max-width: 100%; }
 .board { margin: 24px 0; }
 .answer-area { min-height: 56px; margin-bottom: 18px; }
-.scramble-area { min-height: 56px; padding: 14px; border-radius: 22px; background: var(--surface2); border: 1px dashed var(--line); }
+.scramble-area {
+  min-height: 56px;
+  padding: 14px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(200, 216, 189, .4), rgba(200, 216, 189, .2));
+  border: 2px solid var(--glass-border);
+  box-shadow: inset 0 2px 4px rgba(255,255,255,.4), 0 4px 12px rgba(31, 78, 118, .08);
+}
 
 /* ============================================================
    Tile sizing — a word's silhouette is most of the puzzle, so the
@@ -580,7 +660,7 @@ legend { margin-bottom: 4px; font-size: 15px; font-weight: 700; color: var(--ink
 footer {
   display: flex; max-width: 720px; margin: auto; padding: 16px 20px 26px;
   border-top: 1px solid var(--line); justify-content: space-between; color: var(--muted); font-size: 11px; font-weight: 600;
-  flex-wrap: wrap; gap: 6px;
+  flex-wrap: wrap; gap: 6px; background: transparent;
 }
 
 /* ============================================================
@@ -603,13 +683,6 @@ footer {
 @keyframes toast-pop-in { from { transform: translateY(16px) scale(.85); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
 @keyframes toast-vanish { from { transform: translateY(0) scale(1); opacity: 1; } to { transform: translateY(-10px) scale(.92); opacity: 0; } }
 
-/* Choice-card selected checkmark badge */
-.choice-card { position: relative; }
-.choice-check {
-  position: absolute; top: -6px; right: -6px; display: grid; place-items: center;
-  width: 20px; height: 20px; border-radius: 50%; background: #fff; color: var(--grass-deep);
-  font-size: 12px; font-weight: 800; box-shadow: 0 2px 0 rgba(0,0,0,.15);
-}
 
 /* Quit / end-match / leave-room control, tucked under the action bar. */
 .quit-button {
@@ -670,31 +743,38 @@ footer {
    destination, not an error: it keeps its name so the player can
    see where they are going.
    ============================================================ */
-.level-path { display: flex; flex-direction: column; gap: 10px; width: 100%; margin: 0; padding: 0; list-style: none; }
+.level-path { display: flex; flex-direction: column; gap: 8px; width: 100%; margin: 0; padding: 0; list-style: none; }
 .level-node button {
-  position: relative; display: flex; width: 100%; gap: 14px; padding: 14px 16px;
-  align-items: center; text-align: left; border: 1px solid var(--line);
-  border-radius: 20px; background: var(--surface); box-shadow: 0 4px 0 #e6d4ab;
+  position: relative; display: flex; width: 100%; gap: 8px; padding: 8px 12px;
+  align-items: center; text-align: left; border: 2px solid var(--glass-border);
+  border-radius: 16px; background: linear-gradient(135deg, rgba(255,255,255,.6), rgba(255,255,255,.4));
+  box-shadow: 0 4px 12px rgba(31, 78, 118, .08), inset 0 1px 2px rgba(255,255,255,.4);
+  transition: transform .08s ease;
 }
-.level-node button:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 0 0 #e6d4ab; }
+.level-node button:active:not(:disabled) { transform: translateY(3px); }
 .level-badge {
-  display: grid; flex: none; width: 40px; height: 40px; place-items: center;
-  border-radius: 50%; background: linear-gradient(180deg, #ffd876, var(--sun));
-  color: var(--sun-ink); font-family: var(--font-display); font-size: 17px; font-weight: 700;
-  box-shadow: 0 3px 0 var(--sun-deep);
+  display: grid; flex: none; width: 32px; height: 32px; place-items: center;
+  border-radius: 50%; background: linear-gradient(135deg, #ffc52a, #ffbe3d);
+  color: #3a2504; font-family: var(--font-display); font-size: 14px; font-weight: 800;
+  box-shadow: 0 3px 8px rgba(255, 190, 61, .25), inset 0 2px 4px rgba(255,255,255,.6);
+  border: 2px solid rgba(255,255,255,.8);
+  position: relative; z-index: 2;
 }
-.level-text { display: flex; flex-direction: column; gap: 2px; }
-.level-text strong { font-family: var(--font-display); font-size: 16px; color: var(--ink); }
-.level-text small { color: var(--muted); font-size: 12px; font-weight: 600; }
+.level-text { display: flex; flex-direction: column; gap: 0px; flex: 1; }
+.level-text strong { font-family: var(--font-display); font-size: 14px; color: var(--ink); font-weight: 700; }
+.level-text small { color: var(--muted); font-size: 11px; font-weight: 600; }
 .level-meter {
-  position: absolute; right: 16px; bottom: 12px; width: 64px; height: 5px;
+  position: absolute; right: 12px; bottom: 8px; width: 56px; height: 4px;
   border-radius: 999px; background: var(--surface2); overflow: hidden;
 }
 .level-meter i { display: block; height: 100%; background: var(--grass); }
-.level-node.selected button { border-color: var(--sun-deep); box-shadow: 0 4px 0 var(--sun-deep); }
-.level-node.cleared .level-badge { background: linear-gradient(180deg, #7be0a0, var(--grass)); color: #fff; box-shadow: 0 3px 0 var(--grass-deep); }
-.level-node.locked button { background: var(--surface2); box-shadow: none; opacity: .72; }
-.level-node.locked .level-badge { background: var(--surface2); color: var(--muted); border: 1px dashed var(--line); box-shadow: none; }
+.level-node-stars { position: absolute; right: 12px; top: 8px; display: flex; gap: 2px; font-size: 10px; }
+.level-node-stars b { color: var(--surface2); }
+.level-node-stars b.earned { color: var(--sun-deep); }
+.level-node.selected button { border-color: var(--sun-deep); box-shadow: 0 4px 12px var(--sun-deep), inset 0 1px 2px rgba(255,255,255,.4); }
+.level-node.cleared .level-badge { background: linear-gradient(135deg, #7be0a0, #4fc072); color: #fff; box-shadow: 0 3px 8px rgba(127, 224, 160, .25), inset 0 2px 4px rgba(255,255,255,.5); }
+.level-node.locked button { background: linear-gradient(135deg, rgba(200,200,200,.3), rgba(200,200,200,.2)); box-shadow: none; opacity: .6; }
+.level-node.locked .level-badge { background: rgba(200,200,200,.4); color: var(--muted); border: 1px dashed var(--line); box-shadow: none; }
 
 /* Unlocking a level is the single biggest moment in the run — it gets a
    full-width banner rather than a line of text. */
@@ -1123,52 +1203,58 @@ footer {
 .points-pill { border: 2px solid #ffea91; background: #f1bd36; box-shadow: inset 0 2px 0 rgba(255,255,255,.48), 0 3px 0 #a56b1c; }
 .scramble-area { border: 2px solid rgba(213,255,250,.52); background: rgba(9,112,118,.2); box-shadow: inset 0 4px 12px rgba(9,80,85,.18); }
 .letter-tile {
-  border: 2px solid rgba(226,255,255,.84); border-radius: 12px 12px 13px 4px;
+  border: 2px solid var(--cube-rim); border-radius: var(--cube-corners);
   background: #52ddd1; color: #123f41;
   box-shadow: inset 0 3px 0 rgba(255,255,255,.44), inset -3px -3px 0 rgba(9,100,106,.16), 0 5px 0 #087f88, 0 9px 13px rgba(23,68,58,.22);
 }
-.letter-tile:nth-child(3n + 2) { background: #72e5bc; box-shadow: inset 0 3px 0 rgba(255,255,255,.44), inset -3px -3px 0 rgba(31,120,89,.14), 0 5px 0 #268f70, 0 9px 13px rgba(23,68,58,.2); }
-.letter-tile:nth-child(3n) { background: #f1bf41; box-shadow: inset 0 3px 0 rgba(255,255,255,.46), inset -3px -3px 0 rgba(146,83,11,.13), 0 5px 0 #a96b1d, 0 9px 13px rgba(60,51,22,.2); }
+.letter-tile:nth-child(3n + 2) { background: var(--cube-mint); box-shadow: inset 0 3px 0 rgba(255,255,255,.44), inset -3px -3px 0 rgba(31,120,89,.14), 0 5px 0 #268f70, 0 9px 13px rgba(23,68,58,.2); }
+.letter-tile:nth-child(3n) { background: var(--cube-gold); box-shadow: inset 0 3px 0 rgba(255,255,255,.46), inset -3px -3px 0 rgba(146,83,11,.13), 0 5px 0 #a96b1d, 0 9px 13px rgba(60,51,22,.2); }
 button.letter-tile:active { box-shadow: inset 0 2px 0 rgba(255,255,255,.42); }
 .letter-tile.placed { background: #78e2a1; color: #174f3b; box-shadow: inset 0 3px 0 rgba(255,255,255,.45), 0 5px 0 #218b61; }
 .answer-slot { border-color: rgba(232,255,244,.72); background: rgba(244,255,241,.18); }
 .fixed-tile { background: rgba(255,244,202,.72); border-color: rgba(123,91,40,.35); color: #66512e; }
 
 /* Four physical mode buttons anchored at the bottom of the home world. */
-.mode-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: start; }
+.mode-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; align-items: start; }
 .mode-tile {
-  border: 2px solid rgba(255,255,255,.56); border-radius: 17px 17px 19px 7px; overflow: visible;
-  box-shadow: inset 0 3px 0 rgba(255,255,255,.28), inset 0 -4px 0 rgba(33,62,48,.17), 0 6px 0 var(--mode-edge), 0 12px 20px rgba(40,57,31,.25);
+  border: 2px solid rgba(255,255,255,.56); border-radius: 15px 15px 17px 6px; overflow: visible;
+  box-shadow: inset 0 3px 0 rgba(255,255,255,.28), inset 0 -4px 0 rgba(33,62,48,.17), 0 5px 0 var(--mode-edge), 0 10px 16px rgba(40,57,31,.25);
   backdrop-filter: none; -webkit-backdrop-filter: none;
 }
 .mode-tint-sky { --mode-edge: #9a6621; background: #e7b84b; color: #5e4118; }
 .mode-tint-grass { --mode-edge: #14715f; background: #29ae8c; color: #fff9d8; }
 .mode-tint-violet { --mode-edge: #176ca2; background: #309fda; color: #f4fcff; }
 .mode-tint-berry { --mode-edge: #6540a4; background: #8565d4; color: #fff8ec; }
-.mode-tile-main { min-height: 102px; padding: 10px 5px 9px; gap: 7px; }
+.mode-tile-main { min-height: 78px; padding: 7px 4px 6px; gap: 4px; }
 .mode-icon, .mode-tint-sky .mode-icon, .mode-tint-grass .mode-icon, .mode-tint-violet .mode-icon, .mode-tint-berry .mode-icon {
-  width: 46px; height: 46px; padding: 7px; border: 2px solid rgba(255,255,255,.45); border-radius: 14px 14px 15px 5px;
-  background: rgba(255,255,255,.2); color: currentColor; box-shadow: inset 0 2px 0 rgba(255,255,255,.3), 0 3px 0 rgba(32,61,52,.18);
+  width: 34px; height: 34px; padding: 5px; border: 2px solid rgba(255,255,255,.45); border-radius: 12px 12px 13px 4px;
+  background: rgba(255,255,255,.2); color: currentColor; box-shadow: inset 0 2px 0 rgba(255,255,255,.3), 0 2px 0 rgba(32,61,52,.18);
 }
 .mode-icon svg, .choice-card svg { display: block; width: 100%; height: 100%; }
+.mode-tile .mode-character { width: 38px; height: 38px; margin-top: -2px; }
+.mode-tile .mode-character svg { filter: drop-shadow(0 2px 1px rgba(31,57,48,.28)); }
 .mode-tile-main strong {
-  display: block; width: calc(100% - 6px); padding: 5px 3px; border: 1px solid #c89c58; border-radius: 8px 8px 8px 3px;
-  background: #fff0c7; color: #3d321d; font-family: Georgia, 'Times New Roman', serif; font-size: 11.5px; line-height: 1.05;
+  display: block; width: calc(100% - 4px); padding: 3px 2px; border: 1px solid #c89c58; border-radius: 7px 7px 7px 3px;
+  background: #fff0c7; color: #3d321d; font-family: Georgia, 'Times New Roman', serif; font-size: 10px; line-height: 1.05;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 2px 0 rgba(84,56,24,.26);
 }
-.mode-level { color: rgba(255,255,255,.9); font-size: 9.5px; text-shadow: 0 1px rgba(30,57,47,.5); }
+.mode-level { color: rgba(255,255,255,.9); font-size: 8.5px; text-shadow: 0 1px rgba(30,57,47,.5); }
 .mode-info-button { top: 5px; right: 5px; border-color: rgba(255,255,255,.55); background: rgba(255,246,206,.9); color: #554221; }
 .mode-tile:active { box-shadow: inset 0 2px 0 rgba(255,255,255,.25), 0 1px 0 var(--mode-edge); }
 .mode-tile.expanded { grid-column: span 2; border-color: rgba(255,255,255,.8); box-shadow: inset 0 3px 0 rgba(255,255,255,.28), 0 6px 0 var(--mode-edge), 0 13px 22px rgba(40,57,31,.25); }
 .mode-tile.expanded .mode-info-button { background: #fff0c7; color: #4f3b1e; }
 .mode-detail { margin: 2px 7px 8px; padding: 7px 8px; border-radius: 8px 8px 8px 3px; background: rgba(255,240,199,.94); color: #4e422d; font-size: 11px; text-align: left; }
 
-/* Parchment is the shared reading surface for setup, rooms and results. */
+/* Parchment is the shared reading surface for setup, rooms and results --
+   translucent rather than a flat opaque fill, so the journey map fixed
+   behind the whole app (see .journey-world) still shows through and this
+   still reads as a page floating over the game's world, not a plain
+   solid-colour screen. */
 .panel {
   border: 2px solid #bc863e; border-radius: 24px 24px 26px 10px;
-  background: #f8e7b7;
+  background: rgba(248, 231, 183, .84);
   box-shadow: inset 0 2px 0 rgba(255,255,255,.66), inset 0 -4px 0 rgba(133,86,28,.1), 0 7px 0 #8c5f2c, 0 18px 34px rgba(47,52,27,.28);
-  backdrop-filter: none; -webkit-backdrop-filter: none;
+  backdrop-filter: blur(3px) saturate(1.05); -webkit-backdrop-filter: blur(3px) saturate(1.05);
 }
 .page-shell, .game-shell { padding-top: 18px; }
 .page-title { font-family: Georgia, 'Times New Roman', serif; color: #32594e; text-shadow: 0 1px rgba(255,255,255,.72); }
@@ -1185,14 +1271,34 @@ legend { color: #4b4027; }
   box-shadow: inset 0 2px 0 rgba(255,255,255,.55), 0 4px 0 #8d602e, 0 8px 14px rgba(65,55,30,.13);
 }
 .choice-card, .band-button, .wide-choice { border-radius: 16px 16px 18px 6px; }
-.choice-grid .choice-card:nth-child(1) { border-color: #b57b2c; background: #e9b947; box-shadow: inset 0 2px 0 rgba(255,255,255,.34), 0 4px 0 #8e5d23; }
-.choice-grid .choice-card:nth-child(2) { border-color: #1d8069; background: #43bd95; box-shadow: inset 0 2px 0 rgba(255,255,255,.34), 0 4px 0 #176b59; }
-.choice-grid .choice-card:nth-child(3) { border-color: #207bb0; background: #55b5e4; box-shadow: inset 0 2px 0 rgba(255,255,255,.34), 0 4px 0 #1b6998; }
+/* Glassy like the HAMABRA scramble tiles: translucent saturated colour over
+   whatever sits behind the card (the journey map), not a flat opaque fill. */
+.choice-card {
+  backdrop-filter: blur(5px) saturate(1.2); -webkit-backdrop-filter: blur(5px) saturate(1.2);
+}
+.choice-grid .choice-card:nth-child(1) { border-color: rgba(138,63,34,.85); background: rgba(217,122,78,.6); box-shadow: inset 0 2px 0 rgba(255,255,255,.4), 0 4px 0 rgba(124,58,31,.7); }
+.choice-grid .choice-card:nth-child(2) { border-color: rgba(29,128,105,.85); background: rgba(67,189,149,.55); box-shadow: inset 0 2px 0 rgba(255,255,255,.4), 0 4px 0 rgba(23,107,89,.7); }
+.choice-grid .choice-card:nth-child(3) { border-color: rgba(32,123,176,.85); background: rgba(85,181,228,.55); box-shadow: inset 0 2px 0 rgba(255,255,255,.4), 0 4px 0 rgba(27,105,152,.7); }
 .choice-card > span { flex: 0 0 auto; padding: 6px; border-radius: 11px 11px 12px 4px; background: rgba(255,255,255,.32); color: #254b45; }
-.choice-card strong { color: #293e35; }
-.choice-card.selected, .band-button.selected, .length-button.selected, .wide-choice.selected {
+.choice-card strong { color: #1c332c; text-shadow: 0 1px 0 rgba(255,255,255,.3); }
+/* Selected state stays the same glass card -- a brighter rim is the only
+   change, so the small green check badge (below) does the job of saying
+   "picked" instead of the whole card swapping look. */
+.choice-grid .choice-card.selected {
+  border-color: rgba(255,255,255,.95);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.55), 0 4px 0 rgba(0,0,0,.22), 0 0 0 3px rgba(255,255,255,.4);
+}
+.band-button.selected, .length-button.selected, .wide-choice.selected {
   border-color: #fff1a1; outline: 3px solid #f1b62f; outline-offset: 1px; color: #2c3c31;
   box-shadow: inset 0 2px 0 rgba(255,255,255,.42), 0 4px 0 #9a6625, 0 0 0 5px rgba(255,231,118,.25);
+}
+/* Small green check badge, tucked inside the card's own corner rather than
+   poking off its edge. */
+.choice-card { position: relative; }
+.choice-check {
+  position: absolute; top: 5px; right: 5px; display: grid; place-items: center;
+  width: 15px; height: 15px; border-radius: 50%; background: #2f9350; color: #fff;
+  font-size: 9px; font-weight: 800; line-height: 1; box-shadow: 0 1px 3px rgba(0,0,0,.35), 0 0 0 1.5px rgba(255,255,255,.8);
 }
 .band-grid .band-button { background: #e5c47e; }
 .band-grid .band-button:nth-child(2) { background: #a7d793; }
@@ -1267,9 +1373,9 @@ footer {
 }
 
 @media (max-width: 390px) {
-  .mode-tile-main { min-height: 94px; padding-inline: 3px; }
-  .mode-icon, .mode-tint-sky .mode-icon, .mode-tint-grass .mode-icon, .mode-tint-violet .mode-icon, .mode-tint-berry .mode-icon { width: 40px; height: 40px; }
-  .mode-tile-main strong { font-size: 10.5px; }
+  .mode-tile-main { min-height: 72px; padding-inline: 3px; }
+  .mode-icon, .mode-tint-sky .mode-icon, .mode-tint-grass .mode-icon, .mode-tint-violet .mode-icon, .mode-tint-berry .mode-icon { width: 30px; height: 30px; }
+  .mode-tile-main strong { font-size: 9.5px; }
 }
 
 @media (max-width: 350px) {
@@ -1355,10 +1461,10 @@ footer {
 }
 
 .ground-level-path {
-  position: relative; width: 100%; height: clamp(190px, 25svh, 225px); flex: none;
+  position: relative; width: 100%; height: clamp(210px, 28svh, 245px); flex: none;
 }
 .ground-level-node {
-  position: absolute; display: grid; width: 58px; height: 43px; place-items: center;
+  position: absolute; display: grid; width: 52px; height: 38px; place-items: center;
   border: 3px solid #ddd8c9; border-radius: 50%; padding: 0;
   background: #777b78; color: #fffbed;
   box-shadow: inset 0 4px 0 rgba(255,255,255,.28), inset 0 -5px 0 rgba(51,55,52,.28), 0 5px 0 #4d514e, 0 10px 15px rgba(36,51,40,.24);
@@ -1373,16 +1479,18 @@ footer {
 }
 .ground-level-node.cleared:not(.selected) { border-color: #c9efcd; background: #3ca779; box-shadow: inset 0 4px 0 rgba(255,255,255,.26), 0 5px 0 #226d50; }
 .ground-level-node small {
-  position: absolute; top: 45px; left: 50%; width: max-content; max-width: 100px; translate: -50% 0;
+  position: absolute; top: 40px; left: 50%; width: max-content; max-width: 100px; translate: -50% 0;
   border: 1px solid #b88442; border-radius: 7px 7px 8px 3px; padding: 3px 7px;
   background: #f7e5b3; color: #4b3b22; box-shadow: 0 2px 0 #8f612f;
   font-family: var(--font-body); font-size: 9px; line-height: 1; text-shadow: none;
 }
-.ground-level-0 { left: 43%; bottom: 3%; }
-.ground-level-1 { left: 66%; bottom: 25%; }
-.ground-level-2 { left: 45%; bottom: 47%; }
-.ground-level-3 { left: 65%; bottom: 69%; }
-.ground-level-4 { left: 45%; top: 0; }
+/* Bottom-anchored throughout so the gaps stay predictable -- level 5 gets a
+   wider jump above level 4 instead of crowding it at the container's top. */
+.ground-level-0 { left: 43%; bottom: 2%; }
+.ground-level-1 { left: 66%; bottom: 24%; }
+.ground-level-2 { left: 45%; bottom: 46%; }
+.ground-level-3 { left: 65%; bottom: 66%; }
+.ground-level-4 { left: 45%; bottom: 90%; }
 .ground-level-more {
   position: absolute; right: 2px; bottom: 0; min-height: 32px; padding: 0 10px;
   border: 2px solid #b27b35; border-radius: 9px 9px 10px 3px;
@@ -1391,7 +1499,11 @@ footer {
 }
 .ground-level-more:active { translate: 0 3px; box-shadow: inset 0 2px 0 rgba(255,255,255,.5); }
 
-.home-grid .mode-grid { width: 100%; margin-top: auto; }
+/* The trail is what gets pushed down to sit flush above the mode buttons --
+   pinning margin-top:auto to the buttons instead left a gap floating
+   between the trail and the buttons it's supposed to lead into. */
+.home-grid .ground-level-path { margin-top: auto; margin-bottom: 4px; }
+.home-grid .mode-grid { width: 100%; }
 
 @media (min-width: 521px) {
   body { background: #19483b; }
@@ -1405,8 +1517,8 @@ footer {
   .home-daily-button { width: 91px; height: 51px; }
   .home-daily-button span { font-size: 11px; }
   .home-shell, .home-grid { min-height: calc(100svh - 80px); }
-  .ground-level-node { width: 54px; height: 40px; font-size: 18px; }
-  .ground-level-node small { top: 42px; }
+  .ground-level-node { width: 46px; height: 34px; font-size: 16px; }
+  .ground-level-node small { top: 36px; }
 }
 
 @media (max-width: 350px) {
@@ -1414,5 +1526,5 @@ footer {
   .home-brand strong { font-size: 24px; }
   .home-daily-button { width: 82px; }
   .home-daily-button span { font-size: 10px; }
-  .ground-level-path { height: 180px; }
+  .ground-level-path { height: 200px; }
 }

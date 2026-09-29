@@ -2,10 +2,8 @@
 
 import { useSyncExternalStore } from 'react';
 import { getProgressServerSnapshot, getProgressSnapshot, subscribeProgress } from '@/lib/progress';
-import { levelStatus } from '@/lib/levels';
+import { ALL_LEVELS, levelStatus, starsForLevel } from '@/lib/levels';
 import type { Level } from '@/lib/types';
-
-const LEVELS: Level[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 export function LevelPath({ selected, onSelect }: { selected: Level; onSelect: (level: Level) => void }) {
   // The server snapshot is an empty record, so the server render and the
@@ -14,7 +12,7 @@ export function LevelPath({ selected, onSelect }: { selected: Level; onSelect: (
   const record = useSyncExternalStore(subscribeProgress, getProgressSnapshot, getProgressServerSnapshot);
 
   return <ol className="level-path" aria-label="Your journey">
-    {LEVELS.map((level) => {
+    {ALL_LEVELS.map((level) => {
       const status = levelStatus(record, level);
       const isSelected = selected === level;
       return <li key={level} className={`level-node ${status.unlocked ? '' : 'locked'} ${status.cleared ? 'cleared' : ''} ${isSelected ? 'selected' : ''}`}>
@@ -31,6 +29,9 @@ export function LevelPath({ selected, onSelect }: { selected: Level; onSelect: (
               ? status.cleared ? 'Cleared' : `${status.solved} of ${status.needed} words`
               : 'Locked'}</small>
           </span>
+          {status.unlocked && <span className="level-node-stars" aria-hidden="true">
+            {[1, 2, 3].map((star) => <b key={star} className={star <= starsForLevel(record, level) ? 'earned' : ''}>★</b>)}
+          </span>}
           {status.unlocked && !status.cleared && <span className="level-meter" aria-hidden="true">
             <i style={{ width: `${Math.min(100, (status.solved / status.needed) * 100)}%` }} />
           </span>}

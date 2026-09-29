@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyProgress } from '../lib/progress';
-import { isLevelCleared, highestUnlocked, isUnlocked, levelStatus, WORDS_TO_CLEAR, runLengthFor, clearTargetFor, RUN_LENGTHS, CLEAR_TARGETS } from '../lib/levels';
+import { isLevelCleared, highestUnlocked, isUnlocked, levelStatus, WORDS_TO_CLEAR, runLengthFor, clearTargetFor, RUN_LENGTHS, CLEAR_TARGETS, starsForLevel, totalStars, ALL_LEVELS } from '../lib/levels';
 import type { Level } from '../lib/types';
 import { createRecipe, wordsForLevel, getPuzzleEntry, PLAYABLE_BANK } from '../lib/game-engine';
 
@@ -145,4 +145,30 @@ test('a level already cleared under the flat twenty-word rule is grandfathered',
   assert.equal(isLevelCleared(record, 9), false, 'twenty no longer clears level 9 on its own merits');
   record.legacyClears['9'] = true;
   assert.equal(isLevelCleared(record, 9), true, 'a grandfathered level stays cleared regardless of the new target');
+});
+
+test('a level with no progress rates zero stars', () => {
+  assert.equal(starsForLevel(emptyProgress(), 3), 0);
+});
+
+test('stars rise toward three as a level nears its clear target, but never reach three before clearing', () => {
+  const halfway = withLevel(1, 10, 10, 10); // 10 of 20 needed, all correct
+  assert.equal(starsForLevel(halfway, 1), 1);
+  const almost = withLevel(1, 19, 19, 19); // 19 of 20
+  assert.equal(starsForLevel(almost, 1), 2);
+});
+
+test('a cleared level always rates three stars', () => {
+  const cleared = withLevel(1, WORDS_TO_CLEAR, 20, 22);
+  assert.equal(starsForLevel(cleared, 1), 3);
+});
+
+test('total stars sums every level\'s own rating', () => {
+  const record = withLevel(1, WORDS_TO_CLEAR, 20, 22); // cleared: 3 stars
+  record.levelProgress['2'] = { solvedIds: Array.from({ length: 12 }, (_, i) => `w${i}`), correct: 12, attempts: 12 };
+  assert.equal(totalStars(record), 3 + starsForLevel(record, 2));
+});
+
+test('ALL_LEVELS lists exactly the nine levels in order', () => {
+  assert.deepEqual(ALL_LEVELS, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
 });

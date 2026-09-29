@@ -65,3 +65,19 @@ export function levelStatus(record: ProgressRecord, level: Level) {
     accuracy,
   };
 }
+
+export const ALL_LEVELS: Level[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+/** The map/mastery star rating for one level: full marks once cleared,
+ * otherwise proportional progress toward the clear target, capped short
+ * of three so three stars always means "cleared." */
+export function starsForLevel(record: ProgressRecord, level: Level): number {
+  const status = levelStatus(record, level);
+  if (status.cleared) return 3;
+  return Math.min(2, Math.floor((status.solved / Math.max(1, status.needed)) * 3));
+}
+
+/** The home screen's lifetime star total: every level's own rating, summed. */
+export function totalStars(record: ProgressRecord): number {
+  return ALL_LEVELS.reduce((sum, level) => sum + starsForLevel(record, level), 0);
+}

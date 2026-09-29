@@ -2,17 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { getProgressServerSnapshot, getProgressSnapshot, subscribeProgress } from '@/lib/progress';
-import { levelStatus } from '@/lib/levels';
+import { ALL_LEVELS, levelStatus, starsForLevel } from '@/lib/levels';
 import { LevelPath } from '@/components/LevelPath';
 import type { Level } from '@/lib/types';
-
-const LEVELS: Level[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 /** The nine levels are a journey, not a difficulty dial, so the collapsed
  * control keeps the whole path visible as a nine-segment rail instead of
  * reducing it to a number in a dropdown. Expanded, it is the same list as
  * before -- it just no longer costs most of the home screen to show. */
-export function LevelBar({ selected, onSelect, variant = 'bar' }: { selected: Level; onSelect: (level: Level) => void; variant?: 'bar' | 'ground' }) {
+export function LevelBar({ selected, onSelect, variant = 'bar', newlyUnlocked }: { selected: Level; onSelect: (level: Level) => void; variant?: 'bar' | 'ground'; newlyUnlocked?: Level | null }) {
   const record = useSyncExternalStore(subscribeProgress, getProgressSnapshot, getProgressServerSnapshot);
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -39,9 +37,6 @@ export function LevelBar({ selected, onSelect, variant = 'bar' }: { selected: Le
 
   const pick = (level: Level) => { onSelect(level); close(); };
 
-  const windowStart = Math.max(1, Math.min(5, selected - 2));
-  const visibleLevels = LEVELS.slice(windowStart - 1, windowStart + 4);
-
   const sheet = open && <div className="sheet-backdrop" onClick={close}>
     <div
       className="sheet"
@@ -63,21 +58,25 @@ export function LevelBar({ selected, onSelect, variant = 'bar' }: { selected: Le
 
   if (variant === 'ground') return <>
     <nav className="ground-level-path" aria-label="Journey levels">
-      {visibleLevels.map((level, index) => {
+      <span className="ground-path-trail" aria-hidden="true" />
+      {ALL_LEVELS.map((level, index) => {
         const each = levelStatus(record, level);
+        const stars = starsForLevel(record, level);
         return <button
           key={level}
           type="button"
-          className={`ground-level-node ground-level-${index} ${level === selected ? 'selected' : ''} ${each.cleared ? 'cleared' : ''}`}
+          className={`ground-level-node ground-level-${index} ${level === selected ? 'selected' : ''} ${each.cleared ? 'cleared' : ''} ${level === newlyUnlocked ? 'just-unlocked' : ''}`}
           disabled={!each.unlocked}
           onClick={() => onSelect(level)}
           aria-label={`${each.name}, level ${level}${level === selected ? ', selected' : ''}${each.unlocked ? '' : ', locked'}`}
         >
-          <span>{each.cleared ? '✓' : level}</span>
+          <span>{each.unlocked ? level : '◆'}</span>
           {level === selected && <small>{each.name}</small>}
+          <i className="ground-node-stars" aria-hidden="true">{[1, 2, 3].map((star) => <b key={star} className={star <= stars ? 'earned' : ''}>★</b>)}</i>
         </button>;
       })}
-      <button ref={triggerRef} type="button" className="ground-level-more" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(true)}>All levels</button>
+      <span className="journey-treasure" aria-hidden="true">✦</span>
+      <button ref={triggerRef} type="button" className="ground-level-more" aria-label="Open all journey levels" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(true)}>☰<small>Levels</small></button>
     </nav>
     {sheet}
   </>;
@@ -98,7 +97,7 @@ export function LevelBar({ selected, onSelect, variant = 'bar' }: { selected: Le
         <strong>{status.name}</strong>
         <small>{status.cleared ? 'Cleared' : `${status.solved} of ${status.needed} words`}</small>
         <span className="level-rail" aria-hidden="true">
-          {LEVELS.map((level) => {
+          {ALL_LEVELS.map((level) => {
             const each = levelStatus(record, level);
             return <i
               key={level}
