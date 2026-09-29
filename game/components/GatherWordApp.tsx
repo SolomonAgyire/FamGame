@@ -63,6 +63,14 @@ const DEFAULT_SETTINGS: GameSettings = { categories: ['book', 'person', 'place']
 // be wrong for both at once.
 const DEFAULT_ROOM_SETTINGS: RoomSettings = { categories: ['book', 'person', 'place'], difficulty: 'mixed', length: 10 };
 const TEAM_COLORS = ['#dd6f57', '#2e7d68', '#bc861a', '#6c6faa'];
+const SEAT_ACCENTS = ['#ffbd59', '#71ce85', '#7fb8ff', '#ff8fa8', '#c9a2ff', '#ffd35d'];
+/** A stable, distinct ring color per player, independent of team color --
+ * client-side only, so no RoomDO/protocol field is needed for it. */
+function seatAccent(id: string): string {
+  let hash = 0;
+  for (let index = 0; index < id.length; index += 1) hash = (hash * 31 + id.charCodeAt(index)) >>> 0;
+  return SEAT_ACCENTS[hash % SEAT_ACCENTS.length];
+}
 // Mirrors `MAX_PLAYERS` in lib/room-service.ts -- kept as a plain constant
 // here rather than imported, since that module pulls in Workers-only APIs
 // that a client component must not bundle.
@@ -1073,14 +1081,15 @@ function OnlineLobby({ snapshot, viewer, isHost, busy, action, leave }: { snapsh
   const campSeats = Array.from({ length: 6 }, (_, index) => activePlayers[index] ?? null);
   return <main className="page-shell character-menu-stage"><section className="panel lobby-panel character-menu"><GameCharacter character="tali" mood="idle" size="medium" className="menu-character" />
     <div className="lobby-heading">
+      <button type="button" className="lobby-back-button" onClick={leave} aria-label="Leave room">‹</button>
       <div><p className="section-kicker">Room code</p><h1 className="room-code">{snapshot.code}</h1></div>
-      <button type="button" className="secondary-button" onClick={copy}>Copy invite <span aria-hidden="true">↗</span></button>
+      <button type="button" className="lobby-invite-button" onClick={copy} aria-label="Copy invite link">＋👤</button>
     </div>
     <div className="room-camp" aria-label={`${seatedCount} players in the room`}>
       <div className="camp-code"><small>Room</small><strong>{snapshot.code}</strong></div>
       <div className="campfire" aria-hidden="true"><i /><i /><span>✦</span></div>
       {campSeats.map((player, index) => <div key={player?.id ?? `empty-${index}`} className={`camp-seat camp-seat-${index + 1}${player?.ready ? ' ready' : ''}${player?.teamId ? ` team-${player.teamId}` : ''}${player ? '' : ' empty'}`}>
-        <span className="camp-avatar">{player ? player.name[0]?.toUpperCase() : '+'}{player?.isHost && <b aria-label="Host">♛</b>}</span>
+        <span className="camp-avatar" style={player && !player.teamId ? { '--seat-accent': seatAccent(player.id) } as React.CSSProperties : undefined}>{player ? player.name[0]?.toUpperCase() : '+'}{player?.isHost && <b aria-label="Host">♛</b>}</span>
         <small>{player ? player.name : 'Open'}</small>
         {player && <i>{player.ready ? 'Ready' : 'Waiting'}</i>}
       </div>)}

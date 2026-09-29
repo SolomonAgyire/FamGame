@@ -592,6 +592,13 @@
 .in-world .lobby-heading { position: relative; z-index: 6; align-items: center; justify-content: center; border: 0; }
 .in-world .lobby-heading > div { display: none; }
 .in-world .lobby-heading .secondary-button { margin-left: auto; border-radius: 12px 12px 13px 4px; }
+.lobby-back-button, .lobby-invite-button {
+  flex: none; width: 36px; height: 36px; padding: 0; display: grid; place-items: center;
+  border: 2px solid #f2d79d; border-radius: 10px 10px 11px 4px;
+  background: linear-gradient(#8ddbc4, #3f9e81); color: #123c32; font-size: 15px; font-weight: 800;
+  box-shadow: inset 0 2px 0 #ffffff74, 0 3px 0 #24684f;
+}
+.lobby-back-button:active, .lobby-invite-button:active { translate: 0 3px; box-shadow: inset 0 2px 0 #ffffff70; }
 .room-camp {
   position: relative;
   height: 285px;
@@ -650,6 +657,7 @@
   text-shadow: 0 1px 1px #1b130c;
 }
 .camp-avatar { position: relative; display: grid; place-items: center; width: 50px; height: 50px; border: 4px solid #baaf9e; border-radius: 50%; background: linear-gradient(#f7ddb0, #bd8051); color: #50341f; box-shadow: inset 0 3px 0 #ffffff77, 0 4px 0 #5c3c27, 0 0 0 3px #38261e7a; font: 800 19px/1 var(--font-display); }
+.camp-avatar { border-color: var(--seat-accent, #baaf9e); }
 .camp-seat.ready .camp-avatar { border-color: #7feb8b; box-shadow: inset 0 3px 0 #ffffff77, 0 4px 0 #316e3d, 0 0 18px #6eff7e; }
 .camp-seat.team-sun .camp-avatar { border-color: #ffbd59; }
 .camp-seat.team-olive .camp-avatar { border-color: #71ce85; }
