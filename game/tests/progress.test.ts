@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { emptyProgress, dayKey, loadProgress, saveProgress, PROGRESS_KEY } from '../lib/progress';
 import { highestUnlocked, levelStatus } from '../lib/levels';
 import { advanceMatch } from '../lib/game-engine';
+import { matchStars, coinsForMatch } from '../lib/economy';
 
 test('an empty progress record starts at zero with level 1 unlocked', () => {
   const record = emptyProgress();
@@ -257,4 +258,43 @@ test('a version 1 record with a malformed level entry loads instead of throwing'
   assert.equal(loaded.streak.current, 0);
   assert.doesNotThrow(() => levelStatus(loaded, 2));
   delete (globalThis as Record<string, unknown>).localStorage;
+});
+
+test('emptyProgress starts with no coins or gems', () => {
+  const record = emptyProgress();
+  assert.equal(record.coins, 0);
+  assert.equal(record.gems, 0);
+});
+
+test('a record saved before coins and gems existed loads with both at zero', () => {
+  const legacy = { version: 1, lifetimePoints: 50, levelProgress: {} };
+  const store = new Map<string, string>([[PROGRESS_KEY, JSON.stringify(legacy)]]);
+  (globalThis as Record<string, unknown>).localStorage = {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => { store.set(k, v); },
+  };
+  const loaded = loadProgress();
+  assert.equal(loaded.coins, 0);
+  assert.equal(loaded.gems, 0);
+  delete (globalThis as Record<string, unknown>).localStorage;
+});
+
+test('recording a match pays coins for the stars earned and the words solved', () => {
+  const record = emptyProgress();
+  const outcome = recordMatch(record, { mode: 'solo', level: 1, points: 40, solvedIds: ['book.john', 'book.ruth'], wrong: 0 });
+  const expectedStars = matchStars({ correct: 2, wrong: 0 });
+  assert.equal(outcome.coinsEarned, coinsForMatch(expectedStars, 2));
+  assert.equal(outcome.record.coins, outcome.coinsEarned);
+});
+
+test('a gem is earned exactly once, the match a level first clears', () => {
+  let record = emptyProgress();
+  const nineteen = Array.from({ length: 19 }, (_, i) => `book.word${i}`);
+  record = recordMatch(record, { mode: 'solo', level: 1, points: 10, solvedIds: nineteen, wrong: 0 }).record;
+  const clearing = recordMatch(record, { mode: 'solo', level: 1, points: 10, solvedIds: ['book.last'], wrong: 0 });
+  assert.equal(clearing.gemEarned, true);
+  assert.equal(clearing.record.gems, 1);
+  const again = recordMatch(clearing.record, { mode: 'solo', level: 1, points: 10, solvedIds: ['book.last'], wrong: 0 });
+  assert.equal(again.gemEarned, false, 'an already-cleared level does not pay a second gem');
+  assert.equal(again.record.gems, 1);
 });

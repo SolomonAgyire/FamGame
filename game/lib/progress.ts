@@ -2,6 +2,10 @@
  * sessions. Every read and write goes through this module -- no component
  * touches localStorage directly, so storage being blocked is handled once. */
 
+import type { Level } from '@/lib/types';
+import { isLevelCleared } from '@/lib/levels';
+import { coinsForMatch, matchStars } from '@/lib/economy';
+
 export const PROGRESS_KEY = 'wordin-progress-v1';
 
 export type LevelProgress = {
@@ -19,6 +23,13 @@ export type DailyResult = { day: string; solved: boolean; guesses: number; hints
 export type ProgressRecord = {
   version: 1;
   lifetimePoints: number;
+  /** Earned automatically on every completed solo/together/Daily match --
+   * see `recordMatch`. Time Attack and online rooms keep their own
+   * separate scoring and never touch this. */
+  coins: number;
+  /** A rare bonus: one gem the first time a level's clear condition
+   * becomes true, never again after. */
+  gems: number;
   totalSolved: number;
   totalWrong: number;
   /** Keyed "mode:level", e.g. "solo:3" -> best score seen for that pairing. */
@@ -62,6 +73,8 @@ export function emptyProgress(): ProgressRecord {
   return {
     version: 1,
     lifetimePoints: 0,
+    coins: 0,
+    gems: 0,
     totalSolved: 0,
     totalWrong: 0,
     bestByMode: {},
@@ -155,6 +168,8 @@ function migrate(parsed: Record<string, unknown>): ProgressRecord {
   return {
     version: 1,
     lifetimePoints: numberOr(parsed.lifetimePoints, 0),
+    coins: numberOr(parsed.coins, 0),
+    gems: numberOr(parsed.gems, 0),
     totalSolved: numberOr(parsed.totalSolved, 0),
     totalWrong: numberOr(parsed.totalWrong, 0),
     bestByMode: plainRecord<number>(parsed.bestByMode),
@@ -244,7 +259,7 @@ const MAX_DAYS_TRACKED = 60;
 export type MatchResult = {
   mode: string;
   /** 1..9 */
-  level: number;
+  level: Level;
   points: number;
   /** Entry ids solved in this match. Duplicates are tolerated and collapsed. */
   solvedIds: string[];
@@ -256,7 +271,7 @@ export type MatchResult = {
 export function recordMatch(
   record: ProgressRecord,
   result: MatchResult,
-): { record: ProgressRecord; isBest: boolean; previousBest: number } {
+): { record: ProgressRecord; isBest: boolean; previousBest: number; coinsEarned: number; gemEarned: boolean } {
   const next: ProgressRecord = {
     ...record,
     bestByMode: { ...record.bestByMode },
@@ -291,6 +306,17 @@ export function recordMatch(
     attempts: existing.attempts + distinct.length + result.wrong,
   };
 
+  // Coins are a flat reward for a completed match; a gem is rarer, earned
+  // only the moment a level's clear condition first becomes true -- never
+  // recomputed afterward, so re-playing an already-cleared level cannot
+  // pay a second one.
+  const wasCleared = isLevelCleared(record, result.level);
+  const stars = matchStars({ correct: distinct.length, wrong: result.wrong });
+  const coinsEarned = coinsForMatch(stars, distinct.length);
+  next.coins += coinsEarned;
+  const gemEarned = !wasCleared && isLevelCleared(next, result.level);
+  if (gemEarned) next.gems += 1;
+
   const today = dayKey(result.now ?? new Date());
   next.daysPlayed = [today, ...next.daysPlayed.filter((day) => day !== today)].slice(0, MAX_DAYS_TRACKED);
   // Yesterday's count is not carried over -- a repair has to be paid for
@@ -300,7 +326,7 @@ export function recordMatch(
     count: (record.solvesToday.day === today ? record.solvesToday.count : 0) + distinct.length,
   };
 
-  return { record: next, isBest, previousBest };
+  return { record: next, isBest, previousBest, coinsEarned, gemEarned };
 }
 
 export function masteredCount(record: ProgressRecord): number {
