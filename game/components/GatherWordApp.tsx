@@ -2,15 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { advanceMatch, buildLevelQueue, createFreshRecipe, eligibleWords, getEntryById, getPuzzleEntry, nextPlayableLevelAbove, normalizeAnswer, playableLevelFrom, unplayableReason } from '@/lib/game-engine';
-import { duckMusic, playCorrect, playTap, playWrong, startMusic, stopMusic } from '@/lib/audio';
+import { duckMusic, playCorrect, playRewardFanfare, playShuffle, playTap, playWrong, startMusic, stopMusic } from '@/lib/audio';
 import { showToast, subscribeToasts, type Toast } from '@/lib/toast';
 import type { Category, GameSettings, Level, MatchRecipe, PlayMode, PuzzleRecipe, RoomSettings, Team } from '@/lib/types';
 import { LEVEL_NAMES } from '@/lib/types';
 import { applyLetterHint, HINT_LABELS, hintsFor, type HintKind } from '@/lib/hints';
 import { scoreSolve } from '@/lib/scoring';
-import { secondsFor, timerModeFor } from '@/lib/timing';
+import { secondsFor, timeAttackSecondsFor, timerModeFor } from '@/lib/timing';
 import { saveProgress, recordMatch, masteredCount, subscribeProgress, getProgressSnapshot, getProgressServerSnapshot } from '@/lib/progress';
-import { highestUnlocked, runLengthFor } from '@/lib/levels';
+import { highestUnlocked, runLengthFor, totalStars } from '@/lib/levels';
 import { roomUnplayableReason, roomWordPool } from '@/lib/room-rules';
 import { LevelBar } from '@/components/LevelBar';
 import { DifficultyBar, roomDifficultyLabel } from '@/components/DifficultyBar';
@@ -18,6 +18,9 @@ import { Standings } from '@/components/Standings';
 import { shuffledOrder, TileBoard } from '@/components/TileBoard';
 import { DailyWord, useHydrated } from '@/components/DailyWord';
 import { dailyPuzzleFor } from '@/lib/daily';
+import { ScoreFlight } from '@/components/ScoreFlight';
+import { GameCharacter, type GameCharacterId } from '@/components/GameCharacter';
+import { GameTool, MissionHud, RewardStars } from '@/components/GameChrome';
 
 function ToastHost() {
   const [toasts, setToasts] = useState<(Toast & { leaving?: boolean })[]>([]);
@@ -64,16 +67,32 @@ const TEAM_COLORS = ['#dd6f57', '#2e7d68', '#bc861a', '#6c6faa'];
 const MAX_ROOM_PLAYERS = 30;
 
 function JourneyBackdrop() {
-  return <div className="journey-world" aria-hidden="true" />;
+  return <div className="journey-world" aria-hidden="true">
+    <div className="journey-atmosphere"><span className="journey-cloud" />
+      <span className="journey-sunbeam" /><span className="journey-water-glint" />
+      <span className="journey-firefly" /><span className="journey-firefly" /><span className="journey-firefly" />
+      <span className="journey-firefly" /><span className="journey-firefly" />
+      {['near', 'far'].map((flock) => <div className={`journey-flock journey-flock-${flock}`} key={flock}>{[0, 1, 2, 3, 4].map((bird) => <span className="journey-bird" key={bird}>
+        <svg viewBox="0 0 48 24" focusable="false"><path className="bird-wing bird-wing-left" d="M24 16 Q13 1 2 8 Q13 8 24 16" /><path className="bird-wing bird-wing-right" d="M24 16 Q35 1 46 8 Q35 8 24 16" /><circle cx="24" cy="15" r="2.4" /></svg>
+      </span>)}</div>)}
+      <span className="journey-leaf leaf-one" /><span className="journey-leaf leaf-two" /><span className="journey-leaf leaf-three" />
+    </div>
+    <div className="journey-foreground"><span /><span /></div>
+  </div>;
 }
 
-type GameIconName = EntryMode | Category;
+function ResultMascot({ mood = 'happy', character = 'nuri' }: { mood?: 'happy' | 'brave'; character?: GameCharacterId }) {
+  return <div className={`result-mascot result-mascot-${mood}`}><GameCharacter character={character} mood={mood === 'happy' ? 'cheer' : 'oops'} size="large" /></div>;
+}
+
+type GameIconName = EntryMode | Category | 'teams';
 
 function GameIcon({ name }: { name: GameIconName }) {
   const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   return <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
     {name === 'solo' && <><path {...common} d="M8.2 3.5h3.2v3.2a2 2 0 1 0 4 0V3.5h3.1a2 2 0 0 1 2 2v3.2h-2.7a2 2 0 1 0 0 4h2.7v5.8a2 2 0 0 1-2 2h-5.3v-2.8a2 2 0 1 0-4 0v2.8H5.5a2 2 0 0 1-2-2v-4h2.8a2 2 0 1 0 0-4H3.5v-5a2 2 0 0 1 2-2Z" /></>}
     {name === 'together' && <><circle {...common} cx="8" cy="8" r="3" /><circle {...common} cx="17" cy="9" r="2.5" /><path {...common} d="M2.8 19c.5-3.2 2.3-5 5.2-5s4.8 1.8 5.2 5M13 15.2c1-.9 2.2-1.3 3.7-1.3 2.5 0 4 1.5 4.5 4.1" /></>}
+    {name === 'teams' && <><path {...common} d="M5 21V4l7-2v11l-7 2M14 6l6-2v11l-6 2M16 17v4" /></>}
     {name === 'online' && <><circle {...common} cx="12" cy="12" r="9" /><path {...common} d="M3.5 12h17M12 3c2.4 2.5 3.6 5.5 3.6 9S14.4 18.5 12 21M12 3C9.6 5.5 8.4 8.5 8.4 12s1.2 6.5 3.6 9" /></>}
     {name === 'timeattack' && <path {...common} d="M13.7 2.5 5.8 13h5.5l-1 8.5L18.5 11H13Z" />}
     {name === 'daily' && <><circle {...common} cx="12" cy="12" r="4" /><path {...common} d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4" /></>}
@@ -83,11 +102,37 @@ function GameIcon({ name }: { name: GameIconName }) {
   </svg>;
 }
 
-function Header({ onHome, sound, setSound, homeMode = false, dailyNumber, dailyDone, onDaily }: { onHome: () => void; sound: boolean; setSound: (value: boolean) => void; homeMode?: boolean; dailyNumber?: number | null; dailyDone?: boolean; onDaily?: () => void }) {
+function Header({ onHome, sound, setSound, homeMode = false, showingHome = false, hud, dailyNumber, dailyDone, onDaily }: {
+  onHome: () => void; sound: boolean; setSound: (value: boolean) => void; homeMode?: boolean; showingHome?: boolean;
+  hud?: { totalStars: number; coins: number; gems: number };
+  dailyNumber?: number | null; dailyDone?: boolean; onDaily?: () => void;
+}) {
+  if (showingHome && hud) return <header className="app-header home-hud">
+    <button type="button" className="home-hud-avatar" onClick={onHome} aria-label="WordIn home">
+      <GameCharacter character="nuri" mood="idle" size="small" />
+    </button>
+    <div className="home-hud-currency" aria-label={`${hud.totalStars} stars, ${hud.coins} coins, ${hud.gems} gems`}>
+      <span><b aria-hidden="true">★</b>{hud.totalStars}</span>
+      <span><b aria-hidden="true">🪙</b>{hud.coins}</span>
+      <span><b aria-hidden="true">💎</b>{hud.gems}</span>
+    </div>
+    <div className="home-hud-actions">
+      <button type="button" className="home-hud-icon" onClick={onDaily} aria-label={dailyDone ? 'Daily Word, already done today' : 'Daily Word'}>
+        <span aria-hidden="true">✎</span>
+        {!dailyDone && <b className="home-hud-dot" aria-hidden="true" />}
+      </button>
+      {/* No dedicated settings screen exists yet -- the gear keeps today's
+          one real option, sound, rather than adding a panel nothing else needs. */}
+      <button type="button" className="home-hud-icon" onClick={() => setSound(!sound)} aria-label={`${sound ? 'Turn off' : 'Turn on'} sound`}>
+        <span aria-hidden="true">⚙</span>
+      </button>
+    </div>
+  </header>;
   return <header className={`app-header ${homeMode ? 'home-header' : ''}`}>
     <button className={`brand ${homeMode ? 'home-brand' : ''}`} type="button" onClick={onHome} aria-label="WordIn home">
-      {!homeMode && <span className="brand-mark">W</span>}
-      <span><strong>Word<span>In</span></strong>{!homeMode && <small>Bible word game</small>}</span>
+      {homeMode
+        ? <span><strong>Word<span>In</span></strong></span>
+        : <span className="brand-mark inner-home-mark" aria-hidden="true">⌂</span>}
     </button>
     <div className="header-actions"><button type="button" className="icon-button" onClick={() => setSound(!sound)} aria-label={`${sound ? 'Turn off' : 'Turn on'} sound`}>{sound ? '♪' : '♪̸'}</button></div>
     {homeMode && <button type="button" className="home-daily-button" onClick={onDaily}>
@@ -97,48 +142,30 @@ function Header({ onHome, sound, setSound, homeMode = false, dailyNumber, dailyD
   </header>;
 }
 
-function HomeScreen({ startAs, level, setLevel, blocked }: { startAs: (mode: EntryMode) => void; level: Level; setLevel: (level: Level) => void; blocked: string | null }) {
-  const [expanded, setExpanded] = useState<EntryMode | null>(null);
+function HomeScreen({ startAs, level, setLevel, blocked, newlyUnlocked }: { startAs: (mode: EntryMode) => void; level: Level; setLevel: (level: Level) => void; blocked: string | null; newlyUnlocked: Level | null }) {
   const modes = [
-    { id: 'solo' as const, title: 'Solo Journey', tint: 'sky', detail: 'Play by yourself, at your own pace. The first four levels are untimed.' },
-    { id: 'together' as const, title: 'Play Together', tint: 'grass', detail: 'Pass one phone around. Solve as a team, or split into teams that take turns claiming each puzzle.' },
-    { id: 'online' as const, title: 'Online Room', tint: 'violet', detail: 'Everyone joins from their own phone with a six-character code -- great for players in different places.' },
-    { id: 'timeattack' as const, title: 'Time Attack', tint: 'berry', detail: 'A solo race against the clock. Each level is faster and harder -- chase your high score.' },
+    { id: 'solo' as const, title: 'Solo', tint: 'sky', character: 'nuri' as const },
+    { id: 'together' as const, title: 'Together', tint: 'grass', character: 'boaz' as const },
+    { id: 'online' as const, title: 'Online', tint: 'violet', character: 'mira' as const },
+    { id: 'timeattack' as const, title: 'Time Attack', tint: 'berry', character: 'tali' as const },
   ];
-  // Only solo and together play the level chosen here. An online room picks
-  // its level in the lobby, and Time Attack starts from the player's
-  // progress, so neither is held up by an empty pool on this screen.
   const stopped = Boolean(blocked);
   return <main className="home-shell">
     <section className="home-grid">
-      <h1 className="hero-title">Unscramble the word</h1>
-      <SamplePuzzle />
-      <LevelBar selected={level} onSelect={setLevel} variant="ground" />
+      <h1 className="home-title-plaque">WordIn</h1>
+      <LevelBar selected={level} onSelect={setLevel} variant="ground" newlyUnlocked={newlyUnlocked} />
       {stopped && <p className="field-help warn" role="status">{blocked}</p>}
-      {/* Each tile starts its mode on tap. A separate Start button below cost
-          a row of its own and a second decision for something the tile had
-          already said. */}
-      <div className="mode-grid">
+      <div className="home-mode-row" aria-label="Choose how to play">
         {modes.map((item) => {
           const gated = Boolean(blocked) && (item.id === 'solo' || item.id === 'together');
-          return <div key={item.id} className={`mode-tile mode-tint-${item.tint} ${expanded === item.id ? 'expanded' : ''}`}>
-            <button type="button" disabled={gated} onClick={() => startAs(item.id)} className="mode-tile-main">
-              <span className="mode-icon"><GameIcon name={item.id} /></span><strong>{item.title}</strong>
-              {(item.id === 'solo' || item.id === 'together') && <small className="mode-level">{LEVEL_NAMES[level - 1]}</small>}
-            </button>
-            <button type="button" className="mode-info-button" aria-label={`More about ${item.title}`} aria-expanded={expanded === item.id} onClick={(event) => { event.stopPropagation(); setExpanded(expanded === item.id ? null : item.id); }}>i</button>
-            {expanded === item.id && <p className="mode-detail">{item.detail}</p>}
-          </div>;
+          return <button key={item.id} type="button" disabled={gated} onClick={() => startAs(item.id)} className={`home-mode-chip home-mode-tint-${item.tint}`} aria-label={`Play ${item.title}`}>
+            <GameCharacter character={item.character} mood="idle" size="small" className="home-mode-chip-character" />
+            <small>{item.title}</small>
+          </button>;
         })}
       </div>
     </section>
   </main>;
-}
-
-function SamplePuzzle() {
-  return <div className="sample-wrap home-scramble">
-    <div className="tile-row" aria-label="Scrambled letters H A M A B R A">{'HAMABRA'.split('').map((letter, index) => <span className="letter-tile" key={`${letter}-${index}`}>{letter}</span>)}</div>
-  </div>;
 }
 
 /** The category toggle grid, shared by solo/together's `SettingsPanel` and
@@ -151,11 +178,22 @@ function CategoryPicker({ categories, setCategories }: { categories: Category[];
     if (active && categories.length === 1) return;
     setCategories(active ? categories.filter((item) => item !== category) : [...categories, category]);
   };
-  return <fieldset><legend>Choose your word set</legend><p className="field-help">Select one or blend several categories.</p><div className="choice-grid three">
+  return <fieldset><legend>Word set</legend><div className="choice-grid three">
     {(['book', 'person', 'place'] as Category[]).map((category) => { const isSelected = categories.includes(category); return <button type="button" key={category} className={`choice-card ${isSelected ? 'selected' : ''}`} onClick={() => toggleCategory(category)} aria-pressed={isSelected}>
       <span><GameIcon name={category} /></span><strong>{category === 'book' ? 'Bible Books' : category === 'person' ? 'People' : 'Places'}</strong>
+      {isSelected && <span className="choice-check" aria-hidden="true">✓</span>}
     </button>; })}
   </div></fieldset>;
+}
+
+function PuzzleCount({ value, min = 3, max, setValue }: { value: number; min?: number; max: number; setValue: (value: number) => void }) {
+  return <div className="puzzle-count" aria-label="Number of puzzles">
+    <span className="puzzle-count-copy"><small>Puzzles</small><strong>{value}</strong></span>
+    <div className="puzzle-stepper">
+      <button type="button" aria-label="Fewer puzzles" disabled={value <= min} onClick={() => setValue(Math.max(min, value - 1))}>−</button>
+      <button type="button" aria-label="More puzzles" disabled={value >= max} onClick={() => setValue(Math.min(max, value + 1))}>+</button>
+    </div>
+  </div>;
 }
 
 function SettingsPanel({ settings, setSettings, showLength = true }: { settings: GameSettings; setSettings: (settings: GameSettings) => void; showLength?: boolean }) {
@@ -171,10 +209,7 @@ function SettingsPanel({ settings, setSettings, showLength = true }: { settings:
         room) is a real decision, so this control stays. Solo derives its
         length from the level instead -- see `SoloLengthSummary` below --
         which is why this fieldset is skippable. */}
-    {showLength && <fieldset><legend>How many puzzles?</legend><div className="length-row">
-      {[10, 15].map((value) => <button type="button" key={value} onClick={() => setSettings({ ...settings, length: Math.min(value, cap) })} className={`length-button ${settings.length === value ? 'selected' : ''}`}>{value}</button>)}
-      <label className="custom-length"><span>Custom</span><input aria-label="Custom puzzle count" type="number" min="3" max={cap} value={settings.length} onChange={(event) => setSettings({ ...settings, length: Math.min(cap, Math.max(3, Number(event.target.value) || 3)) })} /></label>
-    </div><p className={`field-help${blocked ? ' warn' : ''}`}>{blocked ?? `${pool} approved answers at ${LEVEL_NAMES[settings.maxBand - 1]} · no repeats inside a match`}</p></fieldset>}
+    {showLength && <div className="count-setting"><PuzzleCount value={settings.length} max={cap} setValue={(length) => setSettings({ ...settings, length })} /><p className={`field-help${blocked ? ' warn' : ''}`}>{blocked ?? `${pool} words · No repeats`}</p></div>}
   </div>;
 }
 
@@ -190,10 +225,7 @@ function RoomSettingsPanel({ settings, setSettings }: { settings: RoomSettings; 
   const cap = Math.max(3, pool);
   return <div className="settings-stack">
     <CategoryPicker categories={settings.categories} setCategories={(categories) => setSettings({ ...settings, categories })} />
-    <fieldset><legend>How many puzzles?</legend><div className="length-row">
-      {[10, 15].map((value) => <button type="button" key={value} onClick={() => setSettings({ ...settings, length: Math.min(value, cap) })} className={`length-button ${settings.length === value ? 'selected' : ''}`}>{value}</button>)}
-      <label className="custom-length"><span>Custom</span><input aria-label="Custom puzzle count" type="number" min="3" max={cap} value={settings.length} onChange={(event) => setSettings({ ...settings, length: Math.min(cap, Math.max(3, Number(event.target.value) || 3)) })} /></label>
-    </div><p className={`field-help${blocked ? ' warn' : ''}`}>{blocked ?? `${pool} approved answers · no repeats inside a match`}</p></fieldset>
+    <div className="count-setting"><PuzzleCount value={settings.length} max={cap} setValue={(length) => setSettings({ ...settings, length })} /><p className={`field-help${blocked ? ' warn' : ''}`}>{blocked ?? `${pool} words · No repeats`}</p></div>
   </div>;
 }
 
@@ -205,16 +237,12 @@ function RoomSettingsPanel({ settings, setSettings }: { settings: RoomSettings; 
  * so it survives a level change without ever losing track of which one is
  * the level's default and which one was chosen on purpose. */
 function SoloLengthSummary({ settings, override, setOverride }: { settings: GameSettings; override: number | null; setOverride: (value: number | null) => void }) {
-  const [changing, setChanging] = useState(false);
   const pool = eligibleWords(settings).length;
   const cap = Math.max(3, pool);
   const blocked = unplayableReason(settings);
   return <fieldset className="solo-length-panel"><legend>Your run</legend>
-    <p className="solo-length-line">{settings.length} puzzles at {LEVEL_NAMES[settings.maxBand - 1]}</p>
-    {changing
-      ? <label className="custom-length"><span>Puzzles</span><input aria-label="Custom puzzle count" type="number" min="3" max={cap} value={override ?? settings.length} onChange={(event) => setOverride(Math.min(cap, Math.max(3, Number(event.target.value) || 3)))} /></label>
-      : <button type="button" className="text-button" onClick={() => setChanging(true)}>Change length</button>}
-    <p className={`field-help${blocked ? ' warn' : ''}`}>{blocked ?? `${pool} approved answers at ${LEVEL_NAMES[settings.maxBand - 1]} · no repeats inside a match`}</p>
+    <div className="solo-run-row"><span><small>Level</small><strong>{LEVEL_NAMES[settings.maxBand - 1]}</strong></span><PuzzleCount value={override ?? settings.length} max={cap} setValue={setOverride} /></div>
+    <p className={`field-help${blocked ? ' warn' : ''}`}>{blocked ?? `${pool} words · No repeats`}</p>
   </fieldset>;
 }
 
@@ -224,19 +252,19 @@ function SetupScreen({ entryMode, settings, setSettings, togetherMode, setTogeth
   soloLengthOverride: number | null; setSoloLengthOverride: (value: number | null) => void;
 }) {
   const updateTeam = (index: number, name: string) => setTeams(teams.map((team, position) => position === index ? { ...team, name: name.slice(0, 18) } : team));
-  return <main className="page-shell"><section className="panel setup-panel"><button className="back-button" type="button" onClick={back}>← Back</button>
-    <p className="section-kicker">{entryMode === 'solo' ? 'Solo journey' : 'One-device play'}</p><h1 className="page-title">Build your match</h1><p className="page-subtitle">Choose the set below, and every match will be a fresh mix of words, order, and difficulty.</p>
-    {entryMode === 'together' && <fieldset><legend>How are you playing?</legend><div className="choice-grid two">
-      <button type="button" className={`wide-choice ${togetherMode === 'cooperative' ? 'selected' : ''}`} onClick={() => setTogetherMode('cooperative')}><span>◎</span><div><strong>Cooperative</strong><small>One score. Solve as a group.</small></div></button>
-      <button type="button" className={`wide-choice ${togetherMode === 'teams' ? 'selected' : ''}`} onClick={() => setTogetherMode('teams')}><span>⚑</span><div><strong>Teams</strong><small>Claim puzzles and compete.</small></div></button>
+  return <main className="page-shell setup-stage"><section className="panel setup-panel"><GameCharacter character={entryMode === 'solo' ? 'nuri' : 'boaz'} mood="think" size="medium" className="setup-character" /><button className="back-button" type="button" onClick={back}>← Back</button>
+    <h1 className="setup-mode-title">{entryMode === 'solo' ? 'Solo journey' : 'Play together'}</h1>
+    {entryMode === 'together' && <fieldset className="play-style-picker"><legend>Play style</legend><div className="choice-grid two">
+      <button type="button" className={`wide-choice ${togetherMode === 'cooperative' ? 'selected' : ''}`} aria-pressed={togetherMode === 'cooperative'} title="Cooperative — solve together for one score" onClick={() => setTogetherMode('cooperative')}><span className="play-style-icon"><GameIcon name="together" /></span><strong>Co-op</strong></button>
+      <button type="button" className={`wide-choice ${togetherMode === 'teams' ? 'selected' : ''}`} aria-pressed={togetherMode === 'teams'} title="Teams — compete head to head" onClick={() => setTogetherMode('teams')}><span className="play-style-icon"><GameIcon name="teams" /></span><strong>Teams</strong></button>
     </div></fieldset>}
-    {entryMode === 'together' && togetherMode === 'teams' && <fieldset><legend>Name your teams</legend><div className="team-inputs">
+    {entryMode === 'together' && togetherMode === 'teams' && <details className="team-drawer"><summary><span><GameIcon name="teams" /></span><strong>{teams.length} teams</strong><small>Edit names</small><span className="drawer-chevron" aria-hidden="true">⌄</span></summary><div className="team-inputs">
       {teams.map((team, index) => <label key={team.id}><span style={{ background: team.color }} /><input value={team.name} aria-label={`Team ${index + 1} name`} onChange={(event) => updateTeam(index, event.target.value)} /></label>)}
       <div className="mini-actions">{teams.length < 4 && <button type="button" onClick={() => setTeams([...teams, { id: `team-${teams.length + 1}`, name: `Team ${teams.length + 1}`, color: TEAM_COLORS[teams.length], score: 0 }])}>+ Add team</button>}{teams.length > 2 && <button type="button" onClick={() => setTeams(teams.slice(0, -1))}>− Remove</button>}</div>
-    </div></fieldset>}
+    </div></details>}
     <SettingsPanel settings={settings} setSettings={setSettings} showLength={entryMode !== 'solo'} />
     {entryMode === 'solo' && <SoloLengthSummary settings={settings} override={soloLengthOverride} setOverride={setSoloLengthOverride} />}
-    <button className="primary-button full-button" type="button" disabled={Boolean(unplayableReason(settings))} onClick={start}>Create fresh match</button>
+    <button className="primary-button full-button quest-play-button" type="button" disabled={Boolean(unplayableReason(settings))} onClick={start}>Play <span aria-hidden="true">▶</span></button>
   </section></main>;
 }
 
@@ -463,21 +491,28 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
       <button className="text-button" type="button" onClick={onHome}>Home</button>
     </div>
   </section></main>;
-  const shuffleTray = () => { playTap(); setOrder(shuffledOrder(puzzle.scramble.length)); };
+  const shuffleTray = () => { playShuffle(); setOrder(shuffledOrder(puzzle.scramble.length)); };
   const undo = () => { if (placed.length === 0) return; playTap(); rejectedRef.current = null; setPlaced(placed.slice(0, -1)); };
   const rematch = () => { finishedRef.current = false; const fresh = createFreshRecipe(settings); setRecipe(fresh); setTimeLeft(secondsForPuzzle(fresh, 0)); setIndex(0); setScores(scores.map((team) => ({ ...team, score: 0 }))); setCorrectCount(0); setWrongCount(0); setRevealCount(0); setFinished(false); resetPuzzle(); setSolvedIds([]); setCombo(0); setSummary(null); setUnlocked(null); };
   if (finished) return <Results mode={mode} scores={scores} correct={correctCount} wrong={wrongCount} total={recipe.puzzles.length} summary={summary} unlocked={unlocked} rematch={rematch} changeSet={onChangeSet} home={onHome} />;
   return <main className="game-shell">
-    {celebration && <BigCelebration key={celebration.id} title={celebration.title} subtitle={celebration.subtitle} />}
-    {missPop !== null && <MissPopup key={missPop} />}
-    <div className="game-topbar"><div><span>Puzzle {index + 1} of {recipe.puzzles.length}</span><div className="progress"><i style={{ width: `${((index + 1) / recipe.puzzles.length) * 100}%` }} /></div></div><div className="score-strip">{scores.map((team) => <span key={team.id}><i style={{ background: team.color }} />{team.name} <strong key={team.score}>{team.score}</strong></span>)}</div></div>
+    {celebration && <BigCelebration key={celebration.id} title={celebration.title} subtitle={celebration.subtitle} character={mode === 'solo' ? 'nuri' : 'boaz'} />}
+    {missPop !== null && <MissPopup key={missPop} character={mode === 'solo' ? 'nuri' : 'boaz'} />}
+    <MissionHud
+      character={<GameCharacter character={mode === 'solo' ? 'nuri' : 'boaz'} mood={resolved ? resolved.correct ? 'cheer' : 'oops' : timerMode === 'enforced' && timeLeft <= Math.ceil(secondsTotal * 0.3) ? 'urgent' : 'think'} size="small" />}
+      mission={`${index + 1} / ${recipe.puzzles.length}`}
+      progress={((index + 1) / recipe.puzzles.length) * 100}
+      urgent={timerMode === 'enforced' && timeLeft <= Math.ceil(secondsTotal * 0.3)}
+      timer={timerMode !== 'none' ? <><span aria-hidden="true">◷</span><strong>{timeLeft}</strong></> : undefined}
+      score={<div className="hud-score-row">{scores.map((team) => <span key={team.id}><i style={{ background: team.color }} />{team.name}<strong key={team.score}>{team.score}</strong><ScoreFlight score={team.score} /></span>)}</div>}
+    />
     {mode === 'teams' && !resolved && <div className="claim-panel"><p>{claimedBy ? <><strong>{scores.find((team) => team.id === claimedBy)?.name}</strong> is building</> : 'Who knows it? Claim the puzzle.'}</p><div>{scores.map((team) => <button type="button" key={team.id} disabled={Boolean(claimedBy)} style={{ '--team-color': team.color } as React.CSSProperties} onClick={() => setClaimedBy(team.id)}>{claimedBy === team.id ? 'Building…' : `Claim · ${team.name}`}</button>)}{claimedBy && <button type="button" className="release" onClick={() => { setClaimedBy(null); setPlaced([]); }}>Release</button>}</div></div>}
-    <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{entry.categories[0]} · {LEVEL_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Unscramble the answer'}</h1></div><div className="card-pills">{timerMode !== 'none' && <span className={`points-pill timer-pill ${timerMode === 'enforced' && timeLeft <= Math.ceil(secondsTotal * 0.3) ? 'urgent' : ''} ${timerMode === 'bonus' ? 'bonus' : ''}`}>{timeLeft > 0 ? `${timeLeft}s` : timerMode === 'bonus' ? 'bonus gone' : '0s'}</span>}<span className="points-pill">{currentValue} pts</span></div></div>
+    <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{entry.categories[0]} · {LEVEL_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Build the word'}</h1></div><span className="points-pill">{currentValue}</span></div>
       {timerMode === 'bonus' && !metLevelBefore && !resolved && <p className="notice">A clock from here on — but running out costs you nothing. Beat it and it pays a speed bonus.</p>}
-      <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} shakeKey={shake ?? undefined} locked={Boolean(resolved) || (mode === 'teams' && !claimedBy)} />
+      <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} shakeKey={shake ?? undefined} feedback={resolved ? resolved.correct ? 'correct' : 'wrong' : 'playing'} locked={Boolean(resolved) || (mode === 'teams' && !claimedBy)} />
       {hints > 0 && !resolved && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{ladder.slice(0, hints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
-      {resolved ? <Resolution lead={resolved.revealed ? 'The answer was' : 'Beautiful work!'} word={entry.display} reference={entry.references[0]} award={resolved.award ? `+${resolved.award} points` : 'No points this time'}><button type="button" className="primary-button" onClick={next}>{index === recipe.puzzles.length - 1 ? 'See results' : 'Next puzzle'}</button></Resolution>
-      : <div className="game-actions"><button type="button" className="soft-button" onClick={shuffleTray}>↻ Shuffle</button><button type="button" className="soft-button" disabled={placed.length === 0} onClick={undo}>↩ Undo</button><button type="button" className="soft-button" disabled={placed.length === 0} onClick={() => { rejectedRef.current = null; setPlaced([]); }}>✕ Clear</button><button type="button" className="soft-button" disabled={!nextHint} onClick={takeHint}>{nextHint ? `✦ Hint · ${HINT_LABELS[nextHint.kind]}` : '✦ Hints used'}</button><button type="button" className="text-button" onClick={reveal}>Reveal & continue</button></div>}
+      {resolved ? <Resolution lead={resolved.revealed ? 'The answer was' : 'Beautiful work!'} word={entry.display} reference={entry.references[0]} award={resolved.award ? `+${resolved.award} points` : 'No points this time'}><GameCharacter character={mode === 'solo' ? 'nuri' : 'boaz'} mood={resolved.correct ? 'cheer' : 'oops'} size="medium" className="resolution-character" /><button type="button" className="primary-button" onClick={next}>{index === recipe.puzzles.length - 1 ? 'See results' : 'Next puzzle'}</button></Resolution>
+      : <div className="game-actions tool-dock"><GameTool icon="↻" label="Shuffle" onClick={shuffleTray} /><GameTool icon="↶" label="Undo" disabled={placed.length === 0} onClick={undo} tone="olive" /><GameTool icon="×" label="Clear" disabled={placed.length === 0} onClick={() => { rejectedRef.current = null; setPlaced([]); }} tone="coral" /><GameTool icon="✦" label={nextHint ? HINT_LABELS[nextHint.kind] : 'Hints used'} count={Math.max(0, ladder.length - hints)} disabled={!nextHint} onClick={takeHint} tone="gold" /><GameTool icon="◉" label="Reveal" onClick={reveal} tone="violet" /></div>}
       <button type="button" className="quit-button" onClick={onHome}>End match</button>
     </section></main>;
 }
@@ -517,22 +552,22 @@ function Resolution({ lead, word, reference, award, children }: { lead: string; 
   </div>;
 }
 
-function BigCelebration({ title, subtitle }: { title: string; subtitle: string }) {
+function BigCelebration({ title, subtitle, character = 'nuri' }: { title: string; subtitle: string; character?: GameCharacterId }) {
   return <div className="big-celebration" role="status" aria-live="assertive">
     <Confetti count={40} />
-    <div className="big-celebration-bubble"><strong>{title}</strong><span>{subtitle}</span></div>
+    <div className="big-celebration-bubble"><GameCharacter character={character} mood="cheer" size="medium" /><strong>{title}</strong><span>{subtitle}</span></div>
   </div>;
 }
 
 /** Center-screen pop for a wrong answer -- appears, sits briefly, vanishes.
  * No confetti, no full-page wash; a lighter, quicker beat than a win. */
-function MissPopup() {
+function MissPopup({ character = 'nuri' }: { character?: GameCharacterId }) {
   return <div className="miss-popup" role="status" aria-live="assertive">
-    <div className="miss-popup-bubble"><span className="miss-emoji" aria-hidden="true">😬</span><strong>Oh no!</strong><span>Try again</span></div>
+    <div className="miss-popup-bubble"><GameCharacter character={character} mood="oops" size="medium" /><strong>Oh no!</strong><span>Try again</span></div>
   </div>;
 }
 
-function TimeAttackGame({ categories, sound, onHome }: { categories: Category[]; sound: boolean; onHome: () => void }) {
+function TimeAttackGame({ categories, sound, started, onStart, onHome, onReplay }: { categories: Category[]; sound: boolean; started: boolean; onStart: () => void; onHome: () => void; onReplay: () => void }) {
   // Start where the player is -- but a level with no approved words in the
   // chosen categories would open on an empty board, so slide to the nearest
   // level that has some.
@@ -544,10 +579,10 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
   const [score, setScore] = useState(0);
   const [solved, setSolved] = useState(0);
   const [strikes, setStrikes] = useState(0);
-  const [timeLeft, setTimeLeft] = useState<number>(() => secondsFor(startLevel, queue[0]?.scramble.length ?? 0));
+  const [timeLeft, setTimeLeft] = useState<number>(() => timeAttackSecondsFor(startLevel, queue[0]?.scramble.length ?? 0));
   const [resolved, setResolved] = useState<{ correct: boolean; gained: number } | null>(null);
   const [combo, setCombo] = useState(0);
-  const [finished, setFinished] = useState<'strikes' | 'cleared' | null>(null);
+  const [finished, setFinished] = useState<'strikes' | 'cleared' | 'ended' | null>(null);
   const [celebration, setCelebration] = useState<{ id: number; title: string; subtitle: string } | null>(null);
   // Read once at mount. Held in state rather than a ref because the
   // results screen renders it, and a ref must not be read during render.
@@ -585,8 +620,8 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
         level: band,
         combo,
         hintsUsed: 0,
-        secondsLeft: timerModeFor(band) === 'none' ? undefined : timeLeft,
-        secondsTotal: timerModeFor(band) === 'none' ? undefined : secondsFor(band, puzzle.scramble.length),
+        secondsLeft: timeLeft,
+        secondsTotal: timeAttackSecondsFor(band, puzzle.scramble.length),
       });
       const newScore = score + gained;
       setScore(newScore);
@@ -614,7 +649,7 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
       setPlaced([]);
       setOrder(null);
       setResolved(null);
-      setTimeLeft(secondsFor(band, remaining[0].scramble.length));
+      setTimeLeft(timeAttackSecondsFor(band, remaining[0].scramble.length));
       return;
     }
     // Skip past any level the chosen categories have no words at -- there
@@ -628,7 +663,7 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
       setOrder(null);
       setResolved(null);
       setStrikes(0);
-      setTimeLeft(secondsFor(nextBand, nextQueue[0]?.scramble.length ?? 0));
+      setTimeLeft(timeAttackSecondsFor(nextBand, nextQueue[0]?.scramble.length ?? 0));
       showToast(`Leveling up: ${LEVEL_NAMES[nextBand - 1]}!`);
       return;
     }
@@ -636,25 +671,22 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
   }
 
 
-  // Per-word countdown, sized to the word. Below Reaching Out there is no
-  // clock at all and a run ends on strikes alone.
+  // Time Attack always has a per-word countdown. Journey levels can be
+  // untimed, but an arcade mode without a clock breaks its own promise.
   useEffect(() => {
-    if (resolved || finished || !entry || timerModeFor(band) === 'none' || timeLeft <= 0) return;
+    if (!started || resolved || finished || !entry || timeLeft <= 0) return;
     const timer = window.setTimeout(() => setTimeLeft((value: number) => value - 1), 1000);
     return () => window.clearTimeout(timer);
-  }, [timeLeft, resolved, finished, entry, band]);
+  }, [timeLeft, resolved, finished, entry, started]);
 
-  // A spent clock is a miss only once it is enforced. At Reaching Out and
-  // Maturity it costs the speed bonus and nothing else. The miss is
-  // scheduled rather than run inline: resolving a word sets four pieces of
-  // state, and doing that synchronously inside an effect cascades a second
-  // render before the first has painted.
+  // A spent Time Attack clock is always a miss. Schedule the state change so
+  // the zero frame paints before the resolution animation begins.
   useEffect(() => {
-    if (resolved || finished || !entry || timerModeFor(band) !== 'enforced' || timeLeft > 0) return;
+    if (!started || resolved || finished || !entry || timeLeft > 0) return;
     const strike = window.setTimeout(() => resolveWord(false), 0);
     return () => window.clearTimeout(strike);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeLeft, resolved, finished, entry, band]);
+  }, [timeLeft, resolved, finished, entry, started]);
 
   // Auto-advance shortly after each word resolves -- an arcade mode keeps moving.
   useEffect(() => {
@@ -673,21 +705,22 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
   // Auto-check: the final tile is the commit. Reaching for a button cost
   // real seconds in the one mode that charges for them.
   useEffect(() => {
-    if (resolved || finished || !entry || !puzzle) return;
+    if (!started || resolved || finished || !entry || !puzzle) return;
     if (placed.length !== puzzle.scramble.length) return;
     const timer = window.setTimeout(() => {
       resolveWord(normalizeAnswer(placed.map((source) => puzzle.scramble[source]).join('')) === entry.answer);
     }, 250);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placed, resolved, finished, entry, puzzle]);
+  }, [placed, resolved, finished, entry, puzzle, started]);
 
   useEffect(() => {
     if (finished && !savedRef.current) {
       savedRef.current = true;
       if (score > personalBest) saveHighScore(score);
+      if (sound && score > 0) playRewardFanfare();
     }
-  }, [finished, score, personalBest]);
+  }, [finished, score, personalBest, sound]);
 
   if (!entry || !puzzle) return <main className="page-shell"><section className="panel results-panel">
     <div className="celebration">🔒</div>
@@ -697,14 +730,35 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
     <div className="result-actions"><button className="primary-button" type="button" onClick={onHome}>Home</button></div>
   </section></main>;
 
+  if (!started) {
+    return <main className="page-shell time-attack-launch-stage"><section className="panel time-attack-launch">
+      <ResultMascot character="tali" />
+      <span className="mode-medallion" aria-hidden="true"><GameIcon name="timeattack" /></span>
+      <p className="section-kicker">Arcade challenge</p>
+      <h1 className="page-title">Time Attack</h1>
+      <p className="page-subtitle">Beat each clock, protect your three hearts, and climb for a high score.</p>
+      <div className="mission-rules">
+        <span><b>⏱</b><strong>Clock</strong><small>Every word</small></span>
+        <span><b>♥</b><strong>3 hearts</strong><small>Solve refills</small></span>
+        <span><b>★</b><strong>High score</strong><small>{personalBest} best</small></span>
+      </div>
+      <button className="primary-button launch-play-button" type="button" onClick={onStart}>Play <span aria-hidden="true">▶</span></button>
+      <button className="text-button launch-home-button" type="button" onClick={onHome}>Back</button>
+    </section></main>;
+  }
+
   if (finished) {
     const best = Math.max(score, personalBest);
-    return <main className="page-shell"><section className="panel results-panel">
+    const cleared = finished === 'cleared';
+    const ended = finished === 'ended';
+    const stars = score === 0 ? 0 : cleared || score >= personalBest ? 3 : solved >= 5 ? 2 : 1;
+    return <main className="page-shell result-stage"><section className="panel results-panel result-popup">
       {score >= personalBest && score > 0 && <Confetti key="final" />}
-      <div className="celebration">{finished === 'cleared' ? '🏆' : '⏱️'}</div>
+      <ResultMascot character="tali" mood={cleared ? 'happy' : 'brave'} />
+      <RewardStars earned={stars} />
       <p className="section-kicker">Time Attack</p>
-      <h1 className="page-title">{finished === 'cleared' ? 'Perfect clear!' : 'Run over'}</h1>
-      <p className="page-subtitle">{finished === 'cleared' ? 'You cleared every word, every band. That has genuinely never happened before on this device.' : 'Three misses in a row ends the run -- that’s the game.'}</p>
+      <h1 className="page-title">{cleared ? 'Perfect clear!' : ended ? 'Run ended' : 'Time’s up!'}</h1>
+      <p className="page-subtitle">{cleared ? 'Every trail cleared.' : ended ? 'Score saved.' : 'Three misses ended the run.'}</p>
       <div className="result-score"><strong>{score}</strong><span>points</span></div>
       <div className="stat-grid">
         <div><strong>{solved}</strong><span>Solved</span></div>
@@ -712,28 +766,31 @@ function TimeAttackGame({ categories, sound, onHome }: { categories: Category[];
         <div><strong>{best}</strong><span>Best score</span></div>
       </div>
       <div className="result-actions">
-        <button className="primary-button" type="button" onClick={() => window.location.reload()}>Play again</button>
+        <button className="primary-button" type="button" onClick={onReplay}>Play again</button>
         <button className="text-button" type="button" onClick={onHome}>Home</button>
       </div>
     </section></main>;
   }
 
-  const timerMode = timerModeFor(band);
-  const timeLimit = secondsFor(band, puzzle.scramble.length);
-  const urgent = timerMode === 'enforced' && timeLeft <= Math.ceil(timeLimit * 0.3);
+  const timeLimit = timeAttackSecondsFor(band, puzzle.scramble.length);
+  const urgent = timeLeft <= Math.ceil(timeLimit * 0.3);
   return <main className="game-shell">
-    {celebration && <BigCelebration key={celebration.id} title={celebration.title} subtitle={celebration.subtitle} />}
-    <div className="game-topbar">
-      <div><span>{LEVEL_NAMES[band - 1]} · {solved} solved</span><div className="progress"><i style={{ width: `${timerMode === 'none' ? 100 : (timeLeft / Math.max(1, timeLimit)) * 100}%`, background: urgent ? 'var(--danger)' : undefined }} /></div></div>
-      <div className="score-strip"><span>Score <strong key={score}>{score}</strong></span><span>{'❤️'.repeat(3 - strikes)}{'🖤'.repeat(strikes)}</span></div>
-    </div>
+    {celebration && <BigCelebration key={celebration.id} title={celebration.title} subtitle={celebration.subtitle} character="tali" />}
+    <MissionHud
+      character={<GameCharacter character="tali" mood={resolved ? resolved.correct ? 'cheer' : 'oops' : urgent ? 'urgent' : 'think'} size="small" />}
+      mission={`${LEVEL_NAMES[band - 1]} · ${solved}`}
+      progress={(timeLeft / Math.max(1, timeLimit)) * 100}
+      urgent={urgent}
+      timer={<><span aria-hidden="true">◷</span><strong>{timeLeft}</strong></>}
+      score={<><span className="heart-meter" aria-label={`${3 - strikes} hearts left`}>{'♥'.repeat(3 - strikes)}<i>{'♥'.repeat(strikes)}</i></span><strong key={score}>{score}</strong><ScoreFlight score={score} /></>}
+    />
     <section className="puzzle-card play-card">
-      <div className="card-top"><div><p className="puzzle-kicker">{entry.categories[0]} · {LEVEL_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Unscramble the answer'}</h1></div><span className={`points-pill timer-pill ${urgent ? 'urgent' : ''} ${timerMode === 'bonus' ? 'bonus' : ''}`}>{timerMode === 'none' ? `${queue.length} left` : timeLeft > 0 ? `${timeLeft}s` : timerMode === 'bonus' ? 'bonus gone' : '0s'}</span></div>
-      <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} locked={Boolean(resolved)} />
-      {resolved && <Resolution lead={resolved.correct ? 'Solved it' : 'Missed it'} word={entry.display} reference={entry.references[0]} award={resolved.correct ? `+${resolved.gained} points` : 'No points'} />}
-      {!resolved && <div className="game-actions"><button type="button" className="soft-button" onClick={() => { playTap(); setOrder(shuffledOrder(puzzle.scramble.length)); }}>↻ Shuffle</button><button type="button" className="soft-button" disabled={placed.length === 0} onClick={() => { playTap(); setPlaced(placed.slice(0, -1)); }}>↩ Undo</button><button type="button" className="soft-button" disabled={placed.length === 0} onClick={() => setPlaced([])}>✕ Clear</button></div>}
+      <div className="card-top"><div><p className="puzzle-kicker">{entry.categories[0]} · {LEVEL_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Build the word'}</h1></div><span className="points-pill">×{Math.max(1, combo + 1)}</span></div>
+      <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} feedback={resolved ? resolved.correct ? 'correct' : 'wrong' : 'playing'} locked={Boolean(resolved)} />
+      {resolved && <Resolution lead={resolved.correct ? 'Solved it' : 'Missed it'} word={entry.display} reference={entry.references[0]} award={resolved.correct ? `+${resolved.gained} points` : 'No points'}><GameCharacter character="tali" mood={resolved.correct ? 'cheer' : 'oops'} size="medium" className="resolution-character" /></Resolution>}
+      {!resolved && <div className="game-actions tool-dock arcade-tools"><GameTool icon="↻" label="Shuffle" onClick={() => { playShuffle(); setOrder(shuffledOrder(puzzle.scramble.length)); }} /><GameTool icon="↶" label="Undo" disabled={placed.length === 0} onClick={() => { playTap(); setPlaced(placed.slice(0, -1)); }} tone="olive" /><GameTool icon="×" label="Clear" disabled={placed.length === 0} onClick={() => setPlaced([])} tone="coral" /></div>}
     </section>
-    <button type="button" className="quit-button" onClick={onHome}>End run</button>
+    <button type="button" className="quit-button" onClick={() => setFinished('ended')}>End run</button>
   </main>;
 }
 
@@ -744,13 +801,16 @@ function Results({ mode, scores, correct, wrong, total, summary, unlocked, remat
   rematch: () => void; changeSet: () => void; home: () => void;
 }) {
   const ranking = [...scores].sort((a, b) => b.score - a.score); const winner = ranking[0];
-  return <main className="page-shell"><section className="panel results-panel"><div className="celebration">✦</div><p className="section-kicker">Match complete</p><h1 className="page-title">{mode === 'teams' ? `${winner.name} wins!` : mode === 'solo' ? 'Nicely done!' : 'Wonderful teamwork!'}</h1><p className="page-subtitle">You turned every scramble into a chance to remember.</p>
+  const accuracy = total === 0 ? 0 : Math.round((correct / Math.max(1, correct + wrong)) * 100);
+  const stars = correct === 0 ? 0 : correct >= total && wrong === 0 ? 3 : accuracy >= 70 ? 2 : 1;
+  return <main className="page-shell result-stage"><section className="panel results-panel result-popup"><ResultMascot character={mode === 'solo' ? 'nuri' : 'boaz'} /><RewardStars earned={stars} /><p className="section-kicker">Quest complete</p><h1 className="page-title">{mode === 'teams' ? `${winner.name} wins!` : mode === 'solo' ? 'Trail cleared!' : 'Great teamwork!'}</h1>
     {unlocked && <div className="unlock-banner" role="status">
       <span className="unlock-key" aria-hidden="true">🔓</span>
       <strong>{unlocked.name} unlocked</strong>
       <small>A new level is open on your journey.</small>
     </div>}
     <div className="result-score"><strong>{winner.score}</strong><span>points</span></div>
+    <div className="reward-scroll"><span aria-hidden="true">✦</span><div><small>Journey reward</small><strong>{unlocked ? `${unlocked.name} is open` : `${correct} words remembered`}</strong></div><span aria-hidden="true">✦</span></div>
     {summary && <div className="score-compare">
       {summary.isBest
         ? <p className="best-flag">Your best yet at this level — previous best {summary.previousBest}</p>
@@ -761,18 +821,17 @@ function Results({ mode, scores, correct, wrong, total, summary, unlocked, remat
       </div>
     </div>}
     {mode === 'teams' && <div className="leaderboard">{ranking.map((team, index) => <div key={team.id}><span>{index + 1}</span><i style={{ background: team.color }} /><strong>{team.name}</strong><b>{team.score}</b></div>)}</div>}
-    <div className="stat-grid"><div><strong>{correct}</strong><span>Solved</span></div><div><strong>{wrong}</strong><span>Wrong checks</span></div><div><strong>{Math.round((correct / total) * 100)}%</strong><span>Completion</span></div></div>
-    <div className="result-actions"><button className="primary-button" type="button" onClick={rematch}>Play again <span>↻</span></button><button className="secondary-button" type="button" onClick={changeSet}>Change set</button><button className="text-button" type="button" onClick={home}>Home</button></div>
+    <div className="stat-grid"><div><strong>{correct}</strong><span>Solved</span></div><div><strong>{wrong}</strong><span>Misses</span></div><div><strong>{accuracy}%</strong><span>Accuracy</span></div></div>
+    <div className="result-actions"><button className="primary-button" type="button" onClick={rematch}>Play again <span>↻</span></button><button className="secondary-button" type="button" onClick={changeSet} aria-label="Change word set">⚙</button><button className="text-button" type="button" onClick={home}>Map</button></div>
   </section></main>;
 }
 
 function OnlineEntry({ onBack, onConnected, initialCode }: { onBack: () => void; onConnected: (credentials: Credentials) => void; initialCode: string }) {
   const [kind, setKind] = useState<'create' | 'join'>(initialCode ? 'join' : 'create'); const [name, setName] = useState(''); const [code, setCode] = useState(initialCode); const [busy, setBusy] = useState(false);
   const submit = async () => { setBusy(true); try { const response = await fetch(kind === 'create' ? '/api/rooms' : `/api/rooms/${code}/join`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(kind === 'create' ? { name, settings: DEFAULT_ROOM_SETTINGS, mode: 'individuals' } : { name }) }); const data = await response.json() as Credentials & { error?: string }; if (!response.ok) throw new Error(data.error || 'Could not connect.'); onConnected(data); } catch (caught) { showToast(caught instanceof Error ? caught.message : 'Could not connect.', 'error'); } finally { setBusy(false); } };
-  return <main className="page-shell"><section className="panel online-entry"><button className="back-button" type="button" onClick={onBack}>← Back</button><p className="section-kicker">Different devices, one game</p><h1 className="page-title">Online room</h1><p className="page-subtitle">The host creates a private six-character code. Everyone else joins from their own device.</p>
-    <div className="tabs"><button type="button" className={kind === 'create' ? 'active' : ''} onClick={() => setKind('create')}>Create room</button><button type="button" className={kind === 'join' ? 'active' : ''} onClick={() => setKind('join')}>Join room</button></div>
-    <div className="form-stack"><label>Display name<input value={name} maxLength={24} autoComplete="name" placeholder="Your name" onChange={(event) => setName(event.target.value)} /></label>{kind === 'join' && <label>Room code<input className="code-input" value={code} maxLength={6} placeholder="A7K4PQ" autoCapitalize="characters" onChange={(event) => setCode(event.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ''))} /></label>}<button type="button" disabled={busy} className="primary-button full-button" onClick={submit}>{busy ? 'Connecting…' : kind === 'create' ? 'Create private room' : 'Join room'}</button></div>
-    <div className="privacy-note"><span>⌁</span><p><strong>No account needed.</strong> Room data expires after two hours of inactivity.</p></div>
+  return <main className="page-shell character-menu-stage"><section className="panel online-entry character-menu"><GameCharacter character="tali" mood="think" size="medium" className="menu-character" /><button className="back-button" type="button" onClick={onBack}>← Back</button><h1 className="page-title">Online room</h1>
+    <div className="tabs room-entry-tabs"><button type="button" className={kind === 'create' ? 'active' : ''} onClick={() => setKind('create')}>Create</button><button type="button" className={kind === 'join' ? 'active' : ''} onClick={() => setKind('join')}>Join</button></div>
+    <div className="form-stack"><label>Display name<input value={name} maxLength={24} autoComplete="name" placeholder="Your name" onChange={(event) => setName(event.target.value)} /></label>{kind === 'join' && <label>Room code<input className="code-input" value={code} maxLength={6} placeholder="A7K4PQ" autoCapitalize="characters" onChange={(event) => setCode(event.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ''))} /></label>}<button type="button" disabled={busy} className="primary-button room-entry-action" onClick={submit}>{busy ? '…' : kind === 'create' ? 'Create' : 'Join'}</button></div>
   </section></main>;
 }
 
@@ -928,7 +987,7 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
   useEffect(() => { submittedRef.current = null; }, [snapshot?.currentIndex, snapshot?.status]);
   if (!snapshot) return <main className="page-shell"><section className="panel loading-panel"><span className="loader" /><h1>Opening room {credentials.code}</h1><p>{error || 'Gathering everyone…'}</p><button type="button" className="text-button" onClick={leave}>Leave</button></section></main>;
   const viewer = snapshot.players.find((player) => player.id === credentials.playerId); const isHost = Boolean(viewer?.isHost);
-  if (snapshot.status === 'LOBBY') return <OnlineLobby key={snapshot.version} snapshot={snapshot} viewer={viewer} isHost={isHost} busy={busy} action={action} leave={leave} />;
+  if (snapshot.status === 'LOBBY') return <OnlineLobby key={`${snapshot.code}-${isHost}`} snapshot={snapshot} viewer={viewer} isHost={isHost} busy={busy} action={action} leave={leave} />;
   if (snapshot.status === 'RESULTS') return <OnlineResults snapshot={snapshot} isHost={isHost} action={action} leave={leave} />;
   const puzzle = snapshot.puzzle;
   // Every host control -- Next puzzle, Host reveal, Leave room -- lives
@@ -966,24 +1025,24 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
     : solvers.length === 1 ? `${solvers[0].solverName} solved it!`
     : `${solvers[0].solverName} and ${solvers.length - 1} other${solvers.length > 2 ? 's' : ''} solved it!`;
   const kick = (targetId: string) => { if (window.confirm('Remove this player from the room?')) void action({ action: 'kick', targetId }); };
-  return <main className="game-shell"><div className="room-banner"><span>Room <strong>{snapshot.code}</strong></span><span>{error || '● Connected'}</span></div>
+  return <main className="game-shell online-play-shell"><div className="room-banner"><span>Room <strong>{snapshot.code}</strong></span><span>{error || '●'}</span></div>
     {isHost && <div className="host-controls">
-      {snapshot.status === 'PUZZLE_OPEN' && <button type="button" className="soft-button" disabled={busy} onClick={() => action({ action: paused ? 'resume' : 'pause' })}>{paused ? '▶ Resume' : '⏸ Pause'}</button>}
-      {snapshot.status === 'PUZZLE_OPEN' && <button type="button" className="soft-button" disabled={busy} onClick={() => action({ action: 'skip' })}>⏭ Skip puzzle</button>}
-      <button type="button" className="soft-button" disabled={busy} onClick={() => action({ action: 'end' })}>◼ End match</button>
+      {snapshot.status === 'PUZZLE_OPEN' && <button type="button" className="host-tool" title={paused ? 'Resume' : 'Pause'} aria-label={paused ? 'Resume' : 'Pause'} disabled={busy} onClick={() => action({ action: paused ? 'resume' : 'pause' })}>{paused ? '▶' : 'Ⅱ'}</button>}
+      {snapshot.status === 'PUZZLE_OPEN' && <button type="button" className="host-tool" title="Skip puzzle" aria-label="Skip puzzle" disabled={busy} onClick={() => action({ action: 'skip' })}>»</button>}
+      <button type="button" className="host-tool danger" title="End match" aria-label="End match" disabled={busy} onClick={() => action({ action: 'end' })}>■</button>
     </div>}
     {paused && <p className="notice">The host paused this puzzle.</p>}
-    <div className="game-topbar"><div><span>Puzzle {snapshot.currentIndex + 1} of {snapshot.puzzleCount}</span><div className="progress"><i style={{ width: `${((snapshot.currentIndex + 1) / snapshot.puzzleCount) * 100}%` }} /></div></div>{snapshot.mode === 'teams' && <div className="score-strip">{teamScores.map((side) => <span key={side.id}>{side.name} <strong key={side.score}>{side.score}</strong></span>)}</div>}</div>
+    <MissionHud character={<GameCharacter character="tali" mood={snapshot.status === 'PUZZLE_RESOLVED' ? viewerSolve ? 'cheer' : 'oops' : 'think'} size="small" />} mission={`${snapshot.currentIndex + 1} / ${snapshot.puzzleCount}`} progress={((snapshot.currentIndex + 1) / snapshot.puzzleCount) * 100} score={snapshot.mode === 'teams' ? <div className="hud-score-row">{teamScores.map((side) => <span key={side.id}>{side.name}<strong>{side.score}</strong></span>)}</div> : <><span aria-hidden="true">★</span><strong>{viewer?.score ?? 0}</strong></>} />
     <Standings players={snapshot.players} viewerId={snapshot.viewerId} answeredIds={snapshot.resolution?.answeredIds ?? []} phase="play" isHost={isHost} onKick={kick} />
-    <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{puzzle.category} · {LEVEL_NAMES[puzzle.band - 1]}</p><h1>{snapshot.status === 'PUZZLE_RESOLVED' ? puzzle.display : 'Everyone is solving…'}</h1></div><span className="points-pill">{scoreSolve({ letterCount: puzzle.scramble.length, level: puzzle.band, combo: 0, hintsUsed: snapshot.viewerHints })} pts</span></div>
-      <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} locked={boardLocked} />
+    <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{puzzle.category} · {LEVEL_NAMES[puzzle.band - 1]}</p><h1>{snapshot.status === 'PUZZLE_RESOLVED' ? puzzle.display : 'Build the word'}</h1></div><span className="points-pill">{scoreSolve({ letterCount: puzzle.scramble.length, level: puzzle.band, combo: 0, hintsUsed: snapshot.viewerHints })}</span></div>
+      <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} feedback={snapshot.status === 'PUZZLE_RESOLVED' ? viewerSolve ? 'correct' : 'wrong' : 'playing'} locked={boardLocked} />
       {snapshot.viewerHints > 0 && snapshot.status === 'PUZZLE_OPEN' && !spectating && !sittingOut && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{puzzle.hints.slice(0, snapshot.viewerHints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
-      {snapshot.status === 'PUZZLE_RESOLVED' ? <Resolution lead={lead} word={puzzle.display ?? ''} reference={puzzle.reference} award={viewerSolve ? `+${viewerSolve.award} points` : 'No points this time'}>{solvers.length > 0 && <Confetti key={snapshot.currentIndex} />}{isHost ? <button type="button" className="primary-button" onClick={() => action({ action: 'next' })}>Next puzzle</button> : <p>Waiting for the host…</p>}</Resolution>
+      {snapshot.status === 'PUZZLE_RESOLVED' ? <Resolution lead={lead} word={puzzle.display ?? ''} reference={puzzle.reference} award={viewerSolve ? `+${viewerSolve.award} points` : 'No points this time'}>{solvers.length > 0 && <Confetti key={snapshot.currentIndex} />}<GameCharacter character="tali" mood={viewerSolve ? 'cheer' : 'oops'} size="medium" className="resolution-character" />{isHost ? <button type="button" className="primary-button" onClick={() => action({ action: 'next' })}>Next puzzle</button> : <p>Waiting for the host…</p>}</Resolution>
       : spectating ? <p className="notice">You&rsquo;re watching this room.</p>
       : sittingOut ? <p className="notice">You&rsquo;ll join in on the next puzzle.</p>
       : viewerSolve ? <p className="notice">Nice! +{viewerSolve.award} points — waiting for the round to finish…</p>
       : paused ? null
-      : <div className="game-actions"><button className="soft-button" type="button" onClick={() => { playTap(); setOrder(shuffledOrder(puzzle.scramble.length)); }}>↻ Shuffle</button><button className="soft-button" type="button" disabled={placed.length === 0} onClick={() => { playTap(); setPlaced(placed.slice(0, -1)); }}>↩ Undo</button><button className="soft-button" type="button" disabled={placed.length === 0} onClick={() => setPlaced([])}>✕ Clear</button><button className="soft-button" type="button" disabled={snapshot.viewerHints >= puzzle.hints.length || busy} onClick={() => action({ action: 'hint' })}>{puzzle.hints[snapshot.viewerHints] ? `✦ Hint · ${HINT_LABELS[puzzle.hints[snapshot.viewerHints].kind]}` : '✦ Hints used'}</button>{isHost && <button className="text-button" type="button" onClick={() => action({ action: 'reveal' })}>Host reveal</button>}</div>}
+      : <div className="game-actions tool-dock"><GameTool icon="↻" label="Shuffle" onClick={() => { playShuffle(); setOrder(shuffledOrder(puzzle.scramble.length)); }} /><GameTool icon="↶" label="Undo" disabled={placed.length === 0} onClick={() => { playTap(); setPlaced(placed.slice(0, -1)); }} tone="olive" /><GameTool icon="×" label="Clear" disabled={placed.length === 0} onClick={() => setPlaced([])} tone="coral" /><GameTool icon="✦" label={puzzle.hints[snapshot.viewerHints]?.kind ? HINT_LABELS[puzzle.hints[snapshot.viewerHints].kind] : 'Hints used'} count={Math.max(0, puzzle.hints.length - snapshot.viewerHints)} disabled={snapshot.viewerHints >= puzzle.hints.length || busy} onClick={() => action({ action: 'hint' })} tone="gold" />{isHost && <GameTool icon="◉" label="Reveal" onClick={() => action({ action: 'reveal' })} tone="violet" />}</div>}
       <button type="button" className="quit-button" onClick={leave}>Leave room</button>
     </section></main>;
 }
@@ -995,25 +1054,61 @@ function OnlineLobby({ snapshot, viewer, isHost, busy, action, leave }: { snapsh
   // letting them start a match nobody can play.
   const blocked = roomUnplayableReason(settings.difficulty, settings.categories);
   const copy = async () => { try { await navigator.clipboard.writeText(joinUrl); } catch { /* clipboard can be blocked */ } };
-  const seatedCount = snapshot.players.filter((player) => player.role === 'player' && !player.left).length;
+  const activePlayers = snapshot.players.filter((player) => player.role === 'player' && !player.left);
+  const seatedCount = activePlayers.length;
   const spectatorCount = snapshot.players.filter((player) => player.role === 'spectator' && !player.left).length;
-  return <main className="page-shell"><section className="panel lobby-panel"><div className="lobby-heading"><div><p className="section-kicker">Private room</p><h1 className="room-code">{snapshot.code}</h1><p>Share this code with up to {MAX_ROOM_PLAYERS - 1} more players.</p></div><button type="button" className="secondary-button" onClick={copy}>Copy invite link</button></div>
-    <div className="lobby-grid"><div><h2>Players <span>{seatedCount}/{MAX_ROOM_PLAYERS}{spectatorCount > 0 ? ` · ${spectatorCount} watching` : ''}</span></h2><div className="player-list">{snapshot.players.filter((player) => !player.left).map((player) => <div key={player.id}><span className="avatar">{player.name[0]?.toUpperCase()}</span><strong>{player.name}{player.id === viewer?.id ? ' (you)' : ''}</strong>{player.isHost && <small>Host</small>}{player.role === 'spectator' ? <em>Watching</em> : <em className={player.ready ? 'ready' : ''}>{player.ready ? 'Ready' : 'Not ready'}</em>}</div>)}</div>{!isHost && viewer?.role === 'player' && <button type="button" className="primary-button full-button" onClick={() => action({ action: 'ready', ready: !viewer?.ready })}>{viewer?.ready ? 'I’m not ready' : 'I’m ready'}</button>}</div>
-      <div className="lobby-settings"><h2>Match setup</h2>{isHost ? <><div className="tabs compact three-tabs"><button className={mode === 'individuals' ? 'active' : ''} onClick={() => setMode('individuals')}>Individuals</button><button className={mode === 'teams' ? 'active' : ''} onClick={() => setMode('teams')}>Teams</button><button className={mode === 'cooperative' ? 'active' : ''} onClick={() => setMode('cooperative')}>Co-op</button></div>
-        <fieldset><legend>Difficulty</legend><DifficultyBar selected={settings.difficulty} onSelect={(difficulty) => setSettings({ ...settings, difficulty })} /></fieldset>
-        <RoomSettingsPanel settings={settings} setSettings={setSettings} /><button type="button" className="secondary-button full-button" onClick={() => action({ action: 'configure', settings, mode })}>Save settings</button><button type="button" disabled={busy || Boolean(blocked)} className="primary-button full-button" onClick={() => action({ action: 'start' })}>Start match</button></> : <div className="setting-summary"><p><strong>{snapshot.mode === 'individuals' ? 'Individuals' : snapshot.mode === 'teams' ? 'Teams' : 'Cooperative'}</strong></p><p>{snapshot.settings.categories.join(' + ')}</p><p>{roomDifficultyLabel(snapshot.settings.difficulty)} · {snapshot.settings.length} puzzles</p></div>}</div></div>
-    <button type="button" className="text-button leave-button" onClick={leave}>Leave room</button>
+  const campSeats = Array.from({ length: 6 }, (_, index) => activePlayers[index] ?? null);
+  return <main className="page-shell character-menu-stage"><section className="panel lobby-panel character-menu"><GameCharacter character="tali" mood="idle" size="medium" className="menu-character" />
+    <div className="lobby-heading">
+      <div><p className="section-kicker">Room code</p><h1 className="room-code">{snapshot.code}</h1></div>
+      <button type="button" className="secondary-button" onClick={copy}>Copy invite <span aria-hidden="true">↗</span></button>
+    </div>
+    <div className="room-camp" aria-label={`${seatedCount} players in the room`}>
+      <div className="camp-code"><small>Room</small><strong>{snapshot.code}</strong></div>
+      <div className="campfire" aria-hidden="true"><i /><i /><span>✦</span></div>
+      {campSeats.map((player, index) => <div key={player?.id ?? `empty-${index}`} className={`camp-seat camp-seat-${index + 1}${player?.ready ? ' ready' : ''}${player?.teamId ? ` team-${player.teamId}` : ''}${player ? '' : ' empty'}`}>
+        <span className="camp-avatar">{player ? player.name[0]?.toUpperCase() : '+'}{player?.isHost && <b aria-label="Host">♛</b>}</span>
+        <small>{player ? player.name : 'Open'}</small>
+        {player && <i>{player.ready ? 'Ready' : 'Waiting'}</i>}
+      </div>)}
+    </div>
+    {!isHost && viewer?.role === 'player' && <button type="button" disabled={busy} className="room-ready-toggle" aria-pressed={viewer.ready} onClick={() => action({ action: 'ready', ready: !viewer.ready })}>{viewer.ready ? '✓ Ready' : 'Ready'}</button>}
+    <div className="lobby-grid">
+      <div className="lobby-players">
+        <details className="room-roster"><summary>Players <span>{seatedCount}/{MAX_ROOM_PLAYERS}{spectatorCount > 0 ? ` · ${spectatorCount} watching` : ''}</span></summary><div className="player-list">{snapshot.players.filter((player) => !player.left).map((player) => <div key={player.id}>
+          <span className="avatar">{player.name[0]?.toUpperCase()}</span>
+          <strong>{player.name}{player.id === viewer?.id ? ' (you)' : ''}{player.isHost && <small>Host</small>}</strong>
+          <em>{player.role === 'spectator' ? 'Watching' : player.ready ? '✓ Ready' : 'Not ready'}</em>
+        </div>)}</div></details>
+      </div>
+      <div className="lobby-settings">
+        {isHost ? <>
+          <div className="tabs compact three-tabs" aria-label="Room play style">
+            <button type="button" aria-pressed={mode === 'individuals'} className={mode === 'individuals' ? 'active' : ''} onClick={() => setMode('individuals')}>Solo</button>
+            <button type="button" aria-pressed={mode === 'teams'} className={mode === 'teams' ? 'active' : ''} onClick={() => setMode('teams')}>Teams</button>
+            <button type="button" aria-pressed={mode === 'cooperative'} className={mode === 'cooperative' ? 'active' : ''} onClick={() => setMode('cooperative')}>Co-op</button>
+          </div>
+          <fieldset className="room-difficulty"><legend>Difficulty</legend><DifficultyBar selected={settings.difficulty} onSelect={(difficulty) => setSettings({ ...settings, difficulty })} /></fieldset>
+          <RoomSettingsPanel settings={settings} setSettings={setSettings} />
+        </> : <div className="setting-summary"><p><strong>{snapshot.mode === 'individuals' ? 'Solo' : snapshot.mode === 'teams' ? 'Teams' : 'Co-op'}</strong> · {roomDifficultyLabel(snapshot.settings.difficulty)} · {snapshot.settings.length} puzzles</p><p>{snapshot.settings.categories.join(' + ')}</p></div>}
+      </div>
+    </div>
+    <div className="room-actions">
+      <button type="button" className="text-button" onClick={leave}>Leave room</button>
+      {isHost && <button type="button" disabled={busy || Boolean(blocked)} className="primary-button room-start-button" onClick={() => action({ action: 'start', settings, mode })}>{busy ? 'Starting…' : 'Start match'} <span aria-hidden="true">▶</span></button>}
+    </div>
   </section></main>;
 }
 
 function OnlineResults({ snapshot, isHost, action, leave }: { snapshot: RoomSnapshot; isHost: boolean; action: (input: Record<string, unknown>) => void; leave: () => void }) {
   const sides = snapshot.mode === 'teams' ? ([['sun', 'Sun Team'], ['olive', 'Olive Team']] as const).map(([id, name]) => ({ id, name, score: snapshot.players.filter((player) => player.teamId === id).reduce((sum, player) => sum + player.score, 0) })) : snapshot.players.map((player) => ({ id: player.id, name: player.name, score: player.score }));
   const ranking = [...sides].sort((a, b) => b.score - a.score);
-  return <main className="page-shell"><section className="panel results-panel"><div className="celebration">✦</div><p className="section-kicker">Room {snapshot.code} · Match complete</p><h1 className="page-title">{snapshot.mode === 'cooperative' ? 'Wonderful teamwork!' : `${ranking[0]?.name} wins!`}</h1>
+  return <main className="page-shell result-stage"><section className="panel results-panel result-popup"><ResultMascot character="tali" /><RewardStars earned={3} /><p className="section-kicker">Room {snapshot.code}</p><h1 className="page-title">{snapshot.mode === 'cooperative' ? 'Great teamwork!' : `${ranking[0]?.name} wins!`}</h1>
     {snapshot.mode === 'teams'
       ? <div className="leaderboard">{ranking.map((side, index) => <div key={side.id}><span>{index + 1}</span><span className="avatar">{side.name[0]}</span><strong>{side.name}</strong><b>{side.score}</b></div>)}</div>
       : <Standings players={snapshot.players} viewerId={snapshot.viewerId} answeredIds={[]} phase="results" />}
-    <div className="result-actions">{isHost && <><button className="primary-button" type="button" onClick={() => action({ action: 'rematch' })}>Play again <span>↻</span></button><button className="secondary-button" type="button" onClick={() => action({ action: 'lobby' })}>Change set</button></>}<button className="text-button" type="button" onClick={leave}>Leave room</button></div></section></main>;
+    <div className="reward-scroll"><span aria-hidden="true">✦</span><div><small>Room reward</small><strong>{snapshot.puzzleCount} words shared</strong></div><span aria-hidden="true">✦</span></div>
+    <div className="result-actions">{isHost && <><button className="primary-button" type="button" onClick={() => action({ action: 'rematch' })}>Play again <span>↻</span></button><button className="secondary-button" type="button" aria-label="Change match settings" onClick={() => action({ action: 'lobby' })}>⚙</button></>}<button className="text-button" type="button" onClick={leave}>Leave</button></div></section></main>;
 }
 
 export default function GatherWordApp() {
@@ -1023,6 +1118,8 @@ export default function GatherWordApp() {
   // snapshot is an empty record, so both first renders say level 1, and
   // the stored record arrives immediately after.
   const progress = useSyncExternalStore(subscribeProgress, getProgressSnapshot, getProgressServerSnapshot);
+  const [newlyUnlocked, setNewlyUnlocked] = useState<Level | null>(null);
+  const previousUnlocked = useRef<Level | null>(null);
   const [pickedLevel, setPickedLevel] = useState<Level | null>(null);
   const level: Level = pickedLevel ?? highestUnlocked(progress);
   // Solo no longer asks how many puzzles: its length is derived from the
@@ -1044,7 +1141,7 @@ export default function GatherWordApp() {
     const length = soloLengthOverride !== null ? Math.min(cap, Math.max(3, soloLengthOverride)) : Math.min(runLengthFor(level), cap);
     return { ...merged, length };
   }, [chosenSettings, level, entryMode, soloLengthOverride]);
-  const setLevel = (value: Level) => setPickedLevel(value);
+  const setLevel = (value: Level) => { setPickedLevel(value); if (value === newlyUnlocked) setNewlyUnlocked(null); };
   const [teams, setTeams] = useState<Team[]>([{ id: 'team-1', name: 'Sun Team', color: TEAM_COLORS[0], score: 0 }, { id: 'team-2', name: 'Olive Team', color: TEAM_COLORS[1], score: 0 }]); const [localGameKey, setLocalGameKey] = useState(0); const [localMode, setLocalMode] = useState<PlayMode | null>(null); const [credentials, setCredentials] = useState<Credentials | null>(null); const [sound, setSound] = useState(true);
   const initialCode = useMemo(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('room')?.toUpperCase() || '', []);
   useEffect(() => { const timer = window.setTimeout(() => { const saved = sessionStorage.getItem('gatherword-room'); if (saved) { try { const value = JSON.parse(saved) as Credentials; setCredentials(value); setScreen('online-lobby'); } catch { sessionStorage.removeItem('gatherword-room'); } } else if (initialCode) { setEntryMode('online'); setScreen('online-entry'); } }, 0); return () => window.clearTimeout(timer); }, [initialCode]);
@@ -1065,6 +1162,7 @@ export default function GatherWordApp() {
     try { void navigator.storage?.persist?.(); } catch { /* not available; progress is still best-effort */ }
   }, []);
   const [timeAttackActive, setTimeAttackActive] = useState(false);
+  const [timeAttackStarted, setTimeAttackStarted] = useState(false);
   const [dailyActive, setDailyActive] = useState(false);
   // Today's number and whether it is done drive the badge on the home tile.
   // Both are date-dependent, so they stay hidden until hydration rather
@@ -1073,14 +1171,14 @@ export default function GatherWordApp() {
   const [today] = useState(() => new Date());
   const dailyKey = useMemo(() => dailyPuzzleFor(today), [today]);
   const dailyDone = progress.daily?.day === dailyKey.dayKey;
-  const home = () => { setLocalMode(null); setTimeAttackActive(false); setDailyActive(false); setScreen('home'); };
+  const home = () => { setLocalMode(null); setTimeAttackActive(false); setTimeAttackStarted(false); setDailyActive(false); setScreen('home'); };
   // Takes the mode explicitly: a tile sets the mode and starts it in one
   // tap, and reading `entryMode` here would still see the previous value.
   const startEntry = (next?: EntryMode) => {
     const target = next ?? entryMode;
     if (target !== entryMode) setEntryMode(target);
     if (target === 'online') setScreen('online-entry');
-    else if (target === 'timeattack') setTimeAttackActive(true);
+    else if (target === 'timeattack') { setTimeAttackStarted(false); setTimeAttackActive(true); }
     else if (target === 'daily') setDailyActive(true);
     else setScreen('setup');
   };
@@ -1088,15 +1186,35 @@ export default function GatherWordApp() {
   const connect = (value: Credentials) => { setCredentials(value); sessionStorage.setItem('gatherword-room', JSON.stringify(value)); setScreen('online-lobby'); };
   const leave = () => { setCredentials(null); sessionStorage.removeItem('gatherword-room'); history.replaceState({}, '', window.location.pathname); setScreen('online-entry'); };
   const showingHome = !dailyActive && !timeAttackActive && !localMode && screen === 'home';
-  return <div className="app"><JourneyBackdrop /><Header onHome={home} sound={sound} setSound={setSound} homeMode={showingHome} dailyNumber={hydrated ? dailyKey.number : null} dailyDone={dailyDone} onDaily={() => startEntry('daily')} />
+  const mapOverlayOpen = !dailyActive && !localMode && ((timeAttackActive && !timeAttackStarted) || (!timeAttackActive && (screen === 'setup' || screen === 'online-entry')));
+  const showingMap = showingHome || mapOverlayOpen;
+  useEffect(() => {
+    if (!hydrated) return;
+    const unlocked = highestUnlocked(progress);
+    // Hydrating saved progress is not a new unlock. Keep the reward until
+    // the player returns from results to the map.
+    const frame = window.requestAnimationFrame(() => {
+      if (previousUnlocked.current !== null && unlocked > previousUnlocked.current) setNewlyUnlocked(unlocked);
+      previousUnlocked.current = unlocked;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [hydrated, progress]);
+  useEffect(() => {
+    if (!showingHome || newlyUnlocked === null) return;
+    const timer = window.setTimeout(() => setNewlyUnlocked(null), 8000);
+    return () => window.clearTimeout(timer);
+  }, [showingHome, newlyUnlocked]);
+  const scene = showingMap ? 'home' : dailyActive ? 'daily' : timeAttackActive ? 'timeattack'
+    : screen === 'online-entry' || screen === 'online-lobby' ? 'online' : entryMode;
+  return <div className={`app${showingMap ? '' : ' in-world'}`} data-scene={scene}><JourneyBackdrop /><Header onHome={home} sound={sound} setSound={setSound} homeMode={showingMap} showingHome={showingHome} hud={{ totalStars: totalStars(progress), coins: progress.coins, gems: progress.gems }} dailyNumber={hydrated ? dailyKey.number : null} dailyDone={dailyDone} onDaily={() => startEntry('daily')} />
+    {showingMap && <div className={`map-underlay${mapOverlayOpen ? ' map-underlay-inactive' : ''}`} inert={mapOverlayOpen ? true : undefined}><HomeScreen startAs={startEntry} level={level} setLevel={setLevel} blocked={unplayableReason(settings)} newlyUnlocked={newlyUnlocked} /></div>}
     {dailyActive ? <DailyWord sound={sound} onHome={home} />
-    : timeAttackActive ? <TimeAttackGame key={localGameKey} categories={settings.categories} sound={sound} onHome={home} />
+    : timeAttackActive ? <div className={timeAttackStarted ? 'game-layer' : 'map-modal-layer in-world'}><TimeAttackGame key={localGameKey} categories={settings.categories} sound={sound} started={timeAttackStarted} onStart={() => setTimeAttackStarted(true)} onHome={home} onReplay={() => { setLocalGameKey((value) => value + 1); setTimeAttackStarted(false); }} /></div>
     : localMode ? <LocalGame key={localGameKey} mode={localMode} settings={settings} teams={teams} sound={sound} onHome={home} onChangeSet={() => { setLocalMode(null); setScreen('setup'); }} />
-    : screen === 'home' ? <HomeScreen startAs={startEntry} level={level} setLevel={setLevel} blocked={unplayableReason(settings)} />
-    : screen === 'setup' ? <SetupScreen entryMode={entryMode} settings={settings} setSettings={setSettings} togetherMode={togetherMode} setTogetherMode={setTogetherMode} teams={teams} setTeams={setTeams} start={startLocal} back={home} soloLengthOverride={soloLengthOverride} setSoloLengthOverride={setSoloLengthOverride} />
-    : screen === 'online-entry' ? <OnlineEntry onBack={home} onConnected={connect} initialCode={initialCode} />
+    : screen === 'home' ? null
+    : screen === 'setup' ? <div className="map-modal-layer in-world"><SetupScreen entryMode={entryMode} settings={settings} setSettings={setSettings} togetherMode={togetherMode} setTogetherMode={setTogetherMode} teams={teams} setTeams={setTeams} start={startLocal} back={home} soloLengthOverride={soloLengthOverride} setSoloLengthOverride={setSoloLengthOverride} /></div>
+    : screen === 'online-entry' ? <div className="map-modal-layer in-world"><OnlineEntry onBack={home} onConnected={connect} initialCode={initialCode} /></div>
     : credentials ? <OnlineRoom credentials={credentials} leave={leave} sound={sound} /> : null}
-    {!showingHome && <footer><span>WordIn</span><span>© 2026 SolomonAgyire</span></footer>}
     <ToastHost />
   </div>;
 }
