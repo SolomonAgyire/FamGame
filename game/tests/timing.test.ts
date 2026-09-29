@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { timerModeFor, secondsFor, TIMER_TABLE } from '../lib/timing';
+import { timerModeFor, secondsFor, timeAttackSecondsFor, TIMER_TABLE, TIME_ATTACK_TIMER_TABLE } from '../lib/timing';
 import type { Level } from '../lib/types';
 
 test('levels one to four have no timer', () => {
@@ -43,4 +43,17 @@ test('every level has a table entry', () => {
   for (let level = 1; level <= 9; level += 1) {
     assert.ok(TIMER_TABLE[level as Level], `level ${level} has no timing entry`);
   }
+});
+
+test('Time Attack has a clock from level one', () => {
+  for (let level = 1; level <= 9; level += 1) {
+    assert.ok(timeAttackSecondsFor(level as Level, 6) > 0);
+  }
+});
+
+test('Time Attack gets faster as the run climbs', () => {
+  for (let level = 2; level <= 9; level += 1) {
+    assert.ok(timeAttackSecondsFor(level as Level, 8) < timeAttackSecondsFor((level - 1) as Level, 8));
+  }
+  assert.equal(Object.keys(TIME_ATTACK_TIMER_TABLE).length, 9);
 });

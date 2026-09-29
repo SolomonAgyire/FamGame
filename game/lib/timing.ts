@@ -16,6 +16,21 @@ export const TIMER_TABLE: Record<Level, { base: number; perLetter: number }> = {
   9: { base: 5, perLetter: 1.6 },
 };
 
+/** Time Attack is an arcade mode, so every level needs a clock even when the
+ * same level is untimed in the calmer journey modes. The curve stays generous
+ * for new players, then tightens as the run climbs. */
+export const TIME_ATTACK_TIMER_TABLE: Record<Level, { base: number; perLetter: number }> = {
+  1: { base: 20, perLetter: 3.2 },
+  2: { base: 18, perLetter: 3.0 },
+  3: { base: 16, perLetter: 2.8 },
+  4: { base: 14, perLetter: 2.6 },
+  5: { base: 12, perLetter: 2.4 },
+  6: { base: 11, perLetter: 2.2 },
+  7: { base: 10, perLetter: 2.0 },
+  8: { base: 9, perLetter: 1.8 },
+  9: { base: 8, perLetter: 1.6 },
+};
+
 /** Even a two-character answer needs long enough to read the board, find
  * the tiles and tap them. Below this the clock is measuring reflexes
  * rather than recall. */
@@ -36,5 +51,10 @@ export function timerModeFor(level: Level): TimerMode {
 export function secondsFor(level: Level, letterCount: number): number {
   const row = TIMER_TABLE[level];
   if (row.base === 0 && row.perLetter === 0) return 0;
+  return Math.max(FLOOR_SECONDS, Math.ceil(row.base + row.perLetter * letterCount));
+}
+
+export function timeAttackSecondsFor(level: Level, letterCount: number): number {
+  const row = TIME_ATTACK_TIMER_TABLE[level];
   return Math.max(FLOOR_SECONDS, Math.ceil(row.base + row.perLetter * letterCount));
 }

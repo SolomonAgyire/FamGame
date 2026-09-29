@@ -140,6 +140,7 @@ export function playCorrect() {
   notes.forEach((freq, index) => pluck(context, context.destination, freq, context.currentTime + index * 0.08, 0.35, 0.58));
   const clapStart = context.currentTime + 0.22;
   for (let i = 0; i < 6; i += 1) clap(context, context.destination, clapStart + i * 0.055 + Math.random() * 0.02, 0.4);
+  vibrate([22, 28, 42]);
 }
 
 /** Wrong answers get an extra boost over the general SFX level -- it
@@ -148,10 +149,51 @@ export function playWrong() {
   const context = getCtx();
   if (!context) return;
   [349.23, 293.66].forEach((freq, index) => pluck(context, context.destination, freq, context.currentTime + index * 0.09, 0.2, 0.55, 'sawtooth'));
+  vibrate(34);
 }
 
 export function playTap() {
   const context = getCtx();
   if (!context) return;
   pluck(context, context.destination, 880, context.currentTime, 0.08, 0.28);
+}
+
+function vibrate(pattern: number | number[]) {
+  try { navigator.vibrate?.(pattern); } catch { /* vibration is optional */ }
+}
+
+/** A wooden-glass tile lift followed by a quieter socket click. */
+export function playTileSnap(direction: 'place' | 'remove' = 'place') {
+  const context = getCtx();
+  if (!context) return;
+  const now = context.currentTime;
+  if (direction === 'place') {
+    pluck(context, context.destination, 720, now, 0.075, 0.24, 'triangle');
+    pluck(context, context.destination, 1080, now + 0.045, 0.09, 0.18, 'sine');
+    vibrate(9);
+  } else {
+    pluck(context, context.destination, 620, now, 0.07, 0.18, 'triangle');
+  }
+}
+
+export function playShuffle() {
+  const context = getCtx();
+  if (!context) return;
+  [640, 760, 680].forEach((frequency, index) => pluck(context, context.destination, frequency, context.currentTime + index * 0.045, 0.08, 0.16));
+  vibrate(7);
+}
+
+export function playStarFill(star = 1) {
+  const context = getCtx();
+  if (!context) return;
+  const root = 659.25 * (1 + (Math.max(1, star) - 1) * 0.12);
+  pluck(context, context.destination, root, context.currentTime, 0.32, 0.34, 'sine');
+  pluck(context, context.destination, root * 1.5, context.currentTime + 0.06, 0.36, 0.25, 'triangle');
+}
+
+export function playRewardFanfare() {
+  const context = getCtx();
+  if (!context) return;
+  [523.25, 659.25, 783.99, 1046.5].forEach((frequency, index) => pluck(context, context.destination, frequency, context.currentTime + index * 0.11, 0.5, 0.32, 'triangle'));
+  vibrate([18, 35, 18, 35, 38]);
 }

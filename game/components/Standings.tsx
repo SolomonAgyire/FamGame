@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { ScoreFlight } from '@/components/ScoreFlight';
 
 export type StandingsPlayer = {
   id: string;
@@ -57,7 +58,7 @@ export function Standings({ players, viewerId, answeredIds, phase, isHost, onKic
           <div className={`standings-row ${player.id === viewerId ? 'viewer' : ''} ${player.left ? 'left' : ''} rank-${rank}`}>
             <span className="rank">{rank}</span>
             <span className="name">{player.name}{player.id === viewerId ? ' (you)' : ''}{player.isHost && <small>Host</small>}{player.left && <small>Left</small>}</span>
-            <span className="score">{player.score}</span>
+            <span className="score">{player.score}{phase === 'play' && player.id === viewerId && <ScoreFlight score={player.score} />}</span>
             {phase === 'play'
               ? <span className={`standings-dot ${answeredIds.includes(player.id) ? 'answered' : ''}`} aria-label={answeredIds.includes(player.id) ? `${player.name} has answered` : `${player.name} has not answered yet`} />
               : <span />}
