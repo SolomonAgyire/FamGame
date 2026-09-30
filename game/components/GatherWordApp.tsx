@@ -125,22 +125,24 @@ function Header({ onHome, sound, setSound, homeMode = false, showingHome = false
     // still says "there's a word waiting."
     const atRisk = !dailyDone && dailyStreak > 0;
     return <header className="app-header home-hud">
-      <button type="button" className="home-hud-brand" onClick={onHome} aria-label="WordIn home">WordIn</button>
+      <div className="home-hud-left">
+        <button type="button" className="home-hud-brand" onClick={onHome} aria-label="WordIn home">WordIn</button>
+        <button
+          type="button"
+          className={`home-hud-daily${atRisk ? ' home-hud-daily-lit' : ''}`}
+          onClick={onDaily}
+          aria-label={dailyDone ? 'Daily Word, already done today' : atRisk ? `Daily Word, keep your ${dailyStreak}-day streak going` : 'Daily Word'}
+        >
+          Daily Word
+          {atRisk ? <b className="home-hud-flame" aria-hidden="true">🔥{dailyStreak}</b>
+            : !dailyDone && <b className="home-hud-dot" aria-hidden="true" />}
+        </button>
+      </div>
       <div className="home-hud-currency" aria-label={`${hud.totalStars} stars, ${hud.coins} coins, ${hud.gems} gems`}>
         <span><b aria-hidden="true">★</b>{hud.totalStars}</span>
         <span><b aria-hidden="true">🪙</b>{hud.coins}</span>
         <span><b aria-hidden="true">💎</b>{hud.gems}</span>
       </div>
-      <button
-        type="button"
-        className={`home-hud-daily${atRisk ? ' home-hud-daily-lit' : ''}`}
-        onClick={onDaily}
-        aria-label={dailyDone ? 'Daily Word, already done today' : atRisk ? `Daily Word, keep your ${dailyStreak}-day streak going` : 'Daily Word'}
-      >
-        Daily Word
-        {atRisk ? <b className="home-hud-flame" aria-hidden="true">🔥{dailyStreak}</b>
-          : !dailyDone && <b className="home-hud-dot" aria-hidden="true" />}
-      </button>
     </header>;
   }
   return <header className={`app-header ${homeMode ? 'home-header' : ''}`}>
