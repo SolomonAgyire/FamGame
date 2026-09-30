@@ -214,7 +214,7 @@ export class RoomDO extends DurableObject<Cloudflare.Env> {
     } else if (action === 'hint' && status === 'PUZZLE_OPEN') {
       if (player.role === 'spectator') throw new Error('Spectators are just watching this room.');
       if (player.sitOutCurrent) throw new Error('You will join in on the next puzzle.');
-      hints = { ...hints, [player.id]: Math.min(3, (hints[player.id] || 0) + 1) };
+      hints = { ...hints, [player.id]: Math.min(2, (hints[player.id] || 0) + 1) };
     } else if (action === 'check' && status === 'PUZZLE_OPEN' && match) {
       if (player.role === 'spectator') throw new Error('Spectators are just watching this room.');
       if (player.sitOutCurrent) throw new Error('You will join in on the next puzzle.');

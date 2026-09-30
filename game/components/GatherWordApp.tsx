@@ -551,7 +551,7 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
       score={<div className="hud-score-row">{scores.map((team) => <span key={team.id}><i style={{ background: team.color }} />{team.name}<strong key={team.score}>{team.score}</strong><ScoreFlight score={team.score} /></span>)}</div>}
     />
     {mode === 'teams' && !resolved && <div className="claim-panel"><p>{claimedBy ? <><strong>{scores.find((team) => team.id === claimedBy)?.name}</strong> is building</> : 'Who knows it? Claim the puzzle.'}</p><div>{scores.map((team) => <button type="button" key={team.id} disabled={Boolean(claimedBy)} style={{ '--team-color': team.color } as React.CSSProperties} onClick={() => setClaimedBy(team.id)}>{claimedBy === team.id ? 'Building…' : `Claim · ${team.name}`}</button>)}{claimedBy && <button type="button" className="release" onClick={() => { setClaimedBy(null); setPlaced([]); }}>Release</button>}</div></div>}
-    <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{entry.categories[0]} · {LEVEL_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Build the word'}</h1></div><span className="points-pill">{currentValue}</span></div>
+    <section className="puzzle-card play-card"><div className="card-top"><div><p className="puzzle-kicker">{LEVEL_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Build the word'}</h1></div><span className="points-pill">{currentValue}</span></div>
       {timerMode === 'bonus' && !metLevelBefore && !resolved && <p className="notice">A clock from here on — but running out costs you nothing. Beat it and it pays a speed bonus.</p>}
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} shakeKey={shake ?? undefined} feedback={resolved ? resolved.correct ? 'correct' : 'wrong' : 'playing'} locked={Boolean(resolved) || (mode === 'teams' && !claimedBy)} />
       {hints > 0 && !resolved && <div className="hint-box"><span className="hint-icon" aria-hidden="true">💡</span><div className="hint-lines">{ladder.slice(0, hints).map((hint) => <p key={hint.kind}>{hint.text}</p>)}</div></div>}
@@ -560,7 +560,7 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
         mood={resolved.correct ? 'cheer' : 'oops'}
         lead={resolved.revealed ? 'The answer was' : mode === 'teams' ? `${scores.find((team) => team.id === claimedBy)?.name ?? 'Someone'} solved it!` : 'Beautiful work!'}
         word={entry.display}
-        reference={entry.references[0]}
+        reference={entry.categories.includes('book') ? undefined : entry.references[0]}
         award={resolved.award ? `+${resolved.award} points` : 'No points this time'}
       />
       : <div className="game-actions tool-dock"><GameTool icon="💡" label={nextHint ? HINT_LABELS[nextHint.kind] : 'Hints used'} count={Math.max(0, ladder.length - hints)} disabled={!nextHint} onClick={takeHint} tone="gold" /><GameTool icon="↻" label="Shuffle" onClick={shuffleTray} /><GameTool icon="🔨" label="Clear" disabled={placed.length === 0} onClick={() => { rejectedRef.current = null; setPlaced([]); }} tone="coral" /><GameTool icon="🧭" label="Reveal" onClick={reveal} tone="violet" /></div>}
@@ -842,9 +842,9 @@ function TimeAttackGame({ categories, sound, started, onStart, onHome, onReplay 
       score={<><span className="heart-meter" aria-label={`${3 - strikes} hearts left`}>{'♥'.repeat(3 - strikes)}<i>{'♥'.repeat(strikes)}</i></span><strong key={score}>{score}</strong><ScoreFlight score={score} /></>}
     />
     <section className="puzzle-card play-card">
-      <div className="card-top"><div><p className="puzzle-kicker">{entry.categories[0]} · {LEVEL_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Build the word'}</h1></div><span className="points-pill">×{Math.max(1, combo + 1)}</span></div>
+      <div className="card-top"><div><p className="puzzle-kicker">{LEVEL_NAMES[entry.band - 1]}</p><h1>{resolved ? entry.display : 'Build the word'}</h1></div><span className="points-pill">×{Math.max(1, combo + 1)}</span></div>
       <TileBoard scramble={puzzle.scramble} placed={placed} setPlaced={setPlaced} order={order ?? undefined} feedback={resolved ? resolved.correct ? 'correct' : 'wrong' : 'playing'} locked={Boolean(resolved)} />
-      {resolved && <Resolution character="tali" mood={resolved.correct ? 'cheer' : 'oops'} lead={resolved.correct ? 'Solved it' : 'Missed it'} word={entry.display} reference={entry.references[0]} award={resolved.correct ? `+${resolved.gained} points` : 'No points'} />}
+      {resolved && <Resolution character="tali" mood={resolved.correct ? 'cheer' : 'oops'} lead={resolved.correct ? 'Solved it' : 'Missed it'} word={entry.display} reference={entry.categories.includes('book') ? undefined : entry.references[0]} award={resolved.correct ? `+${resolved.gained} points` : 'No points'} />}
       {!resolved && <div className="game-actions tool-dock arcade-tools"><GameTool icon="↻" label="Shuffle" onClick={() => { playShuffle(); setOrder(shuffledOrder(puzzle.scramble.length)); }} /><GameTool icon="🔨" label="Clear" disabled={placed.length === 0} onClick={() => setPlaced([])} tone="coral" /></div>}
     </section>
     <button type="button" className="quit-button" onClick={() => setFinished('ended')}>End run</button>
@@ -1072,7 +1072,7 @@ function OnlineRoom({ credentials, leave, sound }: { credentials: Credentials; l
         mood={viewerSolve ? 'cheer' : 'oops'}
         lead={lead}
         word={puzzle.display ?? ''}
-        reference={puzzle.reference}
+        reference={puzzle.category === 'book' ? undefined : puzzle.reference}
         award={viewerSolve ? `+${viewerSolve.award} points` : 'No points this time'}
         action={isHost ? <button type="button" className="primary-button" onClick={() => action({ action: 'next' })}>Next puzzle</button> : <p>Waiting for the host…</p>}
       />
@@ -1092,7 +1092,10 @@ function OnlineLobby({ snapshot, viewer, isHost, busy, action, leave }: { snapsh
   // one their categories have no words at. Say so here rather than
   // letting them start a match nobody can play.
   const blocked = roomUnplayableReason(settings.difficulty, settings.categories);
-  const copy = async () => { try { await navigator.clipboard.writeText(joinUrl); } catch { /* clipboard can be blocked */ } };
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(joinUrl); showToast('Invite link copied'); }
+    catch { showToast('Could not copy the link', 'error'); }
+  };
   const activePlayers = snapshot.players.filter((player) => player.role === 'player' && !player.left);
   const seatedCount = activePlayers.length;
   // Ten seats fill a phone screen without crowding; the roster used to
@@ -1103,11 +1106,8 @@ function OnlineLobby({ snapshot, viewer, isHost, busy, action, leave }: { snapsh
     <div className="room-camp room-camp-full" aria-label={`${seatedCount} players in the room`}>
       <div className="lobby-heading">
         <button type="button" className="lobby-back-button" onClick={leave} aria-label="Leave room">‹</button>
-        <div className="camp-code"><small>Room</small><strong>{snapshot.code}</strong></div>
-        <div className="lobby-heading-actions">
-          {isHost && <button type="button" className="lobby-settings-button" onClick={() => setSettingsOpen(true)} aria-label="Room settings">⚙</button>}
-          <button type="button" className="lobby-invite-button" onClick={copy} aria-label="Copy invite link">＋👤</button>
-        </div>
+        <button type="button" className="camp-code" onClick={copy} aria-label="Copy invite link"><small>Room</small><strong>{snapshot.code}</strong><i aria-hidden="true">⧉</i></button>
+        {isHost && <button type="button" className="lobby-settings-button" onClick={() => setSettingsOpen(true)} aria-label="Room settings"><span aria-hidden="true">⚙</span><small aria-hidden="true">Settings</small></button>}
       </div>
       <div className="campfire" aria-hidden="true"><i /><i /><span>✦</span></div>
       {campSeats.map((player, index) => <div key={player?.id ?? `empty-${index}`} className={`camp-seat camp-seat-${index + 1}${player?.ready ? ' ready' : ''}${player?.teamId ? ` team-${player.teamId}` : ''}${player ? '' : ' empty'}`}>

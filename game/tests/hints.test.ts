@@ -4,44 +4,37 @@ import { applyLetterHint, BIBLE_BOOKS, bookIndexOf, hintsFor } from '../lib/hint
 import { PLAYABLE_BANK } from '../lib/game-engine';
 
 const entry = PLAYABLE_BANK.find((e) => e.display === 'Nehemiah')!;
-/** A word whose citation points somewhere other than its own name, which
- * is the ordinary case: 674 of the 760 words in the bank. */
-const crossReferenced = PLAYABLE_BANK.find((e) => !e.references[0].toUpperCase().replace(/[^A-Z0-9]/g, '').includes(e.playable))!;
 
-test('the first hint reveals a letter in place', () => {
+test('the first hint says what kind of answer it is', () => {
   const [first] = hintsFor(entry);
-  assert.equal(first.kind, 'letter');
-  assert.equal(typeof first.revealIndex, 'number');
+  assert.equal(first.kind, 'category');
 });
 
-test('the second hint gives context, not the category already on screen', () => {
+test('a book entry\'s first hint calls it a book', () => {
+  const [first] = hintsFor({ categories: ['book'], references: ['Genesis 1:1'], playable: 'GENESIS' });
+  assert.equal(first.text, "It's a book.");
+});
+
+test('a person entry\'s first hint calls it a name, not a person', () => {
+  const [first] = hintsFor({ categories: ['person'], references: ['Exodus 2:10'], playable: 'MOSES' });
+  assert.equal(first.text, "It's a name.");
+});
+
+test('a place entry\'s first hint calls it a place', () => {
+  const [first] = hintsFor({ categories: ['place'], references: ['Genesis 13:18'], playable: 'HEBRON' });
+  assert.equal(first.text, "It's a place.");
+});
+
+test('the second hint reveals a letter in place', () => {
   const [, second] = hintsFor(entry);
-  assert.equal(second.kind, 'context');
-  assert.ok(!/^This answer is a/.test(second.text), 'must not restate the kicker');
+  assert.equal(second.kind, 'letter');
+  assert.equal(typeof second.revealIndex, 'number');
 });
 
-test('the third hint gives the scripture reference', () => {
-  const [, , third] = hintsFor(crossReferenced);
-  assert.equal(third.kind, 'reference');
-  assert.ok(third.text.includes(crossReferenced.references[0]),
-    `${crossReferenced.display}: "${third.text}" does not cite ${crossReferenced.references[0]}`);
-});
-
-// A Bible book is cited by its own name, so printing "Nehemiah 1:1" would
-// hand over the answer. Those entries get the position in the canon, which
-// is just as much a scripture fact and still points the player at a book.
-test('a book, whose citation would be the answer, is placed in the canon instead', () => {
-  const [, , third] = hintsFor(entry);
-  assert.equal(third.kind, 'reference');
-  assert.ok(/\bBook 16 of the 66\b/.test(third.text), `unexpected book hint: "${third.text}"`);
-  assert.ok(third.text.includes('Ezra') && third.text.includes('Esther'));
-});
-
-test('a person named after their own book gets chapter and verse, not the book', () => {
-  const ruth = PLAYABLE_BANK.find((e) => e.display === 'Ruth' && e.categories.includes('person'))!;
-  const [, , third] = hintsFor(ruth);
-  assert.equal(third.kind, 'reference');
-  assert.ok(/chapter \d+, verse \d+/.test(third.text), `unexpected hint: "${third.text}"`);
+test('there are exactly two hints -- nothing past the letter', () => {
+  const [first, second, third] = hintsFor(entry);
+  assert.ok(first && second);
+  assert.equal(third, undefined);
 });
 
 test('no hint ever contains the answer itself', () => {
@@ -66,25 +59,18 @@ test('no hint leaks the answer anywhere in the bank, spacing included', () => {
   }
 });
 
-test('every approved word can produce all three hints', () => {
+test('every approved word produces exactly two hints', () => {
   for (const sample of PLAYABLE_BANK) {
-    assert.equal(hintsFor(sample).length, 3, `${sample.display} produced the wrong number of hints`);
+    assert.equal(hintsFor(sample).length, 2, `${sample.display} produced the wrong number of hints`);
   }
 });
 
-test('every citation in the bank names a book the ladder recognises', () => {
+test('every citation in the bank names a book the canon recognises', () => {
   for (const sample of PLAYABLE_BANK) {
     assert.ok(bookIndexOf(sample.references[0]) >= 0,
       `${sample.display} cites "${sample.references[0]}", which is not one of the 66`);
   }
   assert.equal(BIBLE_BOOKS.length, 66);
-});
-
-test('the context hint tells the player which Testament they are in', () => {
-  const hebrew = hintsFor({ categories: ['person'], references: ['Exodus 2:10'], playable: 'MOSES' })[1];
-  const greek = hintsFor({ categories: ['person'], references: ['Matthew 4:18'], playable: 'PETER' })[1];
-  assert.ok(hebrew.text.includes('Hebrew Scriptures'), hebrew.text);
-  assert.ok(greek.text.includes('Christian Greek Scriptures'), greek.text);
 });
 
 test('a letter hint puts the opening tile in its slot', () => {

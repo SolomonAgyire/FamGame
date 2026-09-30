@@ -172,8 +172,8 @@
 .home-hud-currency span { display: flex; align-items: center; gap: 3px; color: #fff4c8; font: 800 11px/1 var(--font-display); white-space: nowrap; }
 .home-hud-currency b { font-size: 12px; }
 .home-hud-daily {
-  justify-self: end; position: relative; height: 34px; padding: 0 10px; border: 2px solid #f2d79d; border-radius: 10px 10px 11px 4px;
-  background: var(--cube-gold); color: #50340e; font: 800 10px/1 var(--font-display); white-space: nowrap;
+  justify-self: end; position: relative; height: 40px; padding: 0 14px; border: 2px solid #f2d79d; border-radius: 12px 12px 13px 5px;
+  background: var(--cube-gold); color: #50340e; font: 800 12px/1 var(--font-display); white-space: nowrap;
   display: grid; place-items: center; box-shadow: inset 0 2px 0 #ffffff70, 0 3px 0 #a96b1d;
 }
 .home-hud-daily:active { translate: 0 3px; box-shadow: inset 0 2px 0 #ffffff70; }
@@ -473,7 +473,7 @@
   display: flex;
   justify-content: center;
   gap: 8px;
-  min-height: 66px;
+  min-height: 72px;
   margin: 8px auto 0;
   padding: 7px 9px 9px;
   border: 2px solid #f2d79d;
@@ -489,9 +489,9 @@
   display: grid;
   place-items: center;
   align-content: center;
-  width: 51px;
-  min-width: 51px;
-  height: 51px;
+  width: 57px;
+  min-width: 57px;
+  height: 57px;
   padding: 2px;
   border: 2px solid #efffff;
   border-radius: 50%;
@@ -504,8 +504,8 @@
 .game-tool-coral { --tool-face: linear-gradient(#ffab90, #e55f65); --tool-edge: #9e3843; color: #67242a; }
 .game-tool-violet { --tool-face: linear-gradient(#d0aff3, #8c5bcc); --tool-edge: #5c368d; color: #fff; }
 .game-tool:not(:disabled):active { translate: 0 4px; box-shadow: inset 0 3px 0 #ffffff62, 0 1px 0 var(--tool-edge); }
-.game-tool-icon { font: 900 22px/1 var(--font-display); }
-.game-tool small { display: block; margin-top: 1px; max-width: 45px; overflow: hidden; font: 800 6px/1 var(--font-display); text-overflow: ellipsis; white-space: nowrap; text-transform: uppercase; }
+.game-tool-icon { font: 900 24px/1 var(--font-display); }
+.game-tool small { display: block; margin-top: 1px; max-width: 49px; overflow: hidden; font: 800 6px/1 var(--font-display); text-overflow: ellipsis; white-space: nowrap; text-transform: uppercase; }
 .game-tool-count { position: absolute; right: -3px; bottom: -2px; display: grid; place-items: center; width: 18px; height: 18px; border: 2px solid #fff0b5; border-radius: 50%; background: #523622; color: #fff7cf; font: 800 8px/1 var(--font-display); }
 .tool-dock .check-button { min-width: 86px; min-height: 50px; padding: 0 12px; border-radius: 15px 15px 16px 6px; font-size: 11px; }
 .host-controls { gap: 5px; }
@@ -619,14 +619,24 @@
   position: absolute; z-index: 6; top: max(10px, env(safe-area-inset-top)); left: 10px; right: 10px;
   display: flex; align-items: center; gap: 8px; padding: 0; border: 0;
 }
-.lobby-heading-actions { display: flex; gap: 8px; margin-left: auto; }
-.lobby-back-button, .lobby-invite-button, .lobby-settings-button {
+.lobby-back-button {
   flex: none; width: 36px; height: 36px; padding: 0; display: grid; place-items: center;
   border: 2px solid #f2d79d; border-radius: 10px 10px 11px 4px;
   background: linear-gradient(#8ddbc4, #3f9e81); color: #123c32; font-size: 15px; font-weight: 800;
   box-shadow: inset 0 2px 0 #ffffff74, 0 3px 0 #24684f;
 }
-.lobby-back-button:active, .lobby-invite-button:active, .lobby-settings-button:active { translate: 0 3px; box-shadow: inset 0 2px 0 #ffffff70; }
+.lobby-back-button:active { translate: 0 3px; box-shadow: inset 0 2px 0 #ffffff70; }
+/* Bigger and its own shape -- a lone circular icon read as decoration, not
+   a control, so this is a labeled pill the eye can tell apart from Back. */
+.lobby-settings-button {
+  flex: none; margin-left: auto; height: 40px; padding: 0 12px; display: flex; align-items: center; gap: 6px;
+  border: 2px solid #f2d79d; border-radius: 12px 12px 13px 5px;
+  background: linear-gradient(#8ddbc4, #3f9e81); color: #123c32; font-weight: 800;
+  box-shadow: inset 0 2px 0 #ffffff74, 0 3px 0 #24684f;
+}
+.lobby-settings-button span { font-size: 18px; }
+.lobby-settings-button small { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
+.lobby-settings-button:active { translate: 0 3px; box-shadow: inset 0 2px 0 #ffffff70; }
 .room-camp-full .camp-code {
   display: flex;
   align-items: center;
@@ -638,8 +648,10 @@
   color: #fff0bf;
   box-shadow: inset 0 2px 0 #ffffff32, 0 3px 0 #281a12;
 }
+.camp-code:active { translate: 0 2px; box-shadow: inset 0 1px 0 #ffffff28; }
 .camp-code small { font-size: 7px; letter-spacing: .1em; text-transform: uppercase; }
 .camp-code strong { font: 800 14px/1 var(--font-display); letter-spacing: .1em; }
+.camp-code i { font-style: normal; font-size: 12px; opacity: .8; }
 .campfire {
   position: absolute;
   z-index: 3;
@@ -660,18 +672,18 @@
   z-index: 4;
   display: grid;
   justify-items: center;
-  width: 62px;
+  width: 68px;
   color: #fff8d4;
   text-align: center;
   text-shadow: 0 1px 1px #1b130c;
 }
 .camp-avatar {
   position: relative; display: grid; place-items: center; overflow: hidden;
-  width: 46px; height: 46px; border: 4px solid #baaf9e; border-radius: 50%;
+  width: 52px; height: 52px; border: 4px solid #baaf9e; border-radius: 50%;
   background: linear-gradient(#f7ddb0, #bd8051); color: #50341f;
   box-shadow: inset 0 3px 0 #ffffff77, 0 4px 0 #5c3c27, 0 0 0 3px #38261e7a;
 }
-.camp-avatar .game-character { width: 42px; height: 42px; }
+.camp-avatar .game-character { width: 48px; height: 48px; }
 .camp-avatar { border-color: var(--seat-accent, #baaf9e); }
 .camp-seat.ready .camp-avatar { border-color: #7feb8b; box-shadow: inset 0 3px 0 #ffffff77, 0 4px 0 #316e3d, 0 0 18px #6eff7e; }
 .camp-seat.team-sun .camp-avatar { border-color: #ffbd59; }
@@ -713,8 +725,8 @@
   .ground-level-node > small { display: none; }
   .in-world .play-card .stone-letter-board { min-height: 300px; padding-top: 47px; }
   .stone-letter-board .answer-area { margin-bottom: 16px; }
-  .tool-dock { min-height: 59px; padding: 5px 7px 7px; }
-  .game-tool { width: 46px; min-width: 46px; height: 46px; }
+  .tool-dock { min-height: 64px; padding: 5px 7px 7px; }
+  .game-tool { width: 50px; min-width: 50px; height: 50px; }
 }
 @media (max-width: 370px) {
   .ground-level-node { width: 41px; height: 41px; }
@@ -722,8 +734,8 @@
   .mission-hud-guide, .mission-hud-guide .game-character { width: 40px; height: 40px; }
   .mission-hud-chip { padding-inline: 5px; }
   .tool-dock { gap: 5px; }
-  .game-tool { width: 44px; min-width: 44px; height: 44px; }
-  .game-tool-icon { font-size: 19px; }
+  .game-tool { width: 48px; min-width: 48px; height: 48px; }
+  .game-tool-icon { font-size: 20px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .rendered-character,

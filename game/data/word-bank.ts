@@ -50,9 +50,6 @@ export const LEVEL_TARGETS = [88, 88, 83, 78, 73, 68, 80, 80, 80] as const;
 function makeEntries(category: Category, rows: SourceRow[], status: 'draft' | 'approved'): WordEntry[] {
   return rows.map(([display, reference, familiarity]) => {
     const playable = playableOf(display);
-    // The stored pair is the last two rungs of the shared ladder. The first
-    // rung places a letter on the board, so it is derived at play time from
-    // whatever the player has already built rather than baked in here.
     const ladder = hintsFor({ categories: [category], references: [reference], playable });
     return {
       id: `${category}.${slug(display)}`,
@@ -63,7 +60,7 @@ function makeEntries(category: Category, rows: SourceRow[], status: 'draft' | 'a
       level: 1 as Level,
       familiarity,
       band: 1 as Level,
-      hints: [ladder[1].text, ladder[2].text],
+      hints: [ladder[0].text, ladder[1].text],
       references: [reference],
       verification: 'English NWT naming standard',
       status,

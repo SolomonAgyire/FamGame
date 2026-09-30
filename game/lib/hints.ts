@@ -1,6 +1,6 @@
 import type { Category, WordEntry } from '@/lib/types';
 
-export type HintKind = 'letter' | 'context' | 'reference';
+export type HintKind = 'category' | 'letter';
 
 export type Hint = {
   kind: HintKind;
@@ -12,15 +12,12 @@ export type Hint = {
 /** What the player is about to buy, shown on the button so paying is an
  * informed choice rather than a coin flip. */
 export const HINT_LABELS: Record<HintKind, string> = {
+  category: 'what it is',
   letter: 'a letter',
-  context: 'where it sits',
-  reference: 'the scripture',
 };
 
-/** The 66 books in canonical order. This lives here rather than in the
- * word bank because it is reference metadata, not playable content: the
- * Testament, the section of the Bible and a book's position in the canon
- * all fall out of this one list. */
+/** The 66 books in canonical order. Kept as reference metadata: the word
+ * bank's own tests check every citation names a book on this list. */
 export const BIBLE_BOOKS: readonly string[] = [
   'Genesis', 'Exodus', 'Leviticus', 'Numbers', 'Deuteronomy', 'Joshua', 'Judges', 'Ruth',
   '1 Samuel', '2 Samuel', '1 Kings', '2 Kings', '1 Chronicles', '2 Chronicles', 'Ezra', 'Nehemiah',
@@ -32,10 +29,6 @@ export const BIBLE_BOOKS: readonly string[] = [
   'Philemon', 'Hebrews', 'James', '1 Peter', '2 Peter', '1 John', '2 John', '3 John',
   'Jude', 'Revelation',
 ];
-
-/** Malachi is the last of the Hebrew Scriptures; Matthew opens the
- * Christian Greek Scriptures. */
-const HEBREW_BOOK_COUNT = 39;
 
 /** The bank cites the Psalms both ways. Anything else is spelled exactly
  * as `BIBLE_BOOKS` spells it. */
@@ -54,102 +47,29 @@ export function bookIndexOf(reference: string): number {
   return BIBLE_BOOKS.indexOf(referenceBook(reference));
 }
 
-function sectionFor(index: number): string {
-  if (index <= 4) return 'the Law';
-  if (index <= 16) return 'the history books';
-  if (index <= 21) return 'the poetry and wisdom books';
-  if (index <= 38) return 'the prophets';
-  if (index <= 43) return 'the Gospels and Acts';
-  if (index <= 64) return 'the letters';
-  return 'Revelation';
-}
-
-function testamentFor(index: number): string {
-  return index < HEBREW_BOOK_COUNT ? 'Hebrew Scriptures' : 'Christian Greek Scriptures';
-}
-
-const CATEGORY_NOUN: Record<Category, string> = {
-  book: 'book', person: 'person', place: 'place',
-  tribe: 'tribe of Israel', nation: 'people or nation',
+/** "Book," "name" or "place" -- the noun a player would actually ask for
+ * ("is it a book, a place, or a name?"), not the bank's internal category
+ * id (a person is asked about as a "name", never a "person"). */
+const CATEGORY_HINT_NOUN: Record<Category, string> = {
+  book: 'book', person: 'name', place: 'place', tribe: 'name', nation: 'name',
 };
-
-/** Stricter than the naked substring test a reader would apply: the answer
- * is stripped of spaces and punctuation before the comparison, so "Read it
- * at 1 Kings 1:1" is caught as a leak of `1KINGS` even though the two do
- * not match character for character. */
-function leaks(text: string, playable: string): boolean {
-  return text.toUpperCase().replace(/[^A-Z0-9]/g, '').includes(playable);
-}
-
-/** The first phrasing that does not hand over the answer. Later candidates
- * deliberately drop detail: a place called "Ur" cannot be told it is in the
- * "Hebrew Scriptures" without the word Script-UR-es spelling it out. */
-function pick(candidates: string[], playable: string): string {
-  return candidates.find((candidate) => !leaks(candidate, playable)) ?? candidates[candidates.length - 1];
-}
-
-/** What the entry is and where in the Bible it sits. Never restates the
- * kicker, which already shows the category and the level. */
-function contextCandidates(categories: Category[], reference: string): string[] {
-  const noun = CATEGORY_NOUN[categories[0]] ?? 'name';
-  const index = bookIndexOf(reference);
-  if (index < 0) return [`A ${noun} named in the Bible.`, 'Named somewhere in the Bible.'];
-  const section = sectionFor(index);
-  const testament = testamentFor(index);
-  return [
-    `A ${noun} from the ${testament}, in ${section}.`,
-    `A ${noun} from ${section}.`,
-    `Named in ${section}.`,
-    `From ${section}.`,
-    `In the ${testament}.`,
-  ];
-}
-
-/** The citation itself, which is the whole point of the game -- except
- * where the citation *is* the answer. Every Bible book is cited by its own
- * name, and so are the people and places with a book named after them, so
- * those get the canon position or a bare chapter and verse instead. */
-function referenceCandidates(categories: Category[], reference: string): string[] {
-  const index = bookIndexOf(reference);
-  const chapterVerse = /(\d+):(\d+)\s*$/.exec(reference);
-  const candidates = [`Read it at ${reference}.`];
-  if (categories.includes('book') && index >= 0) {
-    const position = index + 1;
-    const previous = BIBLE_BOOKS[index - 1];
-    const next = BIBLE_BOOKS[index + 1];
-    candidates.push(
-      previous && next ? `Book ${position} of the 66, between ${previous} and ${next}.`
-        : next ? `The very first of the 66 books, just before ${next}.`
-          : `The last of the 66 books, right after ${previous}.`,
-      `Book ${position} of the 66.`,
-    );
-  }
-  if (chapterVerse) {
-    candidates.push(
-      `Read it at chapter ${chapterVerse[1]}, verse ${chapterVerse[2]} of the book that carries this very name.`,
-      `Read it at chapter ${chapterVerse[1]}, verse ${chapterVerse[2]}.`,
-      `Chapter ${chapterVerse[1]}, verse ${chapterVerse[2]}.`,
-    );
-  }
-  return candidates;
-}
 
 /** Everything `hintsFor` needs. Typed as a subset of `WordEntry` so the
  * word bank can build the ladder while an entry is still half-made. */
 export type HintSource = Pick<WordEntry, 'categories' | 'references' | 'playable'>;
 
-/** Three rungs, each worth a point: a letter on the board, then where in
- * the Bible the answer sits, then the citation. The old pair restated the
- * kicker and the slot count -- two points for one real fact. */
+/** Two rungs: what kind of answer it is, then its opening letter placed on
+ * the board. Nothing past that -- a citation would tell a player exactly
+ * where to read the answer's own name for a Bible book, so the ladder
+ * never reaches the scripture reference. */
 export function hintsFor(entry: HintSource): Hint[] {
   const playable = entry.playable;
-  const reference = entry.references[0] ?? '';
+  const noun = CATEGORY_HINT_NOUN[entry.categories[0]] ?? 'name';
   return [
+    { kind: 'category', text: `It's a ${noun}.` },
     // The opening character, not "the first letter": a numbered book
     // carries its numeral into the scramble, so "1 Kings" starts with 1.
-    { kind: 'letter', text: pick([`It starts with ${playable[0]}.`], playable), revealIndex: 0 },
-    { kind: 'context', text: pick(contextCandidates(entry.categories, reference), playable) },
-    { kind: 'reference', text: pick(referenceCandidates(entry.categories, reference), playable) },
+    { kind: 'letter', text: `It starts with ${playable[0]}.`, revealIndex: 0 },
   ];
 }
 

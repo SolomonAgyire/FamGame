@@ -21,9 +21,8 @@ import { matchStars } from '@/lib/economy';
 /** Four goes at it, then the word is shown. Enough room to think, not so
  * much that the share card stops meaning anything. */
 const MAX_GUESSES = 4;
-/** Three rungs, same ladder as every other mode: a letter, then where in
- * the Bible it sits, then the citation. */
-const MAX_HINTS = 3;
+/** Two rungs, same ladder as every other mode: what it is, then a letter. */
+const MAX_HINTS = 2;
 
 const NEVER_CHANGES = () => () => {};
 
@@ -245,9 +244,9 @@ export function DailyWord({ sound, onHome }: { sound: boolean; onHome: () => voi
       </div> : undefined}
       headline={{ value: done.points, label: 'points' }}
       coinsEarned={undefined}
-      scripture={entry.references[0]}
+      scripture={entry.categories.includes('book') ? undefined : entry.references[0]}
       extra={<>
-        <p className="page-subtitle daily-answer">The answer was <strong>{entry.display}</strong> — {entry.references[0]}</p>
+        <p className="page-subtitle daily-answer">The answer was <strong>{entry.display}</strong>{!entry.categories.includes('book') && <> — {entry.references[0]}</>}</p>
         <div className="daily-scoreline">
           <div><strong>{done.guesses}</strong><span>{done.guesses === 1 ? 'Guess' : 'Guesses'}</span></div>
           <div><strong>{done.hintsUsed}</strong><span>Hints</span></div>
@@ -280,7 +279,9 @@ export function DailyWord({ sound, onHome }: { sound: boolean; onHome: () => voi
         <button type="button" className="check-button" onClick={check}>Check answer</button>
         <GameTool icon="🧭" label="Give up" onClick={() => finish(false, Math.max(1, guesses))} tone="violet" />
       </div>
-      <button type="button" className="quit-button" onClick={onHome}>Back home</button>
+      {/* Leaving mid-puzzle still counts today's attempt and shows the
+          summary, the same as every other mode's early-quit button. */}
+      <button type="button" className="quit-button" onClick={() => finish(false, Math.max(1, guesses))}>Back home</button>
     </section>
   </main>;
 }
