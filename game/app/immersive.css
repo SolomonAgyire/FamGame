@@ -178,6 +178,14 @@
 }
 .home-hud-daily:active { translate: 0 3px; box-shadow: inset 0 2px 0 #ffffff70; }
 .home-hud-dot { position: absolute; top: -3px; right: -3px; width: 9px; height: 9px; border-radius: 50%; background: #ff6b6b; border: 2px solid #34251b; }
+/* A streak at risk gets a warmer pull than the plain dot: a glow around
+   the whole button, and the streak count where the dot used to sit. */
+.home-hud-daily-lit { box-shadow: inset 0 2px 0 #ffffff70, 0 3px 0 #a96b1d, 0 0 14px 3px rgba(255,154,61,.75); }
+.home-hud-flame {
+  position: absolute; top: -12px; right: -8px; display: flex; align-items: center; gap: 2px;
+  padding: 2px 6px 2px 4px; border-radius: 999px; background: linear-gradient(160deg, #ff9a3d, #e5542a);
+  border: 2px solid #1a2e22; color: #fff; font-size: 10px; font-weight: 800;
+}
 
 /* Title plaque ------------------------------------------------------ */
 .home-title-plaque {
@@ -266,26 +274,33 @@
 }
 .ground-level-more small { display: block; font-size: 6px; line-height: 1; }
 /* Compact secondary mode row ---------------------------------------- */
+/* No boxed tab, no per-mode tint -- just the character and its name
+   floating on the scene. The art itself (camel/lion/fox/hoopoe) already
+   tells the four modes apart. */
 .home-mode-row {
   position: absolute; z-index: 12; left: 8px; right: 8px; bottom: max(7px, env(safe-area-inset-bottom));
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 6px;
-  border: 2px solid #f3d598; border-radius: 16px 16px 18px 7px;
-  background: linear-gradient(180deg, #5a3a24d0, #34251bd8);
-  box-shadow: inset 0 2px 0 #ffffff26, 0 4px 0 #271a12, 0 9px 16px #14281e60;
-  backdrop-filter: blur(4px);
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 4px;
 }
 .home-mode-chip {
-  display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0;
-  padding: 4px 2px; border: 2px solid #eafffb; border-radius: 11px 11px 12px 4px;
-  background: var(--cube-cyan); color: #173d3c;
-  box-shadow: inset 0 3px 0 #ffffff79, 0 3px 0 #167484;
+  display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0;
+  padding: 4px 2px; border: 0; background: none; color: #fff4c8;
 }
-.home-mode-chip:active:not(:disabled) { translate: 0 3px; box-shadow: inset 0 2px 0 #ffffff70; }
-.home-mode-tint-grass { background: linear-gradient(#87e6a0, #3baa66); box-shadow: inset 0 3px 0 #ffffff79, 0 3px 0 #236f45; }
-.home-mode-tint-violet { background: linear-gradient(#c6a2f2, #8754c8); color: #fff; box-shadow: inset 0 3px 0 #ffffff79, 0 3px 0 #543489; }
-.home-mode-tint-berry { background: linear-gradient(#ff9d88, #e65668); color: #fff; box-shadow: inset 0 3px 0 #ffffff79, 0 3px 0 #9e3447; }
-.home-mode-chip-character { width: 28px; height: 28px; }
-.home-mode-chip small { font: 800 8px/1 var(--font-display); text-shadow: 0 1px 0 #ffffff6b; }
+.home-mode-chip:active:not(:disabled) { translate: 0 3px; }
+.home-mode-chip-character { width: 52px; height: 52px; }
+.home-mode-chip small { font: 800 10.5px/1 var(--font-display); text-shadow: 0 2px 2px rgba(0,0,0,.4); }
+/* Livelier than the shared idle breathe -- a bob, a tilt and a touch of
+   scale, staggered per chip so the row doesn't move in unison. */
+.home-mode-chip-character.rendered-character.mood-idle { animation: home-mode-lively 2.4s ease-in-out infinite; transform-origin: 50% 92%; }
+.home-mode-row .home-mode-chip:nth-child(1) .home-mode-chip-character { animation-delay: 0ms; }
+.home-mode-row .home-mode-chip:nth-child(2) .home-mode-chip-character { animation-delay: -600ms; }
+.home-mode-row .home-mode-chip:nth-child(3) .home-mode-chip-character { animation-delay: -1200ms; }
+.home-mode-row .home-mode-chip:nth-child(4) .home-mode-chip-character { animation-delay: -1800ms; }
+@keyframes home-mode-lively {
+  0%, 100% { transform: translateY(0) rotate(0deg) scale(1); }
+  30% { transform: translateY(-5px) rotate(-3deg) scale(1.02); }
+  60% { transform: translateY(0) rotate(2deg) scale(1); }
+  80% { transform: translateY(-2px) rotate(-1deg) scale(1.01); }
+}
 @keyframes current-node { 50% { transform: scale(1.08); filter: brightness(1.12); } }
 @keyframes treasure-glow { 50% { transform: translateY(-3px) rotate(1deg); filter: brightness(1.12); } }
 
@@ -727,6 +742,7 @@
   .stone-letter-board .answer-area { margin-bottom: 16px; }
   .tool-dock { min-height: 64px; padding: 5px 7px 7px; }
   .game-tool { width: 50px; min-width: 50px; height: 50px; }
+  .home-mode-chip-character { width: 44px; height: 44px; }
 }
 @media (max-width: 370px) {
   .ground-level-node { width: 41px; height: 41px; }

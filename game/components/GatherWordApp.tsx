@@ -114,23 +114,35 @@ function GameIcon({ name }: { name: GameIconName }) {
   </svg>;
 }
 
-function Header({ onHome, sound, setSound, homeMode = false, showingHome = false, hud, dailyNumber, dailyDone, onDaily }: {
+function Header({ onHome, sound, setSound, homeMode = false, showingHome = false, hud, dailyNumber, dailyDone, dailyStreak = 0, onDaily }: {
   onHome: () => void; sound: boolean; setSound: (value: boolean) => void; homeMode?: boolean; showingHome?: boolean;
   hud?: { totalStars: number; coins: number; gems: number };
-  dailyNumber?: number | null; dailyDone?: boolean; onDaily?: () => void;
+  dailyNumber?: number | null; dailyDone?: boolean; dailyStreak?: number; onDaily?: () => void;
 }) {
-  if (showingHome && hud) return <header className="app-header home-hud">
-    <button type="button" className="home-hud-brand" onClick={onHome} aria-label="WordIn home">WordIn</button>
-    <div className="home-hud-currency" aria-label={`${hud.totalStars} stars, ${hud.coins} coins, ${hud.gems} gems`}>
-      <span><b aria-hidden="true">★</b>{hud.totalStars}</span>
-      <span><b aria-hidden="true">🪙</b>{hud.coins}</span>
-      <span><b aria-hidden="true">💎</b>{hud.gems}</span>
-    </div>
-    <button type="button" className="home-hud-daily" onClick={onDaily} aria-label={dailyDone ? 'Daily Word, already done today' : 'Daily Word'}>
-      Daily Word
-      {!dailyDone && <b className="home-hud-dot" aria-hidden="true" />}
-    </button>
-  </header>;
+  if (showingHome && hud) {
+    // A streak worth protecting is the stronger pull -- show it in place of
+    // the plain "something's new" dot. With no streak yet, the dot alone
+    // still says "there's a word waiting."
+    const atRisk = !dailyDone && dailyStreak > 0;
+    return <header className="app-header home-hud">
+      <button type="button" className="home-hud-brand" onClick={onHome} aria-label="WordIn home">WordIn</button>
+      <div className="home-hud-currency" aria-label={`${hud.totalStars} stars, ${hud.coins} coins, ${hud.gems} gems`}>
+        <span><b aria-hidden="true">★</b>{hud.totalStars}</span>
+        <span><b aria-hidden="true">🪙</b>{hud.coins}</span>
+        <span><b aria-hidden="true">💎</b>{hud.gems}</span>
+      </div>
+      <button
+        type="button"
+        className={`home-hud-daily${atRisk ? ' home-hud-daily-lit' : ''}`}
+        onClick={onDaily}
+        aria-label={dailyDone ? 'Daily Word, already done today' : atRisk ? `Daily Word, keep your ${dailyStreak}-day streak going` : 'Daily Word'}
+      >
+        Daily Word
+        {atRisk ? <b className="home-hud-flame" aria-hidden="true">🔥{dailyStreak}</b>
+          : !dailyDone && <b className="home-hud-dot" aria-hidden="true" />}
+      </button>
+    </header>;
+  }
   return <header className={`app-header ${homeMode ? 'home-header' : ''}`}>
     <button className={`brand ${homeMode ? 'home-brand' : ''}`} type="button" onClick={onHome} aria-label="WordIn home">
       {homeMode
@@ -147,10 +159,10 @@ function Header({ onHome, sound, setSound, homeMode = false, showingHome = false
 
 function HomeScreen({ startAs, level, setLevel, blocked, newlyUnlocked }: { startAs: (mode: EntryMode) => void; level: Level; setLevel: (level: Level) => void; blocked: string | null; newlyUnlocked: Level | null }) {
   const modes = [
-    { id: 'solo' as const, title: 'Solo', tint: 'sky', character: 'nuri' as const },
-    { id: 'together' as const, title: 'Together', tint: 'grass', character: 'boaz' as const },
-    { id: 'online' as const, title: 'Online', tint: 'violet', character: 'mira' as const },
-    { id: 'timeattack' as const, title: 'Time Attack', tint: 'berry', character: 'tali' as const },
+    { id: 'solo' as const, title: 'Solo', character: 'nuri' as const },
+    { id: 'together' as const, title: 'Together', character: 'boaz' as const },
+    { id: 'online' as const, title: 'Online', character: 'mira' as const },
+    { id: 'timeattack' as const, title: 'Time Attack', character: 'tali' as const },
   ];
   const stopped = Boolean(blocked);
   return <main className="home-shell">
@@ -165,7 +177,7 @@ function HomeScreen({ startAs, level, setLevel, blocked, newlyUnlocked }: { star
       <div className="home-mode-row" aria-label="Choose how to play">
         {modes.map((item) => {
           const gated = Boolean(blocked) && (item.id === 'solo' || item.id === 'together');
-          return <button key={item.id} type="button" disabled={gated} onClick={() => startAs(item.id)} className={`home-mode-chip home-mode-tint-${item.tint}`} aria-label={`Play ${item.title}`}>
+          return <button key={item.id} type="button" disabled={gated} onClick={() => startAs(item.id)} className="home-mode-chip" aria-label={`Play ${item.title}`}>
             <GameCharacter character={item.character} mood="idle" size="small" className="home-mode-chip-character" />
             <small>{item.title}</small>
           </button>;
@@ -1281,7 +1293,7 @@ export default function GatherWordApp() {
   }, [showingHome, newlyUnlocked]);
   const scene = showingMap ? 'home' : dailyActive ? 'daily' : timeAttackActive ? 'timeattack'
     : screen === 'online-entry' || screen === 'online-lobby' ? 'online' : entryMode;
-  return <div className={`app${showingMap ? '' : ' in-world'}`} data-scene={scene}><JourneyBackdrop /><Header onHome={home} sound={sound} setSound={setSound} homeMode={showingMap} showingHome={showingHome} hud={{ totalStars: totalStars(progress), coins: progress.coins, gems: progress.gems }} dailyNumber={hydrated ? dailyKey.number : null} dailyDone={dailyDone} onDaily={() => startEntry('daily')} />
+  return <div className={`app${showingMap ? '' : ' in-world'}`} data-scene={scene}><JourneyBackdrop /><Header onHome={home} sound={sound} setSound={setSound} homeMode={showingMap} showingHome={showingHome} hud={{ totalStars: totalStars(progress), coins: progress.coins, gems: progress.gems }} dailyNumber={hydrated ? dailyKey.number : null} dailyDone={dailyDone} dailyStreak={progress.streak.current} onDaily={() => startEntry('daily')} />
     {showingMap && <div className={`map-underlay${mapOverlayOpen ? ' map-underlay-inactive' : ''}`} inert={mapOverlayOpen ? true : undefined}><HomeScreen startAs={startEntry} level={level} setLevel={setLevel} blocked={unplayableReason(settings)} newlyUnlocked={newlyUnlocked} /></div>}
     {dailyActive ? <DailyWord sound={sound} onHome={home} />
     : timeAttackActive ? <div className={timeAttackStarted ? 'game-layer' : 'map-modal-layer in-world'}><TimeAttackGame key={localGameKey} categories={settings.categories} sound={sound} started={timeAttackStarted} onStart={() => setTimeAttackStarted(true)} onHome={home} onReplay={() => { setLocalGameKey((value) => value + 1); setTimeAttackStarted(false); }} /></div>
