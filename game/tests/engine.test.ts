@@ -49,6 +49,33 @@ test('1,000 deterministic seeds generate 1,000 distinct match signatures', () =>
   assert.equal(signatures.size, 1000);
 });
 
+test('a recipe avoids already-solved words while enough fresh ones remain', () => {
+  const pool = eligibleWords(allSettings);
+  // Exclude everything except a generous handful -- still comfortably more
+  // than one run's length, so the fresh pool alone can fill the match.
+  const excluded = new Set(pool.slice(allSettings.length * 3).map((entry) => entry.id));
+  const recipe = createRecipe(allSettings, 'fresh-first-seed', excluded);
+  for (const puzzle of recipe.puzzles) {
+    assert.ok(!excluded.has(puzzle.entryId), `${puzzle.entryId} was already solved and should have been skipped`);
+  }
+  assert.equal(recipe.puzzles.length, allSettings.length, 'the fresh pool alone was big enough to fill the run');
+});
+
+test('a recipe falls back to repeats once the fresh pool cannot fill a whole run', () => {
+  const pool = eligibleWords(allSettings);
+  // Exclude all but a few -- fewer than one run needs -- so "no repeats"
+  // cannot be honoured without leaving the match short.
+  const excluded = new Set(pool.slice(2).map((entry) => entry.id));
+  const recipe = createRecipe(allSettings, 'exhausted-pool-seed', excluded);
+  assert.equal(recipe.puzzles.length, allSettings.length, 'the level must stay playable once its fresh words run out');
+});
+
+test('omitting the exclude set behaves exactly as before', () => {
+  const withNoArg = createRecipe(allSettings, 'same-seed');
+  const withEmptySet = createRecipe(allSettings, 'same-seed', new Set());
+  assert.deepEqual(withNoArg, withEmptySet);
+});
+
 test('settings filter and answer normalization behave predictably', () => {
   const books = eligibleWords({ categories: ['book'], maxBand: 1, length: 10 });
   assert.ok(books.length >= 10);

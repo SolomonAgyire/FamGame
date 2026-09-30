@@ -639,6 +639,9 @@ footer {
   background: linear-gradient(180deg, #ffd876, var(--sun)); color: var(--sun-ink);
   font-size: 13px; font-weight: 700; box-shadow: 0 3px 0 var(--sun-deep);
 }
+.level-progress-line {
+  margin: 10px 0 0; text-align: center; font-size: 13px; color: var(--muted);
+}
 .best-flag.quiet {
   background: var(--surface2); color: var(--muted);
   border: 1px solid var(--line); box-shadow: 0 3px 0 #d8c79f;

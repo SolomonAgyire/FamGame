@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyProgress, dayKey, loadProgress, saveProgress, PROGRESS_KEY } from '../lib/progress';
-import { highestUnlocked, levelStatus } from '../lib/levels';
+import { highestUnlocked, levelStatus, clearTargetFor } from '../lib/levels';
 import { advanceMatch } from '../lib/game-engine';
 import { matchStars, coinsForMatch } from '../lib/economy';
 
@@ -289,8 +289,8 @@ test('recording a match pays coins for the stars earned and the words solved', (
 
 test('a gem is earned exactly once, the match a level first clears', () => {
   let record = emptyProgress();
-  const nineteen = Array.from({ length: 19 }, (_, i) => `book.word${i}`);
-  record = recordMatch(record, { mode: 'solo', level: 1, points: 10, solvedIds: nineteen, wrong: 0 }).record;
+  const oneShort = Array.from({ length: clearTargetFor(1) - 1 }, (_, i) => `book.word${i}`);
+  record = recordMatch(record, { mode: 'solo', level: 1, points: 10, solvedIds: oneShort, wrong: 0 }).record;
   const clearing = recordMatch(record, { mode: 'solo', level: 1, points: 10, solvedIds: ['book.last'], wrong: 0 });
   assert.equal(clearing.gemEarned, true);
   assert.equal(clearing.record.gems, 1);
@@ -304,21 +304,22 @@ test('a gem is never paid twice, even if accuracy drops the level back below its
   // accuracy -- accuracy alone can fall after a clear, so "cleared" is not
   // the one-way ratchet the gem award assumed it was.
   const record = emptyProgress();
-  const twenty = Array.from({ length: 20 }, (_, i) => `book.word${i}`);
-  const cleared = recordMatch(record, { mode: 'solo', level: 1, points: 10, solvedIds: twenty, wrong: 0 });
+  const target = clearTargetFor(1);
+  const allWords = Array.from({ length: target }, (_, i) => `book.word${i}`);
+  const cleared = recordMatch(record, { mode: 'solo', level: 1, points: 10, solvedIds: allWords, wrong: 0 });
   assert.equal(cleared.gemEarned, true);
   assert.equal(cleared.record.gems, 1);
 
   // Replaying already-solved words with a bad run drags cumulative
   // accuracy under 70% without adding any new distinct solves.
-  const unclear = recordMatch(cleared.record, { mode: 'solo', level: 1, points: 0, solvedIds: [], wrong: 20 });
+  const unclear = recordMatch(cleared.record, { mode: 'solo', level: 1, points: 0, solvedIds: [], wrong: target });
   assert.equal(unclear.record.levelProgress['1'].correct / unclear.record.levelProgress['1'].attempts < 0.7, true, 'accuracy must have actually dropped below the clear threshold');
 
   // Three clean runs bring accuracy back over 70%, re-clearing the level.
   let reclearing = unclear.record;
   let lastOutcome = unclear;
   for (let run = 0; run < 3; run += 1) {
-    lastOutcome = recordMatch(reclearing, { mode: 'solo', level: 1, points: 10, solvedIds: twenty, wrong: 0 });
+    lastOutcome = recordMatch(reclearing, { mode: 'solo', level: 1, points: 10, solvedIds: allWords, wrong: 0 });
     reclearing = lastOutcome.record;
   }
   assert.equal(lastOutcome.gemEarned, false, 'a level that already paid its gem must not pay a second one on re-clearing');

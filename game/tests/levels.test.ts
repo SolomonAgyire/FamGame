@@ -99,7 +99,7 @@ test('a run gets longer as the journey climbs', () => {
 });
 
 test('clearing a level takes more as the journey climbs', () => {
-  assert.equal(clearTargetFor(1), 20);
+  assert.equal(clearTargetFor(1), 30);
   assert.ok(clearTargetFor(9) > clearTargetFor(1) * 2);
   for (let level = 2; level <= 9; level += 1) {
     assert.ok(clearTargetFor(level as Level) >= clearTargetFor((level - 1) as Level));
@@ -152,9 +152,9 @@ test('a level with no progress rates zero stars', () => {
 });
 
 test('stars rise toward three as a level nears its clear target, but never reach three before clearing', () => {
-  const halfway = withLevel(1, 10, 10, 10); // 10 of 20 needed, all correct
+  const halfway = withLevel(1, 10, 10, 10); // 10 of 30 needed, all correct
   assert.equal(starsForLevel(halfway, 1), 1);
-  const almost = withLevel(1, 19, 19, 19); // 19 of 20
+  const almost = withLevel(1, 25, 25, 25); // 25 of 30
   assert.equal(starsForLevel(almost, 1), 2);
 });
 

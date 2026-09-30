@@ -12,9 +12,15 @@ export const RUN_LENGTHS: Record<Level, number> = {
 /** Distinct words needed to clear a level. This rises FASTER than run
  * length on purpose: if it did not, a longer run at the top would clear the
  * hardest level in fewer attempts than the easiest, and the climb would get
- * shorter as it got harder. */
+ * shorter as it got harder.
+ *
+ * Every level's target is bounded by the smallest approved-word pool from
+ * that level onward (level 6 has only 82 words, the tightest in the bank),
+ * since a later level's target can never exceed its own pool and targets
+ * never decrease. That bottleneck is why levels 1-6 top out well under
+ * what their own, often much bigger, pools could otherwise support. */
 export const CLEAR_TARGETS: Record<Level, number> = {
-  1: 20, 2: 24, 3: 28, 4: 33, 5: 38, 6: 44, 7: 50, 8: 55, 9: 60,
+  1: 30, 2: 40, 3: 48, 4: 56, 5: 64, 6: 70, 7: 76, 8: 78, 9: 84,
 };
 
 /** Kept as an alias of the Studying-level target: some call sites only

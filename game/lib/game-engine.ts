@@ -127,11 +127,20 @@ export function makeScramble(answer: string, random: () => number) {
   return scrambled === answer ? `${answer.slice(1)}${answer[0]}` : scrambled;
 }
 
-export function createRecipe(settings: GameSettings, seed: string): MatchRecipe {
+/** `exclude` is the set of word IDs a player has already solved at this
+ * level. A run prefers words outside it -- otherwise the same handful of
+ * words could resurface across separate sessions well before the level's
+ * whole pool has been seen. Once the fresh pool can no longer fill a full
+ * run, this falls back to the whole pool so a nearly-exhausted level stays
+ * playable instead of coming up short. */
+export function createRecipe(settings: GameSettings, seed: string, exclude: ReadonlySet<string> = new Set()): MatchRecipe {
   const random = seededRandom(seed);
+  const wholePool = eligibleWords(settings);
+  const freshPool = wholePool.filter((entry) => !exclude.has(entry.id));
+  const pool = freshPool.length >= settings.length ? freshPool : wholePool;
   const byCategory = settings.categories.map((category) => ({
     category,
-    words: shuffle(eligibleWords(settings).filter((entry) => entry.categories.includes(category)), random),
+    words: shuffle(pool.filter((entry) => entry.categories.includes(category)), random),
   }));
   const selected: WordEntry[] = [];
   let cursor = 0;
@@ -143,7 +152,7 @@ export function createRecipe(settings: GameSettings, seed: string): MatchRecipe 
     if (cursor > settings.length * byCategory.length * 4) break;
   }
   if (selected.length < settings.length) {
-    const remaining = shuffle(eligibleWords(settings).filter((entry) => !selected.some((picked) => picked.id === entry.id)), random);
+    const remaining = shuffle(pool.filter((entry) => !selected.some((picked) => picked.id === entry.id)), random);
     selected.push(...remaining.slice(0, settings.length - selected.length));
   }
   const puzzles: PuzzleRecipe[] = shuffle(selected, random).map((entry) => ({ entryId: entry.id, scramble: makeScramble(entry.playable, random) }));
@@ -199,14 +208,14 @@ function writeHistory(history: MatchHistory): void {
   }
 }
 
-export function createFreshRecipe(settings: GameSettings) {
+export function createFreshRecipe(settings: GameSettings, exclude?: ReadonlySet<string>) {
   const history = readHistory();
   const opensLikeLastTime = (candidate: MatchRecipe) =>
     history.lastOpener !== null && candidate.puzzles[0]?.entryId === history.lastOpener;
-  let recipe = createRecipe(settings, secureSeed());
+  let recipe = createRecipe(settings, secureSeed(), exclude);
   let attempts = 0;
   while ((history.signatures.includes(recipe.signature) || opensLikeLastTime(recipe)) && attempts < 40) {
-    recipe = createRecipe(settings, secureSeed());
+    recipe = createRecipe(settings, secureSeed(), exclude);
     attempts += 1;
   }
   writeHistory({

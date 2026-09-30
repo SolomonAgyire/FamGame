@@ -10,7 +10,7 @@ import { applyLetterHint, HINT_LABELS, hintsFor, type HintKind } from '@/lib/hin
 import { scoreSolve } from '@/lib/scoring';
 import { secondsFor, timeAttackSecondsFor, timerModeFor } from '@/lib/timing';
 import { saveProgress, recordMatch, masteredCount, subscribeProgress, getProgressSnapshot, getProgressServerSnapshot } from '@/lib/progress';
-import { highestUnlocked, runLengthFor, totalStars } from '@/lib/levels';
+import { clearTargetFor, highestUnlocked, isLevelCleared, runLengthFor, totalStars } from '@/lib/levels';
 import { roomUnplayableReason, roomWordPool } from '@/lib/room-rules';
 import { LevelBar } from '@/components/LevelBar';
 import { DifficultyBar } from '@/components/DifficultyBar';
@@ -157,7 +157,7 @@ function Header({ onHome, sound, setSound, homeMode = false, showingHome = false
   </header>;
 }
 
-function HomeScreen({ startAs, level, setLevel, blocked, newlyUnlocked }: { startAs: (mode: EntryMode) => void; level: Level; setLevel: (level: Level) => void; blocked: string | null; newlyUnlocked: Level | null }) {
+function HomeScreen({ startAs, level, onPlayLevel, blocked, newlyUnlocked }: { startAs: (mode: EntryMode) => void; level: Level; onPlayLevel: (level: Level) => void; blocked: string | null; newlyUnlocked: Level | null }) {
   const modes = [
     { id: 'solo' as const, title: 'Solo', character: 'nuri' as const },
     { id: 'together' as const, title: 'Together', character: 'boaz' as const },
@@ -171,7 +171,7 @@ function HomeScreen({ startAs, level, setLevel, blocked, newlyUnlocked }: { star
       <div className="home-signposts" aria-hidden="true">
         {['Rivers', 'Villages', 'High Places', 'New World'].map((label) => <span key={label} className="home-signpost">{label}</span>)}
       </div>
-      <LevelBar selected={level} onSelect={setLevel} variant="ground" newlyUnlocked={newlyUnlocked} />
+      <LevelBar selected={level} onSelect={onPlayLevel} variant="ground" newlyUnlocked={newlyUnlocked} />
       <GameCharacter character="nuri" mood="idle" size="large" className="home-mascot" />
       {stopped && <p className="field-help warn" role="status">{blocked}</p>}
       <div className="home-mode-row" aria-label="Choose how to play">
@@ -315,12 +315,22 @@ function Confetti({ count = 20 }: { count?: number }) {
   </div>;
 }
 
+/** Solo is a personal, continuing journey through a level -- together/teams
+ * are a shared moment, where "pick up where you left off" doesn't mean the
+ * same thing for everyone at the table. Reading this fresh (never memoized)
+ * means a "Play again" a minute later sees the words the first run just
+ * solved. */
+function soloExclusions(mode: PlayMode, settings: GameSettings): Set<string> | undefined {
+  if (mode !== 'solo') return undefined;
+  return new Set(getProgressSnapshot().levelProgress[String(settings.maxBand)]?.solvedIds ?? []);
+}
+
 function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound, onHome, onChangeSet }: { mode: PlayMode; settings: GameSettings; teams: Team[]; sound: boolean; onHome: () => void; onChangeSet: () => void }) {
   // Frozen for the life of the match. Finishing one can unlock the next
   // level, which moves the home screen's selection -- but "Play again"
   // has to replay the level that was actually just played.
   const [settings] = useState(chosenSettings);
-  const [recipe, setRecipe] = useState<MatchRecipe>(() => createFreshRecipe(settings));
+  const [recipe, setRecipe] = useState<MatchRecipe>(() => createFreshRecipe(settings, soloExclusions(mode, settings)));
   const [timeLeft, setTimeLeft] = useState(() => secondsForPuzzle(recipe, 0));
   // Whether this player has ever played at this level before. The clock
   // explains itself the first time they meet it and never again; it is
@@ -342,6 +352,16 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
   const [shake, setShake] = useState<number | null>(null);
   const [summary, setSummary] = useState<{ points: number; isBest: boolean; previousBest: number; lifetime: number; mastered: number; coinsEarned: number; gemEarned: boolean } | null>(null);
   const [unlocked, setUnlocked] = useState<{ level: Level; name: string } | null>(null);
+  // The inline banner stays on the results screen for as long as it's
+  // shown; the confetti burst is a one-time beat that plays once, then gets
+  // out of the way -- a persistent full-screen wash would just be noise the
+  // second time someone looks at this same results screen.
+  const [celebrating, setCelebrating] = useState(false);
+  useEffect(() => {
+    if (!celebrating) return;
+    const timer = window.setTimeout(() => setCelebrating(false), 1700);
+    return () => window.clearTimeout(timer);
+  }, [celebrating]);
   const puzzle = recipe.puzzles[index]; const entry = getPuzzleEntry(recipe, index);
   const assembled = puzzle ? placed.map((source) => puzzle.scramble[source]).join('') : '';
   // Declared before the effects below since the auto-advance effect needs
@@ -377,7 +397,9 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
       });
       saveProgress(outcome.record);
       const nowUnlocked = highestUnlocked(outcome.record);
-      setUnlocked(nowUnlocked > wasUnlocked ? { level: nowUnlocked, name: LEVEL_NAMES[nowUnlocked - 1] } : null);
+      const justUnlocked = nowUnlocked > wasUnlocked;
+      setUnlocked(justUnlocked ? { level: nowUnlocked, name: LEVEL_NAMES[nowUnlocked - 1] } : null);
+      setCelebrating(justUnlocked);
       setSummary({
         points: headline,
         isBest: outcome.isBest,
@@ -508,7 +530,7 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
     </div>
   </section></main>;
   const shuffleTray = () => { playShuffle(); setOrder(shuffledOrder(puzzle.scramble.length)); };
-  const rematch = () => { finishedRef.current = false; const fresh = createFreshRecipe(settings); setRecipe(fresh); setTimeLeft(secondsForPuzzle(fresh, 0)); setIndex(0); setScores(scores.map((team) => ({ ...team, score: 0 }))); setCorrectCount(0); setWrongCount(0); setRevealCount(0); setFinished(false); resetPuzzle(); setSolvedIds([]); setCombo(0); setSummary(null); setUnlocked(null); };
+  const rematch = () => { finishedRef.current = false; const fresh = createFreshRecipe(settings, soloExclusions(mode, settings)); setRecipe(fresh); setTimeLeft(secondsForPuzzle(fresh, 0)); setIndex(0); setScores(scores.map((team) => ({ ...team, score: 0 }))); setCorrectCount(0); setWrongCount(0); setRevealCount(0); setFinished(false); resetPuzzle(); setSolvedIds([]); setCombo(0); setSummary(null); setUnlocked(null); setCelebrating(false); };
   // Ending early still shows a results screen, same as Time Attack's "End
   // run" -- marking finishedRef first means a resolution popup's pending
   // auto-advance timer (if one is still running) cannot record a second,
@@ -521,7 +543,17 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
     // Matches the `wrong` count `recordMatch` was given (below, in `next()`)
     // so the stars shown here always agree with the coins paid for them.
     const stars = matchStars({ correct: correctCount, wrong: wrongCount + revealCount });
-    return <Results
+    // A run rarely clears a level by itself (most levels take several runs'
+    // worth of distinct words) -- without this, a run that doesn't unlock
+    // anything looks simply "finished" rather than progress toward something.
+    const currentProgress = getProgressSnapshot();
+    const levelCleared = isLevelCleared(currentProgress, settings.maxBand);
+    const solvedAtLevel = currentProgress.levelProgress[String(settings.maxBand)]?.solvedIds.length ?? 0;
+    const levelTarget = clearTargetFor(settings.maxBand);
+    const nextLevelName = settings.maxBand < 9 ? LEVEL_NAMES[settings.maxBand as number] : null;
+    return <>
+      {celebrating && unlocked && <BigCelebration key={unlocked.level} title={`${unlocked.name} unlocked!`} subtitle="A new level is open on your journey." character={mode === 'solo' ? 'nuri' : 'boaz'} />}
+      <Results
       character={mode === 'solo' ? 'nuri' : 'boaz'}
       stars={stars}
       subtitle="Quest complete"
@@ -547,13 +579,17 @@ function LocalGame({ mode, settings: chosenSettings, teams: initialTeams, sound,
           </div>
         </div>}
         {mode === 'teams' && <div className="leaderboard">{ranking.map((team, index) => <div key={team.id}><span>{index + 1}</span><i style={{ background: team.color }} /><strong>{team.name}{index === 0 && <b className="leaderboard-crown" aria-label="Winner">👑</b>}</strong><b>{team.score}</b></div>)}</div>}
+        {!levelCleared && <p className="level-progress-line">
+          <strong>{solvedAtLevel}</strong> of <strong>{levelTarget}</strong> words{nextLevelName ? <> toward <strong>{nextLevelName}</strong></> : null}
+        </p>}
       </>}
       stats={[{ label: 'Solved', value: correctCount }, { label: 'Misses', value: wrongCount }, { label: 'Accuracy', value: `${accuracy}%` }]}
       primaryLabel="Play again"
       onPrimary={rematch}
       secondaryAction={<button className="secondary-button" type="button" onClick={onChangeSet} aria-label="Change word set">⚙</button>}
       onHome={onHome}
-    />;
+    />
+    </>;
   }
   return <main className="game-shell">
     {missPop !== null && <MissPopup key={missPop} character={mode === 'solo' ? 'nuri' : 'boaz'} />}
@@ -1273,6 +1309,15 @@ export default function GatherWordApp() {
     else setScreen('setup');
   };
   const startLocal = () => { setLocalGameKey((value) => value + 1); setLocalMode(entryMode === 'solo' ? 'solo' : togetherMode); };
+  // Tapping an open level on the home path is a shortcut straight into
+  // Solo at that level -- locked nodes are disabled, so this only ever
+  // fires for a level that can actually be played.
+  const playLevelNow = (value: Level) => {
+    setLevel(value);
+    setEntryMode('solo');
+    setLocalGameKey((key) => key + 1);
+    setLocalMode('solo');
+  };
   const connect = (value: Credentials) => { setCredentials(value); sessionStorage.setItem('gatherword-room', JSON.stringify(value)); setScreen('online-lobby'); };
   const leave = () => { setCredentials(null); sessionStorage.removeItem('gatherword-room'); history.replaceState({}, '', window.location.pathname); setScreen('online-entry'); };
   const showingHome = !dailyActive && !timeAttackActive && !localMode && screen === 'home';
@@ -1297,7 +1342,7 @@ export default function GatherWordApp() {
   const scene = showingMap ? 'home' : dailyActive ? 'daily' : timeAttackActive ? 'timeattack'
     : screen === 'online-entry' || screen === 'online-lobby' ? 'online' : entryMode;
   return <div className={`app${showingMap ? '' : ' in-world'}`} data-scene={scene}><JourneyBackdrop /><Header onHome={home} sound={sound} setSound={setSound} homeMode={showingMap} showingHome={showingHome} hud={{ totalStars: totalStars(progress), coins: progress.coins, gems: progress.gems }} dailyNumber={hydrated ? dailyKey.number : null} dailyDone={dailyDone} dailyStreak={progress.streak.current} onDaily={() => startEntry('daily')} />
-    {showingMap && <div className={`map-underlay${mapOverlayOpen ? ' map-underlay-inactive' : ''}`} inert={mapOverlayOpen ? true : undefined}><HomeScreen startAs={startEntry} level={level} setLevel={setLevel} blocked={unplayableReason(settings)} newlyUnlocked={newlyUnlocked} /></div>}
+    {showingMap && <div className={`map-underlay${mapOverlayOpen ? ' map-underlay-inactive' : ''}`} inert={mapOverlayOpen ? true : undefined}><HomeScreen startAs={startEntry} level={level} onPlayLevel={playLevelNow} blocked={unplayableReason(settings)} newlyUnlocked={newlyUnlocked} /></div>}
     {dailyActive ? <DailyWord sound={sound} onHome={home} />
     : timeAttackActive ? <div className={timeAttackStarted ? 'game-layer' : 'map-modal-layer in-world'}><TimeAttackGame key={localGameKey} categories={settings.categories} sound={sound} started={timeAttackStarted} onStart={() => setTimeAttackStarted(true)} onHome={home} onReplay={() => { setLocalGameKey((value) => value + 1); setTimeAttackStarted(false); }} /></div>
     : localMode ? <LocalGame key={localGameKey} mode={localMode} settings={settings} teams={teams} sound={sound} onHome={home} onChangeSet={() => { setLocalMode(null); setScreen('setup'); }} />
