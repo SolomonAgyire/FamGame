@@ -178,7 +178,9 @@ function HomeScreen({ startAs, level, setLevel, blocked, newlyUnlocked }: { star
         {modes.map((item) => {
           const gated = Boolean(blocked) && (item.id === 'solo' || item.id === 'together');
           return <button key={item.id} type="button" disabled={gated} onClick={() => startAs(item.id)} className="home-mode-chip" aria-label={`Play ${item.title}`}>
-            <GameCharacter character={item.character} mood="idle" size="small" className="home-mode-chip-character" />
+            <span className="home-mode-chip-backdrop">
+              <GameCharacter character={item.character} mood="cheer" size="small" className="home-mode-chip-character" />
+            </span>
             <small>{item.title}</small>
           </button>;
         })}
