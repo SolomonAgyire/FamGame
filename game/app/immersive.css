@@ -295,6 +295,14 @@
   box-shadow: inset 0 -2px 0 #226e6766, 0 2px 0 #805d2c40;
 }
 .home-mode-chip-character { width: 58px; height: 58px; }
+/* A gated mode (Solo/Together with no playable words at this level) only
+   dimmed before -- nothing said why. A small padlock in the corner says it
+   without needing the word count spelled out on every chip. */
+.home-mode-chip-lock {
+  position: absolute; z-index: 3; top: 4px; left: 4px; width: 20px; height: 20px;
+  display: grid; place-items: center; border-radius: 50%; background: #241b16d9;
+  border: 2px solid #f2d79d; font-size: 11px;
+}
 /* A dark pill behind the label -- the scene under it is busy enough that
    text-shadow alone wasn't reliably readable. */
 .home-mode-chip small {
